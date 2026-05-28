@@ -985,9 +985,11 @@ footer.summary-bar {
     <div id="history-list"></div>
     <div style="height: 12px"></div>
     <div class="row">
-      <button class="btn outline sm" id="export-history-btn" style="flex: 2;">📤 匯出 CSV</button>
-      <button class="btn outline sm danger" id="clear-history-btn" style="flex: 1;">🗑 全清</button>
+      <button class="btn outline sm" id="export-history-btn" style="flex: 1;">📤 摘要</button>
+      <button class="btn outline sm" id="export-detail-btn" style="flex: 1;">📦 明細</button>
+      <button class="btn outline sm danger" id="clear-history-btn" style="flex: 0.6;">🗑</button>
     </div>
+    <p class="hint" style="font-size: 11px; margin-top: 6px;">📤 摘要 = 每行一個 SKU 的彙總 · 📦 明細 = 每行一張寄件單裡的一個 SKU (含寄件編號)</p>
   </div>
 
     <!-- Tab 2: Excel paste -->
@@ -2029,7 +2031,7 @@ function toggleScanMode() {
   }
   saveState();
   renderScanPanel();
-  if (state.scanMode) setTimeout(() => document.getElementById("scan-input").focus({ preventScroll: true }), 100);
+  // (開啟掃描模式時不強制 focus, 全域監聽會接管)
 }
 
 // 從刷槍輸入抽出真實寄件編號 (處理 7-11 JSON QR 等情況)
@@ -2504,6 +2506,66 @@ document.getElementById("export-history-btn").addEventListener("click", () => {
   showToast(`✓ 已匯出 ${history.length} 筆紀錄`);
 });
 
+document.getElementById("export-detail-btn").addEventListener("click", () => {
+  if (history.length === 0) { showToast("沒有資料可匯出"); return; }
+  // 明細格式: 每行 = 一張寄件單 × 一個 SKU
+  const rows = [["出貨日期", "通路", "寄件編號", "寄件完成時間", "商品編號", "商品名稱", "分類", "數量"]];
+  let parcelCount = 0;
+  let entriesWithoutParcels = 0;
+  for (const e of history) {
+    const d = new Date(e.completedAt);
+    const dateStr = d.toLocaleString("zh-TW");
+    const parcels = e.parcels || [];
+    if (parcels.length === 0) {
+      entriesWithoutParcels++;
+      // 沒有 parcel 資料 → 改用該筆 history 的 items, 標記寄件編號為「(未分單)」
+      for (const it of e.items) {
+        if (it.packed > 0) {
+          rows.push([
+            dateStr, e.platform, "(未分單)", "",
+            it.sku, (it.name || "").replace(/[\r\n]+/g, " "), it.category || "", it.packed
+          ]);
+        }
+      }
+      continue;
+    }
+    for (const p of parcels) {
+      parcelCount++;
+      const pt = p.completedAt ? new Date(p.completedAt) : null;
+      const pTimeStr = pt ? pt.toLocaleString("zh-TW") : "";
+      for (const sku in (p.items || {})) {
+        const itemInfo = e.items.find(it => it.sku === sku) || {};
+        rows.push([
+          dateStr, e.platform, p.id, pTimeStr,
+          sku, (itemInfo.name || "").replace(/[\r\n]+/g, " "), itemInfo.category || "",
+          p.items[sku]
+        ]);
+      }
+    }
+  }
+  if (rows.length === 1) {
+    showToast("⚠ 沒有可匯出的明細");
+    return;
+  }
+  const csv = "\ufeff" + rows.map(r => r.map(cell => {
+    const s = String(cell);
+    if (/[,"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `出貨明細_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  let msg = `✓ 已匯出 ${parcelCount} 張寄件單明細`;
+  if (entriesWithoutParcels > 0) msg += ` (${entriesWithoutParcels} 筆無寄件單資料)`;
+  showToast(msg);
+});
+
 // === 規格對應 - 單筆新增/編輯/刪除 ===
 let editingSpec = null; // null = 新增, 字串 = 編輯該 spec
 let editingMappings = []; // 暫存當前編輯的對應 [{sku, qty}]
@@ -2956,6 +3018,48 @@ document.getElementById("filter-bar").addEventListener("click", (e) => {
 // 掃描模式 toggle / 輸入 / 完成
 document.getElementById("scan-toggle-btn").addEventListener("click", toggleScanMode);
 
+// 全域 keydown 監聽 - 讓刷槍即使在 scan-input 沒 focus 時也能工作
+// (例如用戶點 +/- 時 scan-input 失焦, 此時刷槍仍能繼續送 key)
+let _scanBuffer = "";
+let _scanBufferTimer = null;
+document.addEventListener("keydown", (e) => {
+  if (!state.scanMode) return;
+  const ae = document.activeElement;
+  // 若使用者正在某個 input/textarea/select 中, 由原本元素處理 (不攔截)
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
+  // 若 modal 開啟中, 不攔截 (避免衝突)
+  if (!document.getElementById("qty-modal").hidden) return;
+  if (!document.getElementById("spec-edit-modal").hidden) return;
+  if (!document.getElementById("settings-modal").hidden) return;
+  if (!document.getElementById("report-modal").hidden) return;
+  if (!document.getElementById("lib-modal").hidden) return;
+
+  if (e.key === "Enter") {
+    if (_scanBuffer.length > 0) {
+      e.preventDefault();
+      processScan(_scanBuffer);
+      _scanBuffer = "";
+      const inp = document.getElementById("scan-input");
+      if (inp) inp.value = "";
+    }
+    return;
+  }
+  // 只捕捉可印字元 (英數字、符號)
+  if (e.key.length === 1) {
+    _scanBuffer += e.key;
+    // 視覺反饋: 同步顯示在 scan-input
+    const inp = document.getElementById("scan-input");
+    if (inp) inp.value = _scanBuffer;
+    // 1.5 秒沒新輸入就清掉 buffer (避免誤觸殘留)
+    clearTimeout(_scanBufferTimer);
+    _scanBufferTimer = setTimeout(() => {
+      _scanBuffer = "";
+      const i = document.getElementById("scan-input");
+      if (i && i.value) i.value = "";
+    }, 1500);
+  }
+});
+
 document.getElementById("scan-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -2966,16 +3070,7 @@ document.getElementById("scan-input").addEventListener("keydown", (e) => {
   }
 });
 
-// 失焦時自動 refocus (避免 iOS 點到別處就跳離)
-document.getElementById("scan-input").addEventListener("blur", () => {
-  if (state.scanMode && state.activeParcel) {
-    // 在裝箱進行中時, 略延遲 refocus 以免阻擋其他點擊
-    setTimeout(() => {
-      if (state.scanMode && document.getElementById("scan-input"))
-        document.getElementById("scan-input").focus({ preventScroll: true });
-    }, 200);
-  }
-});
+// (已移除 auto-refocus blur 處理: 改用全域 keydown 監聽, 不需強制 focus)
 
 document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   if (!state.activeParcel) { showToast("沒有進行中的訂單"); return; }
@@ -2984,7 +3079,7 @@ document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   saveState();
   renderScanPanel();
   showToast("✓ 訂單 " + id + " 已完成");
-  setTimeout(() => document.getElementById("scan-input").focus({ preventScroll: true }), 100);
+  // (移除 refocus: 全域 keydown 監聽會自動處理刷槍輸入)
 });
 
 // (移除 show-parcels-btn handler, 已改成 details 展開)
