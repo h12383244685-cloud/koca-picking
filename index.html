@@ -293,6 +293,91 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-color: var(--primary);
 }
 
+/* 裝箱掃描面板 */
+.scan-panel { margin: 0 12px 8px; }
+.scan-toggle {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--primary);
+  color: white;
+  border: 0; border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.scan-toggle:active { opacity: .9; }
+.scan-toggle .scan-status {
+  margin-left: auto;
+  font-size: 11px;
+  background: rgba(255,255,255,.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.scan-toggle.active { background: var(--success); }
+.scan-toggle.active .scan-status { background: rgba(255,255,255,.3); }
+.scan-body {
+  background: var(--surface);
+  border-radius: 0 0 12px 12px;
+  margin-top: -2px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+.scan-input {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  border: 2px solid var(--primary);
+  border-radius: 10px;
+  background: #fff8e1;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.scan-input:focus {
+  outline: none;
+  border-color: var(--warn);
+  background: #fffbeb;
+  box-shadow: 0 0 0 4px rgba(245,158,11,.15);
+}
+.active-parcel {
+  margin-top: 10px;
+  padding: 12px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 10px;
+  border-left: 4px solid var(--warn);
+}
+.active-parcel-label { font-size: 11px; color: var(--text-soft); }
+.active-parcel-id {
+  font-size: 16px;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+.active-parcel-items {
+  background: rgba(255,255,255,.6);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  margin-bottom: 8px;
+  min-height: 30px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.active-parcel-items .empty { color: var(--text-soft); }
+.scan-stats {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 #items, #lib-items, #menu-items { padding: 0 12px; }
 .item {
   background: var(--surface);
@@ -415,6 +500,40 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 .cat-header .cat-arrow { font-size: 11px; opacity: .7; }
 .cat-items { padding-left: 0; }
+
+/* 規格對應清單 - 每筆操作 */
+.spec-map-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.spec-map-row:last-child { border-bottom: 0; }
+.spec-map-content { flex: 1; min-width: 0; font-size: 12px; }
+.spec-map-spec {
+  color: var(--text);
+  word-break: break-all;
+  margin-bottom: 2px;
+}
+.spec-map-summary {
+  color: var(--primary);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+.spec-map-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.spec-map-icon-btn {
+  background: var(--bg);
+  border: 0;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.spec-map-icon-btn:active { background: #d8e6f3; }
+.spec-map-icon-btn.danger { color: var(--danger); }
+.spec-map-icon-btn.danger:active { background: var(--danger-bg); }
 
 /* 出貨紀錄 卡片 */
 .history-item {
@@ -787,6 +906,7 @@ footer.summary-bar {
       <p class="hint" style="margin-bottom:6px;">這是系統記住的「規格 → SKU」對應，下次匯入會自動套用 (跨通路共用)。</p>
       <div id="spec-map-list" class="hint" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafbfc;">尚無資料</div>
       <button class="btn full sm outline" id="restore-spec-map-btn" style="margin-top:8px;">↻ 還原 Koca 預設對應</button>
+      <button class="btn full sm secondary" id="add-spec-map-btn" style="margin-top:8px;">➕ 新增規格對應</button>
       <button class="btn full sm danger" id="clear-spec-map-btn" style="margin-top:8px;">🗑 全部清空 (含預設)</button>
     </details>
   </div>
@@ -847,6 +967,34 @@ footer.summary-bar {
 
 <!-- PICKING VIEW: shown once a list is loaded -->
 <div id="picking-view" hidden>
+  <!-- 裝箱掃描面板 (預設收合) -->
+  <div id="scan-panel" class="scan-panel">
+    <button class="scan-toggle" id="scan-toggle-btn">
+      <span id="scan-toggle-icon">▶</span>
+      <span>📦 裝箱掃描</span>
+      <span class="scan-status" id="scan-status">未啟用</span>
+    </button>
+    <div id="scan-body" class="scan-body" hidden>
+      <input type="text" id="scan-input" inputmode="none" autocomplete="off"
+             placeholder="📡 刷寄件編號或手動輸入 + Enter..."
+             class="scan-input">
+      <div class="hint" style="font-size: 11px; margin-top: 4px; color: var(--text-soft);">
+        💡 支援自動辨識: 7-11 交貨便服務代碼 (C+11位數字)、全家、黑貓宅急便、蝦皮店到店等。即使刷到 QR Code 的 JSON 也會自動抽出代碼。
+      </div>
+      <div id="active-parcel" class="active-parcel" hidden>
+        <div class="active-parcel-info">
+          <div class="active-parcel-label">當前訂單</div>
+          <div class="active-parcel-id" id="active-parcel-id">—</div>
+        </div>
+        <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
+        <button class="btn full sm" id="finish-parcel-btn">✓ 再刷一次 / 手動完成此筆</button>
+      </div>
+      <div class="scan-stats">
+        ✓ 已完成 <strong id="completed-parcels-count">0</strong> 筆訂單
+        <button class="btn outline sm" id="show-parcels-btn" style="margin-left:auto;">查看明細</button>
+      </div>
+    </div>
+  </div>
   <div class="filter-bar" id="filter-bar">
     <button data-filter="all" class="active">全部 <span id="cnt-all">0</span></button>
     <button data-filter="pending">未完成 <span id="cnt-pending">0</span></button>
@@ -927,6 +1075,32 @@ footer.summary-bar {
       <button class="btn outline" id="qty-modal-cancel" style="flex:1;">取消</button>
       <button class="btn" id="qty-modal-apply" style="flex:2;">套用</button>
     </div>
+  </div>
+</div>
+
+<!-- 新增/編輯 規格對應 modal -->
+<div class="modal-backdrop" id="spec-edit-modal" hidden>
+  <div class="modal" style="max-width: 540px;">
+    <h2 id="spec-edit-title">➕ 新增規格對應</h2>
+    <p class="hint">先填入規格文字 (從通路 CSV 上看到的商品規格)，再選擇對應的 SKU 與數量。組合包可加多個 SKU。</p>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">規格文字</label>
+    <input type="text" id="spec-edit-text" placeholder="例如: Joy Lite 1 白色單主機 ●現貨">
+
+    <div style="height: 12px"></div>
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:6px;">對應的 SKU (可多個)</label>
+    <div id="spec-edit-skus"></div>
+
+    <button class="btn full sm outline" id="spec-edit-add-sku-btn" style="margin-top: 6px;">➕ 加入一個 SKU</button>
+
+    <div style="height: 16px"></div>
+    <div class="row">
+      <button class="btn outline" id="spec-edit-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="spec-edit-save" style="flex:2;">儲存</button>
+    </div>
+    <div style="height: 8px"></div>
+    <button class="btn full sm outline" id="spec-edit-skip" style="background: var(--warn-bg); color: #92400e; border-color: var(--warn);">標記為「略過此規格」</button>
+    <p class="hint" style="margin-top:6px;">略過 = 看到這個規格時系統會自動跳過、不算進備貨清單。</p>
   </div>
 </div>
 
@@ -1021,7 +1195,7 @@ const CATEGORY_EMOJI = {
 };
 const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
 
-let state = { items: [], filter: "all", loadedDate: null };
+let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -1050,7 +1224,11 @@ function loadState() {
       const p = JSON.parse(s);
       if (p && typeof p === "object" && Array.isArray(p.items)) {
         state = p;
-        console.log("[state] loaded from main:", state.items.length, "items");
+        // 補上新欄位 (舊資料相容)
+        if (typeof state.scanMode === "undefined") state.scanMode = false;
+        if (typeof state.activeParcel === "undefined") state.activeParcel = null;
+        if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
+        console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels");
       }
     }
   } catch(e) { console.warn("[storage] loadState failed", e); }
@@ -1146,6 +1324,8 @@ function loadHistory() {
 function appendHistory() {
   // 從當前 state.items 建一筆紀錄
   if (!state.items || state.items.length === 0) return;
+  // 收尾還在進行中的 parcel (若有)
+  if (state.activeParcel) finalizeActiveParcel(true);
   const items = state.items.map(it => ({
     sku: it.sku, name: it.name || "", category: it.category || "其他",
     expected: it.expected, packed: it.packed,
@@ -1158,11 +1338,13 @@ function appendHistory() {
     completedAt: new Date().toISOString(),
     platform: currentPlatform || "unknown",
     items,
+    parcels: (state.completedParcels || []).map(p => ({ ...p })),
     summary: {
       totalSku: items.length,
       completedSku: completedSkus,
       totalExpected, totalPacked,
       completionRate: totalExpected > 0 ? Math.round(totalPacked / totalExpected * 100) : 0,
+      parcelCount: (state.completedParcels || []).length,
     },
   };
   history.unshift(entry); // 新的放最前面
@@ -1416,9 +1598,10 @@ function renderPicking() {
   if (filtered.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="icon">✨</div><div>這個分類沒有項目</div></div>';
   } else {
-    // 依分類群組
+    // 依分類群組 (可收合)
     const groups = groupByCategory(filtered);
     container.innerHTML = groups.map(g => {
+      const collapsed = !!collapsedCats[g.name];
       const itemsHtml = g.items.map(it => {
         const realIdx = state.items.indexOf(it);
         const s = statusOf(it);
@@ -1440,14 +1623,16 @@ function renderPicking() {
         </div>`;
       }).join("");
       const doneInCat = g.items.filter(it => statusOf(it) === "done").length;
+      const allDone = doneInCat === g.items.length && g.items.length > 0;
       return `
-        <div class="cat-section">
-          <div class="cat-section-header">
+        <div class="cat-group">
+          <button class="cat-header ${allDone ? "has-selected" : ""}" data-cat-toggle="${escapeHtml(g.name)}">
             <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
-            <span>${escapeHtml(g.name)}</span>
+            <span class="cat-name">${escapeHtml(g.name)}</span>
             <span class="cat-count">${doneInCat} / ${g.items.length}</span>
-          </div>
-          ${itemsHtml}
+            <span class="cat-arrow">${collapsed ? "▶" : "▼"}</span>
+          </button>
+          <div class="cat-items" ${collapsed ? "hidden" : ""}>${itemsHtml}</div>
         </div>`;
     }).join("");
   }
@@ -1627,6 +1812,7 @@ function renderHistory() {
         </div>
         <div class="history-item-summary">
           <strong>${e.summary.totalSku}</strong> SKU · 應出 <strong>${e.summary.totalExpected}</strong> · 已裝 <strong>${e.summary.totalPacked}</strong> · 完成率 <strong>${e.summary.completionRate}%</strong>
+          ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
           ${isPartial ? `<br>⚠ ${e.summary.totalSku - e.summary.completedSku} 個 SKU 未完成` : ''}
         </div>
         <div class="history-item-actions">
@@ -1638,6 +1824,167 @@ function renderHistory() {
       </div>
     `;
   }).join("");
+}
+
+// ---- 裝箱掃描模式 ----
+function toggleScanMode() {
+  state.scanMode = !state.scanMode;
+  if (!state.scanMode) {
+    // 關閉掃描模式時, 若有 active parcel, 先收尾
+    if (state.activeParcel) finalizeActiveParcel(true);
+  }
+  saveState();
+  renderScanPanel();
+  if (state.scanMode) setTimeout(() => document.getElementById("scan-input").focus(), 100);
+}
+
+// 從刷槍輸入抽出真實寄件編號 (處理 7-11 JSON QR 等情況)
+function extractParcelId(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  // 1. 蝦皮店到家物流條碼: TW + 12 位數字 + 字母 (例: TW262445297876H) - 最高優先, 避免被「12 位純數字」regex 截掉
+  const shopeeLog = s.match(/TW\d{12}[A-Z]/);
+  if (shopeeLog) return shopeeLog[0];
+  // 2. 7-11 交貨便服務代碼: C + 10-12 位數字 (例: C04888507520)
+  const c711 = s.match(/C\d{10,12}/);
+  if (c711) return c711[0];
+  // 3. 國際小包: 2 字母 + 9-12 位數字 + TW 結尾 (例: EE123456789TW)
+  const intl = s.match(/[A-Z]{2}\d{9,12}TW\b/);
+  if (intl) return intl[0];
+  // 4. 全家便利商店: 通常是 P/T/F 開頭 + 數字
+  const family = s.match(/\b[PTF]\d{11,13}\b/);
+  if (family) return family[0];
+  // 5. 蝦皮訂單編號: 6 位數字 + 8 位字母數字 (例: 260528HEB7SNH5)
+  const shopeeOrder = s.match(/\b\d{6}[A-Z0-9]{8}\b/);
+  if (shopeeOrder) return shopeeOrder[0];
+  // 6. 黑貓宅急便: 12 位純數字 (例: 481234567890) - 最後 fallback, 因為純數字格式最容易誤判
+  const blackcat = s.match(/(?<![A-Za-z\d])\d{12}(?![A-Za-z\d])/);
+  if (blackcat && s.length > 30) return blackcat[0];
+  // 5. JSON 格式: 嘗試解析找已知欄位
+  if (s.startsWith("{") || s.startsWith("[")) {
+    try {
+      const obj = JSON.parse(s);
+      const codeKeys = ["code", "Code", "serviceCode", "ServiceCode", "parcelId", "ParcelId", "id", "Id", "編號", "代碼", "服務代碼"];
+      function findCode(o) {
+        if (typeof o !== "object" || o === null) return null;
+        if (Array.isArray(o)) {
+          for (const x of o) {
+            const r = findCode(x);
+            if (r) return r;
+          }
+          return null;
+        }
+        for (const k in o) {
+          if (codeKeys.includes(k) && typeof o[k] === "string") return o[k];
+          const r = findCode(o[k]);
+          if (r) return r;
+        }
+        return null;
+      }
+      const found = findCode(obj);
+      if (found) return found;
+    } catch(e) {
+      // 不是合法 JSON, 略過
+    }
+  }
+  // 6. 預設: 整段去除前後空白後當作 ID (適用直接掃簡單 1D 條碼 / 手動輸入)
+  return s.substring(0, 64); // 限制最長 64 字元避免 JSON 整段塞進去
+}
+
+function processScan(code) {
+  const original = code;
+  code = extractParcelId(code);
+  if (!code) return;
+  if (original !== code) console.log("[scan] extracted", code, "from", original.substring(0, 60) + (original.length > 60 ? "..." : ""));
+  console.log("[scan]", code);
+  if (state.activeParcel) {
+    // 已有 active parcel
+    if (state.activeParcel.id === code) {
+      // 同一張 -> 結束此筆
+      finalizeActiveParcel(false);
+      showToast("✓ 訂單 " + code + " 已完成");
+    } else {
+      // 不同張 -> 警告
+      if (!confirm(`目前還在處理 ${state.activeParcel.id}，要先結束它再開新的 ${code} 嗎？`)) return;
+      finalizeActiveParcel(false);
+      startParcel(code);
+      showToast("📦 開新訂單 " + code);
+    }
+  } else {
+    // 沒有 active parcel
+    // 檢查是否已完成過此編號
+    if (state.completedParcels.some(p => p.id === code)) {
+      if (!confirm(`寄件編號 ${code} 之前已完成過。要重新打開嗎？(會從紀錄中移除舊資料)`)) return;
+      state.completedParcels = state.completedParcels.filter(p => p.id !== code);
+    }
+    startParcel(code);
+    showToast("📦 開始裝箱 " + code);
+  }
+  saveState();
+  renderScanPanel();
+}
+
+function startParcel(id) {
+  state.activeParcel = {
+    id, items: {},
+    startedAt: new Date().toISOString(),
+  };
+}
+
+function finalizeActiveParcel(skipIfEmpty) {
+  if (!state.activeParcel) return;
+  const ap = state.activeParcel;
+  const hasItems = ap.items && Object.keys(ap.items).length > 0;
+  if (!hasItems && skipIfEmpty) {
+    state.activeParcel = null;
+    return;
+  }
+  ap.completedAt = new Date().toISOString();
+  state.completedParcels.push(ap);
+  state.activeParcel = null;
+}
+
+function renderScanPanel() {
+  const toggleBtn = document.getElementById("scan-toggle-btn");
+  const icon = document.getElementById("scan-toggle-icon");
+  const status = document.getElementById("scan-status");
+  const body = document.getElementById("scan-body");
+  if (!toggleBtn) return;
+  toggleBtn.classList.toggle("active", state.scanMode);
+  icon.textContent = state.scanMode ? "▼" : "▶";
+  if (state.scanMode) {
+    status.textContent = state.activeParcel ? "裝箱中..." : "等待刷碼";
+    body.hidden = false;
+  } else {
+    status.textContent = "未啟用";
+    body.hidden = true;
+  }
+  document.getElementById("completed-parcels-count").textContent = state.completedParcels.length;
+  renderActiveParcel();
+}
+
+function renderActiveParcel() {
+  const wrapper = document.getElementById("active-parcel");
+  const idEl = document.getElementById("active-parcel-id");
+  const itemsEl = document.getElementById("active-parcel-items");
+  if (!wrapper) return;
+  if (!state.activeParcel) {
+    wrapper.hidden = true;
+    return;
+  }
+  wrapper.hidden = false;
+  idEl.textContent = state.activeParcel.id;
+  const items = state.activeParcel.items || {};
+  const skus = Object.keys(items);
+  if (skus.length === 0) {
+    itemsEl.innerHTML = '<span class="empty">▶ 從下方備貨清單點 + 加入此訂單</span>';
+  } else {
+    itemsEl.innerHTML = skus.map(sku => {
+      const prod = state.items.find(it => it.sku === sku) || { name: "" };
+      return `<div>${escapeHtml(sku)} (${escapeHtml(prod.name)}) × ${items[sku]}</div>`;
+    }).join("");
+  }
 }
 
 // ---- Master render ----
@@ -1654,7 +2001,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) renderPicking();
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderHistory(); }
 }
@@ -1700,7 +2047,16 @@ function renderSpecMapList() {
     const m = specMap[spec];
     const summary = m.length === 0 ? "(略過)" :
       m.map(x => `${x.sku}×${x.qty}`).join(" + ");
-    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;"><div style="color:var(--text);">${escapeHtml(spec)}</div><div style="color:var(--primary);font-family:monospace;">${escapeHtml(summary)}</div></div>`;
+    return `<div class="spec-map-row">
+      <div class="spec-map-content">
+        <div class="spec-map-spec">${escapeHtml(spec)}</div>
+        <div class="spec-map-summary">${escapeHtml(summary)}</div>
+      </div>
+      <div class="spec-map-actions">
+        <button class="spec-map-icon-btn" data-spec-edit="${escapeHtml(spec)}" title="編輯">✏️</button>
+        <button class="spec-map-icon-btn danger" data-spec-delete="${escapeHtml(spec)}" title="刪除">✕</button>
+      </div>
+    </div>`;
   }).join("");
 }
 
@@ -1709,6 +2065,14 @@ function bumpPickItem(idx, delta) {
   const it = state.items[idx];
   if (!it) return;
   it.packed = Math.max(0, it.packed + delta);
+  // 若在掃描模式且有 active parcel, 紀錄到當前訂單
+  if (state.scanMode && state.activeParcel && delta !== 0) {
+    const ap = state.activeParcel;
+    if (!ap.items) ap.items = {};
+    ap.items[it.sku] = Math.max(0, (ap.items[it.sku] || 0) + delta);
+    if (ap.items[it.sku] === 0) delete ap.items[it.sku];
+    renderActiveParcel();
+  }
   if (delta > 0 && navigator.vibrate) navigator.vibrate(12);
   saveState();
   renderPicking();
@@ -1901,6 +2265,141 @@ document.getElementById("export-history-btn").addEventListener("click", () => {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast(`✓ 已匯出 ${history.length} 筆紀錄`);
+});
+
+// === 規格對應 - 單筆新增/編輯/刪除 ===
+let editingSpec = null; // null = 新增, 字串 = 編輯該 spec
+let editingMappings = []; // 暫存當前編輯的對應 [{sku, qty}]
+
+function openSpecEditModal(spec) {
+  editingSpec = spec || null;
+  const title = document.getElementById("spec-edit-title");
+  const textInput = document.getElementById("spec-edit-text");
+  if (spec && spec in specMap) {
+    title.textContent = "✏️ 編輯規格對應";
+    textInput.value = spec;
+    textInput.disabled = true; // 編輯時不允許改規格文字
+    editingMappings = JSON.parse(JSON.stringify(specMap[spec]));
+  } else {
+    title.textContent = "➕ 新增規格對應";
+    textInput.value = "";
+    textInput.disabled = false;
+    editingMappings = [];
+  }
+  renderSpecEditSkus();
+  document.getElementById("spec-edit-modal").hidden = false;
+  setTimeout(() => textInput.focus(), 100);
+}
+
+function closeSpecEditModal() {
+  document.getElementById("spec-edit-modal").hidden = true;
+  editingSpec = null;
+  editingMappings = [];
+}
+
+function renderSpecEditSkus() {
+  const wrap = document.getElementById("spec-edit-skus");
+  if (!wrap) return;
+  if (editingMappings.length === 0) {
+    wrap.innerHTML = '<div class="hint" style="padding: 10px; background: var(--bg); border-radius: 8px; text-align: center;">尚未加入 SKU，按下方按鈕加入</div>';
+    return;
+  }
+  const libOptions = library.map(p => `<option value="${escapeHtml(p.sku)}">${escapeHtml(p.sku)} — ${escapeHtml(p.name)}</option>`).join("");
+  wrap.innerHTML = editingMappings.map((m, i) => `
+    <div class="mapped-sku" style="margin-bottom: 6px;">
+      <select data-spec-sku-idx="${i}" style="flex:1; padding:6px; font-size:12px; font-family: inherit; border:1px solid var(--border); border-radius:6px;">
+        <option value="">-- 選 SKU --</option>
+        ${libOptions.replace(`value="${escapeHtml(m.sku)}"`, `value="${escapeHtml(m.sku)}" selected`)}
+      </select>
+      <div class="sku-qty">
+        <span class="qty-label">×</span>
+        <input type="number" min="1" value="${m.qty}" data-spec-qty-idx="${i}">
+      </div>
+      <button class="remove-btn" data-spec-remove-idx="${i}">×</button>
+    </div>
+  `).join("");
+}
+
+// 開啟新增 modal
+document.getElementById("add-spec-map-btn").addEventListener("click", () => openSpecEditModal(null));
+
+// 列表中的 編輯 / 刪除 按鈕
+document.getElementById("spec-map-list").addEventListener("click", (e) => {
+  const edit = e.target.closest("button[data-spec-edit]");
+  if (edit) { openSpecEditModal(edit.dataset.specEdit); return; }
+  const del = e.target.closest("button[data-spec-delete]");
+  if (del) {
+    const spec = del.dataset.specDelete;
+    if (!confirm(`刪除這筆對應?\n${spec}`)) return;
+    delete specMap[spec];
+    saveSpecMap();
+    renderSpecMapList();
+    showToast("已刪除");
+    return;
+  }
+});
+
+// 加 SKU
+document.getElementById("spec-edit-add-sku-btn").addEventListener("click", () => {
+  editingMappings.push({ sku: "", qty: 1 });
+  renderSpecEditSkus();
+});
+
+// SKU / qty 變動 + 移除
+document.getElementById("spec-edit-skus").addEventListener("change", (e) => {
+  const sel = e.target.closest("select[data-spec-sku-idx]");
+  if (sel) {
+    const i = parseInt(sel.dataset.specSkuIdx, 10);
+    editingMappings[i].sku = sel.value;
+    return;
+  }
+  const inp = e.target.closest("input[data-spec-qty-idx]");
+  if (inp) {
+    const i = parseInt(inp.dataset.specQtyIdx, 10);
+    editingMappings[i].qty = Math.max(1, parseInt(inp.value, 10) || 1);
+  }
+});
+document.getElementById("spec-edit-skus").addEventListener("click", (e) => {
+  const rm = e.target.closest("button[data-spec-remove-idx]");
+  if (!rm) return;
+  const i = parseInt(rm.dataset.specRemoveIdx, 10);
+  editingMappings.splice(i, 1);
+  renderSpecEditSkus();
+});
+
+// 儲存
+document.getElementById("spec-edit-save").addEventListener("click", () => {
+  const text = document.getElementById("spec-edit-text").value.trim();
+  if (!text) { showToast("請輸入規格文字"); return; }
+  // 過濾掉 sku 為空的
+  const cleaned = editingMappings.filter(m => m.sku && m.qty > 0);
+  if (cleaned.length === 0) {
+    if (!confirm("沒有任何 SKU 對應，要存成「略過此規格」嗎?")) return;
+    specMap[text] = [];
+  } else {
+    specMap[text] = cleaned;
+  }
+  saveSpecMap();
+  renderSpecMapList();
+  closeSpecEditModal();
+  showToast(editingSpec ? "已更新" : "已新增");
+});
+
+// 標記略過
+document.getElementById("spec-edit-skip").addEventListener("click", () => {
+  const text = document.getElementById("spec-edit-text").value.trim();
+  if (!text) { showToast("請先輸入規格文字"); return; }
+  if (!confirm(`把「${text}」標記為略過? (匯入時會自動跳過)`)) return;
+  specMap[text] = [];
+  saveSpecMap();
+  renderSpecMapList();
+  closeSpecEditModal();
+  showToast("已標記為略過");
+});
+
+document.getElementById("spec-edit-cancel").addEventListener("click", closeSpecEditModal);
+document.getElementById("spec-edit-modal").addEventListener("click", (e) => {
+  if (e.target.id === "spec-edit-modal") closeSpecEditModal();
 });
 
 document.getElementById("clear-spec-map-btn").addEventListener("click", () => {
@@ -2127,7 +2626,16 @@ function applyQtyModal() {
   const v = parseInt(document.getElementById("qty-modal-input").value, 10);
   if (isNaN(v) || v < 0) { showToast("請輸入有效數字"); return; }
   const it = state.items[editingItemIdx];
+  const oldPacked = it.packed;
   it.packed = v;
+  // 掃描模式: 把差量加進 active parcel
+  if (state.scanMode && state.activeParcel) {
+    const ap = state.activeParcel;
+    if (!ap.items) ap.items = {};
+    ap.items[it.sku] = Math.max(0, (ap.items[it.sku] || 0) + (v - oldPacked));
+    if (ap.items[it.sku] === 0) delete ap.items[it.sku];
+    renderActiveParcel();
+  }
   saveState();
   closeQtyModal();
   renderPicking();
@@ -2159,6 +2667,15 @@ document.getElementById("qty-modal").addEventListener("click", (e) => {
 
 // Picking view interactions
 document.getElementById("items").addEventListener("click", (e) => {
+  // 分類大標點擊收合
+  const catBtn = e.target.closest("button[data-cat-toggle]");
+  if (catBtn) {
+    const cat = catBtn.dataset.catToggle;
+    collapsedCats[cat] = !collapsedCats[cat];
+    saveCollapsed();
+    renderPicking();
+    return;
+  }
   // 點數字打開 modal
   const qty = e.target.closest("[data-qty-click]");
   if (qty) {
@@ -2180,6 +2697,52 @@ document.getElementById("filter-bar").addEventListener("click", (e) => {
 });
 
 // Settings
+// 掃描模式 toggle / 輸入 / 完成
+document.getElementById("scan-toggle-btn").addEventListener("click", toggleScanMode);
+
+document.getElementById("scan-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const v = e.target.value;
+    e.target.value = "";
+    if (v.trim()) processScan(v);
+    setTimeout(() => e.target.focus(), 50);
+  }
+});
+
+// 失焦時自動 refocus (避免 iOS 點到別處就跳離)
+document.getElementById("scan-input").addEventListener("blur", () => {
+  if (state.scanMode && state.activeParcel) {
+    // 在裝箱進行中時, 略延遲 refocus 以免阻擋其他點擊
+    setTimeout(() => {
+      if (state.scanMode && document.getElementById("scan-input"))
+        document.getElementById("scan-input").focus();
+    }, 200);
+  }
+});
+
+document.getElementById("finish-parcel-btn").addEventListener("click", () => {
+  if (!state.activeParcel) { showToast("沒有進行中的訂單"); return; }
+  const id = state.activeParcel.id;
+  finalizeActiveParcel(false);
+  saveState();
+  renderScanPanel();
+  showToast("✓ 訂單 " + id + " 已完成");
+  setTimeout(() => document.getElementById("scan-input").focus(), 100);
+});
+
+document.getElementById("show-parcels-btn").addEventListener("click", () => {
+  if (state.completedParcels.length === 0) { showToast("尚無已完成訂單"); return; }
+  let msg = `本次共 ${state.completedParcels.length} 筆已完成:\n\n`;
+  for (const p of state.completedParcels) {
+    const t = new Date(p.completedAt);
+    msg += `${p.id} (${t.toLocaleTimeString("zh-TW")})\n`;
+    for (const sku in p.items) msg += `  ${sku} × ${p.items[sku]}\n`;
+    msg += "\n";
+  }
+  alert(msg);
+});
+
 // 🏠 首頁按鈕：暫離備貨頁去瀏覽商品庫 (state 保留)
 document.getElementById("home-btn").addEventListener("click", () => {
   window.__homeOverride = true;
@@ -2198,7 +2761,7 @@ document.getElementById("reset-btn").addEventListener("click", () => {
   msg += "清空後無法復原，連備份也會清除。\n\n如果是出貨完成請按「✓ 產生備貨報告」→「出貨完成」。";
   if (!confirm(msg)) return;
   console.log("[state] manually cancelled by user");
-  state = { items: [], filter: "all", loadedDate: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   settingsModal.hidden = true;
@@ -2268,7 +2831,7 @@ document.getElementById("complete-shipping-btn").addEventListener("click", () =>
   // 存入歷史紀錄
   appendHistory();
   console.log("[state] shipping completed, archived to history, clearing state");
-  state = { items: [], filter: "all", loadedDate: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
