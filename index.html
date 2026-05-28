@@ -1,4 +1,11 @@
 <!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Koca Shipping Picker",
+  "schemaVersion": 1,
+  "description": "Koca 出貨雙重確認手機 App — 兩種模式：(1) 從常用商品庫挑選 + 輸入今日數量 (2) 從 Excel 出貨總表貼上資料。逐件 +1/-1 確認備貨，即時顯示狀態、產生完整備貨報告。資料存在手機本地 (localStorage)。"
+}
+</script>
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
@@ -975,11 +982,19 @@ footer.summary-bar {
       <span class="scan-status" id="scan-status">未啟用</span>
     </button>
     <div id="scan-body" class="scan-body" hidden>
-      <input type="text" id="scan-input" inputmode="none" autocomplete="off"
-             placeholder="📡 刷寄件編號或手動輸入 + Enter..."
+      <input type="text" id="scan-input"
+             inputmode="email"
+             lang="en"
+             autocomplete="off"
+             autocorrect="off"
+             autocapitalize="characters"
+             spellcheck="false"
+             enterkeyhint="done"
+             placeholder="SCAN 或輸入寄件編號 + Enter"
              class="scan-input">
       <div class="hint" style="font-size: 11px; margin-top: 4px; color: var(--text-soft);">
-        💡 支援自動辨識: 7-11 交貨便服務代碼 (C+11位數字)、全家、黑貓宅急便、蝦皮店到店等。即使刷到 QR Code 的 JSON 也會自動抽出代碼。
+        💡 鍵盤已設為英文輸入法 (若仍跳出中文，請手動切換鍵盤)。<br>
+        支援自動辨識: 7-11 交貨便 (C+11位)、蝦皮店到家 (TW...)、黑貓、全家等格式。
       </div>
       <div id="active-parcel" class="active-parcel" hidden>
         <div class="active-parcel-info">
@@ -1154,10 +1169,9 @@ let currentPlatform = "a1";
 // A1 規格 → SKU 對應預設 (依據實際 A1 揀貨單預先建立)
 const DEFAULT_SPEC_MAP = {
   "Joy Lite 1 白色單主機 ●現貨": [{ sku: "KPJ-40MV47", qty: 1 }],
-  "Joy Lite 1 白 單主機版●現貨": [{ sku: "KPJ-40MV47", qty: 1 }],
   "Joy Lite 1隨行組 ●現貨":     [{ sku: "KPJ-40MV47", qty: 1 }, { sku: "KPJ-40MV47-BAG", qty: 1 }],
   "濾芯5個":                  [{ sku: "KVC-18MV45-HEPA", qty: 5 }],
-  "Dusty MINI 1收納包及濾芯4組": [{ sku: "KVCBG-18MV45", qty: 1 }, { sku: "KVC-18MV45-HEPA", qty: 4 }],
+  "Dusty MINI 1收納包及濾芯4組": [{ sku: "KVC-18MV45", qty: 1 }, { sku: "KVCBG-18MV45", qty: 1 }, { sku: "KVC-18MV45-HEPA", qty: 4 }],
   "Dusty MINI 1 一般版●預購":   [{ sku: "KVC-18MV45", qty: 1 }],
   "簡約白【單主機款】送6件套":      [{ sku: "KVC-40MV46", qty: 1 }],
   "簡約白【日本熱銷旗艦款】送6件套":  [{ sku: "KVC-40MV46", qty: 1 }],
@@ -1179,7 +1193,7 @@ const DEFAULT_LIBRARY = [
   { sku: "HD-WH-W",          name: "吹風機壁掛(白)",                      category: "吹風機" },
   { sku: "HD-WH-B",          name: "吹風機壁掛(黑)",                      category: "吹風機" },
   { sku: "KHD-44MV42",       name: "KOCA Shiny 1 吹風機",               category: "吹風機" },
-  { sku: "KPJ-40MV47",       name: "KPJ-40MV47 投影機 Joy Lite 1",       category: "投影機" },
+  { sku: "KPJ-40MV47",       name: "Joy Lite 1 白色單主機 ●現貨",         category: "投影機" },
   { sku: "KPJ-40MV47-BAG",   name: "Joy Lite 1 投影機收納包",              category: "投影機" },
   { sku: "KVC-18MV45",       name: "KOCA Dusty MINI 1 單主機 銀灰色版",     category: "吸塵器" },
   { sku: "KVC-18MV45-HEPA",  name: "KOCA Dusty MINI 1 濾芯",            category: "吸塵器" },
@@ -1288,13 +1302,24 @@ function loadLibrary() {
     const NAME_UPDATES_V2 = {
       "HD-WH-W": { from: "吹風機透明支架(白)", to: "吹風機壁掛(白)" },
     };
+    const NAME_UPDATES_V3 = {
+      "KPJ-40MV47": { from: "KPJ-40MV47 投影機 Joy Lite 1", to: "Joy Lite 1 白色單主機 ●現貨" },
+    };
     const nameMigKey = "lib_name_mig_v2";
+    const nameMigKeyV3 = "lib_name_mig_v3";
     if (!localStorage.getItem(nameMigKey)) {
       for (const it of library) {
         const up = NAME_UPDATES_V2[it.sku];
         if (up && it.name === up.from) { it.name = up.to; migrated = true; }
       }
       try { localStorage.setItem(nameMigKey, "1"); } catch(e) {}
+    }
+    if (!localStorage.getItem(nameMigKeyV3)) {
+      for (const it of library) {
+        const up = NAME_UPDATES_V3[it.sku];
+        if (up && it.name === up.from) { it.name = up.to; migrated = true; console.log("[migration] 更新名稱", it.sku, "→", up.to); }
+      }
+      try { localStorage.setItem(nameMigKeyV3, "1"); } catch(e) {}
     }
     if (migrated) saveLibrary();
   } catch(e) {}
@@ -1381,6 +1406,31 @@ function loadSpecMap() {
         specMap[spec] = JSON.parse(JSON.stringify(DEFAULT_SPEC_MAP[spec]));
         mapMigrated = true;
       }
+    }
+    // 一次性修正: Dusty MINI 1 套組原本漏了主機 (v2026-05-28)
+    const SPEC_FIX_KEY = "picking_spec_fix_dusty_bundle_v1";
+    if (!localStorage.getItem(SPEC_FIX_KEY)) {
+      const bundleSpec = "Dusty MINI 1收納包及濾芯4組";
+      if (specMap[bundleSpec]) {
+        const hasMaster = specMap[bundleSpec].some(m => m.sku === "KVC-18MV45");
+        if (!hasMaster) {
+          specMap[bundleSpec].unshift({ sku: "KVC-18MV45", qty: 1 });
+          mapMigrated = true;
+          console.log("[migration] 補入主機到 Dusty MINI 套組對應");
+        }
+      }
+      try { localStorage.setItem(SPEC_FIX_KEY, "1"); } catch(e) {}
+    }
+    // 一次性修正: 移除重複的 Joy Lite 1 白 單主機版 (v2026-05-28)
+    const SPEC_FIX_KEY_2 = "picking_spec_fix_joylite_dup_v1";
+    if (!localStorage.getItem(SPEC_FIX_KEY_2)) {
+      const dupSpec = "Joy Lite 1 白 單主機版●現貨";
+      if (dupSpec in specMap) {
+        delete specMap[dupSpec];
+        mapMigrated = true;
+        console.log("[migration] 移除重複規格", dupSpec);
+      }
+      try { localStorage.setItem(SPEC_FIX_KEY_2, "1"); } catch(e) {}
     }
     if (mapMigrated) saveSpecMap();
   } catch(e) {}
@@ -1514,6 +1564,7 @@ function showToast(msg) {
 
 // ---- Render: Import (Menu tab) ----
 function renderMenu() {
+  const _scrollY = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
   const container = document.getElementById("menu-items");
   if (library.length === 0) {
     container.innerHTML = `
@@ -1549,6 +1600,10 @@ function renderMenu() {
     }).join("");
   }
   // (純瀏覽模式 - 不再追蹤選中數量)
+  requestAnimationFrame(() => {
+    if (document.scrollingElement) document.scrollingElement.scrollTop = _scrollY;
+    else window.scrollTo(0, _scrollY);
+  });
 }
 
 // ---- Render: Library management modal ----
@@ -1571,6 +1626,8 @@ function renderLibrary() {
 
 // ---- Render: Picking view ----
 function renderPicking() {
+  // 保存捲動位置 (避免 innerHTML 重繪後跳到頂端)
+  const _scrollY = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
   const counts = { all: state.items.length, pending: 0, done: 0, over: 0 };
   for (const it of state.items) {
     const s = statusOf(it);
@@ -1648,6 +1705,11 @@ function renderPicking() {
   document.getElementById("expected-qty").textContent = expectedQty;
   document.getElementById("pct").textContent = pct + "%";
   document.getElementById("progress-fill").style.width = Math.min(100, pct) + "%";
+  // 還原捲動位置
+  requestAnimationFrame(() => {
+    if (document.scrollingElement) document.scrollingElement.scrollTop = _scrollY;
+    else window.scrollTo(0, _scrollY);
+  });
 }
 
 // ---- A1 Mapping Editor ----
