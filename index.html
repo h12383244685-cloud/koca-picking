@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-<script type="application/json" id="cowork-artifact-meta">
-{
-  "name": "Koca Shipping Picker",
-  "schemaVersion": 1,
-  "description": "Koca 出貨雙重確認手機 App — 兩種模式：(1) 從常用商品庫挑選 + 輸入今日數量 (2) 從 Excel 出貨總表貼上資料。逐件 +1/-1 確認備貨，即時顯示狀態、產生完整備貨報告。資料存在手機本地 (localStorage)。"
-}
-</script>
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
@@ -435,6 +428,33 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .item-qty .sep { color: var(--text-soft); font-weight: 400; margin: 0 2px; }
 .item-qty .expected { color: var(--text-soft); font-size: 18px; }
 .item.status-done .item-qty { color: var(--success); }
+.item-qty .shipped-remaining { color: #94a3b8; }
+.item-qty .current.done, .item-qty .expected.done { color: var(--success); }
+.shipped-note {
+  font-size: 10px;
+  color: var(--success);
+  font-weight: 600;
+  margin-top: 2px;
+  text-align: center;
+  background: var(--success-bg);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.item.status-essential-used { border-left-color: #6366f1; background: #eef2ff; }
+.item.status-essential-pending { border-left-color: #a5b4fc; }
+.item.status-essential-used .item-qty,
+.item.status-essential-pending .item-qty { color: #4f46e5; }
+.essential-badge {
+  display: inline-block;
+  background: #6366f1;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+}
 .item-qty[data-qty-click] {
   cursor: pointer;
   padding: 4px 10px;
@@ -541,6 +561,38 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .spec-map-icon-btn:active { background: #d8e6f3; }
 .spec-map-icon-btn.danger { color: var(--danger); }
 .spec-map-icon-btn.danger:active { background: var(--danger-bg); }
+
+/* 已完成訂單明細 */
+.completed-parcels-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+.completed-parcel {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+.completed-parcel:last-child { border-bottom: 0; }
+.completed-parcel-id {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--success);
+  font-size: 12px;
+}
+.completed-parcel-items {
+  color: var(--text-soft);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.completed-parcel-time {
+  color: var(--text-soft);
+  font-size: 10px;
+  margin-left: 6px;
+}
 
 /* 出貨紀錄 卡片 */
 .history-item {
@@ -916,6 +968,12 @@ footer.summary-bar {
       <button class="btn full sm secondary" id="add-spec-map-btn" style="margin-top:8px;">➕ 新增規格對應</button>
       <button class="btn full sm danger" id="clear-spec-map-btn" style="margin-top:8px;">🗑 全部清空 (含預設)</button>
     </details>
+
+    <details>
+      <summary>📦 必要商品 (<span id="essential-count">0</span>)</summary>
+      <p class="hint" style="margin-bottom:6px;">標記為必要商品的 SKU 會自動加入每次的備貨清單，用幾個由你當下決定，不計入完成率。可在「📚 管理商品庫」修改。</p>
+      <div id="essential-list" class="hint" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:6px 10px; background:#fafbfc;">尚無</div>
+    </details>
   </div>
 
     <!-- Tab: 出貨紀錄 -->
@@ -1006,8 +1064,11 @@ footer.summary-bar {
       </div>
       <div class="scan-stats">
         ✓ 已完成 <strong id="completed-parcels-count">0</strong> 筆訂單
-        <button class="btn outline sm" id="show-parcels-btn" style="margin-left:auto;">查看明細</button>
       </div>
+      <details id="completed-parcels-details" style="margin-top:8px;">
+        <summary>📋 查看已完成訂單明細</summary>
+        <div id="completed-parcels-list" class="completed-parcels-list">尚無</div>
+      </details>
     </div>
   </div>
   <div class="filter-bar" id="filter-bar">
@@ -1184,11 +1245,11 @@ const DEFAULT_SPEC_MAP = {
 
 // Koca 主賣商品預設庫 (首次開啟自動載入)
 const DEFAULT_LIBRARY = [
-  { sku: "5E-5061-EV",       name: "五益包裝50*61破壞袋50入",            category: "包裝" },
-  { sku: "5E-5063-EV",       name: "三口品白色破壞袋38x52cm",             category: "包裝" },
-  { sku: "CTN-A1-F",         name: "紙箱龍F箱",                          category: "包裝" },
-  { sku: "CTN-A1-G",         name: "紙箱龍G箱-0101A331 12.1x7.1x3.1",   category: "包裝" },
-  { sku: "CTN-A1-Z",         name: "紙箱龍Z箱-0101A331 12.1x7.1x3.1",   category: "包裝" },
+  { sku: "5E-5061-EV",       name: "五益包裝50*61破壞袋50入",            category: "包裝", essential: true },
+  { sku: "5E-5063-EV",       name: "三口品白色破壞袋38x52cm",             category: "包裝", essential: true },
+  { sku: "CTN-A1-F",         name: "紙箱龍F箱",                          category: "包裝", essential: true },
+  { sku: "CTN-A1-G",         name: "紙箱龍G箱-0101A331 12.1x7.1x3.1",   category: "包裝", essential: true },
+  { sku: "CTN-A1-Z",         name: "紙箱龍Z箱-0101A331 12.1x7.1x3.1",   category: "包裝", essential: true },
   { sku: "HD-BAG1",          name: "吹風機 小號硬殼收納包",                  category: "吹風機" },
   { sku: "HD-WH-W",          name: "吹風機壁掛(白)",                      category: "吹風機" },
   { sku: "HD-WH-B",          name: "吹風機壁掛(黑)",                      category: "吹風機" },
@@ -1320,6 +1381,17 @@ function loadLibrary() {
         if (up && it.name === up.from) { it.name = up.to; migrated = true; console.log("[migration] 更新名稱", it.sku, "→", up.to); }
       }
       try { localStorage.setItem(nameMigKeyV3, "1"); } catch(e) {}
+    }
+    // 一次性遷移: 把包裝類標記為 essential
+    const essentialMigKey = "lib_essential_mig_v1";
+    if (!localStorage.getItem(essentialMigKey)) {
+      for (const it of library) {
+        if (it.category === "包裝" && !it.essential) {
+          it.essential = true;
+          migrated = true;
+        }
+      }
+      try { localStorage.setItem(essentialMigKey, "1"); } catch(e) {}
     }
     if (migrated) saveLibrary();
   } catch(e) {}
@@ -1532,6 +1604,16 @@ function parseLibraryData(text) {
 }
 
 // ---- Helpers ----
+function getShippedBySkuMap() {
+  const shipped = {};
+  for (const p of (state.completedParcels || [])) {
+    if (!p.items) continue;
+    for (const sku in p.items) {
+      shipped[sku] = (shipped[sku] || 0) + p.items[sku];
+    }
+  }
+  return shipped;
+}
 function groupByCategory(items) {
   const groups = {};
   for (const it of items) {
@@ -1545,11 +1627,21 @@ function groupByCategory(items) {
   return order.map(c => ({ name: c, items: groups[c] }));
 }
 
-function statusOf(it) {
-  if (it.packed === 0) return "pending";
-  if (it.packed < it.expected) return "partial";
-  if (it.packed === it.expected) return "done";
-  return "over";
+function statusOf(it, shippedMap) {
+  if (it.essential) {
+    const skuShipped = (shippedMap && shippedMap[it.sku]) || 0;
+    const currentActive = it.packed - skuShipped;
+    return currentActive > 0 ? "essential-used" : "essential-pending";
+  }
+  // 新模式: 已確認出貨的部分 + 當前活動 vs 剩餘目標
+  const shipped = (shippedMap && shippedMap[it.sku]) || 0;
+  const currentActive = it.packed - shipped;
+  const remaining = it.expected - shipped;
+  if (shipped >= it.expected) return "done"; // 全部已確認出貨
+  if (currentActive === 0 && remaining > 0) return "pending";
+  if (currentActive > 0 && currentActive < remaining) return "partial";
+  if (currentActive === remaining) return "done"; // 此筆完成後就 100%
+  return "over"; // currentActive > remaining
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1616,9 +1708,10 @@ function renderLibrary() {
     container.innerHTML = library.map((p, idx) => `
       <div class="lib-item">
         <div class="item-info">
-          <div class="item-sku">${escapeHtml(p.sku)}</div>
+          <div class="item-sku">${escapeHtml(p.sku)}${p.essential ? ' <span class="essential-badge">必要</span>' : ''}</div>
           <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
         </div>
+        <button class="btn sm outline" data-lib-toggle-essential="${idx}" title="標記為必要商品">${p.essential ? "★" : "☆"}</button>
         <button class="btn sm danger" data-lib-remove="${idx}">移除</button>
       </div>`).join("");
   }
@@ -1626,11 +1719,11 @@ function renderLibrary() {
 
 // ---- Render: Picking view ----
 function renderPicking() {
-  // 保存捲動位置 (避免 innerHTML 重繪後跳到頂端)
   const _scrollY = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
+  const shipped = getShippedBySkuMap();
   const counts = { all: state.items.length, pending: 0, done: 0, over: 0 };
   for (const it of state.items) {
-    const s = statusOf(it);
+    const s = statusOf(it, shipped);
     if (s === "done") counts.done++;
     else if (s === "over") counts.over++;
     else counts.pending++;
@@ -1646,7 +1739,7 @@ function renderPicking() {
 
   const filtered = state.items.filter(it => {
     if (state.filter === "all") return true;
-    const s = statusOf(it);
+    const s = statusOf(it, shipped);
     if (state.filter === "pending") return s !== "done" && s !== "over";
     return s === state.filter;
   });
@@ -1661,7 +1754,35 @@ function renderPicking() {
       const collapsed = !!collapsedCats[g.name];
       const itemsHtml = g.items.map(it => {
         const realIdx = state.items.indexOf(it);
-        const s = statusOf(it);
+        const s = statusOf(it, shipped);
+        if (it.essential) {
+          const skuShipped = shipped[it.sku] || 0;
+          const currentActive = it.packed - skuShipped;
+          return `
+        <div class="item status-${s}">
+          <div class="item-info">
+            <div class="item-sku">${escapeHtml(it.sku)} <span class="essential-badge">📦 自由計數</span></div>
+            <div class="item-name">${escapeHtml(it.name || "(無名稱)")}</div>
+          </div>
+          <div class="item-counter">
+            <div class="item-qty" data-qty-click data-idx="${realIdx}" role="button" tabindex="0">
+              <span class="current">${currentActive}</span>
+              ${skuShipped > 0 ? `<div class="shipped-note">今日已出 ${skuShipped}</div>` : ''}
+            </div>
+            <div class="qty-controls">
+              <button class="qty-btn minus" data-pick-act="minus" data-idx="${realIdx}" ${currentActive === 0 ? "disabled" : ""}>−</button>
+              <button class="qty-btn plus" data-pick-act="plus" data-idx="${realIdx}">＋</button>
+            </div>
+          </div>
+        </div>`;
+        }
+        const skuShipped = shipped[it.sku] || 0;
+        const currentActive = it.packed - skuShipped;
+        const remaining = it.expected - skuShipped;
+        const allDone = skuShipped >= it.expected;
+        const qtyHtml = allDone
+          ? `<span class="current done">${skuShipped}</span><span class="sep">/</span><span class="expected done">${it.expected}</span>`
+          : `<span class="current">${currentActive}</span><span class="sep">/</span><span class="expected shipped-remaining">${remaining}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
         return `
         <div class="item status-${s}">
           <div class="item-info">
@@ -1670,10 +1791,10 @@ function renderPicking() {
           </div>
           <div class="item-counter">
             <div class="item-qty" data-qty-click data-idx="${realIdx}" role="button" tabindex="0">
-              <span class="current">${it.packed}</span><span class="sep">/</span><span class="expected">${it.expected}</span>
+              ${qtyHtml}
             </div>
             <div class="qty-controls">
-              <button class="qty-btn minus" data-pick-act="minus" data-idx="${realIdx}" ${it.packed === 0 ? "disabled" : ""}>−</button>
+              <button class="qty-btn minus" data-pick-act="minus" data-idx="${realIdx}" ${currentActive === 0 ? "disabled" : ""}>−</button>
               <button class="qty-btn plus" data-pick-act="plus" data-idx="${realIdx}">＋</button>
             </div>
           </div>
@@ -1694,10 +1815,12 @@ function renderPicking() {
     }).join("");
   }
 
-  const totalSku = state.items.length;
-  const doneSku = state.items.filter(it => statusOf(it) === "done").length;
-  const expectedQty = state.items.reduce((s, it) => s + it.expected, 0);
-  const packedQty = state.items.reduce((s, it) => s + it.packed, 0);
+  // 完成率只看非 essential 商品
+  const normalItems = state.items.filter(it => !it.essential);
+  const totalSku = normalItems.length;
+  const doneSku = normalItems.filter(it => statusOf(it, shipped) === "done").length;
+  const expectedQty = normalItems.reduce((s, it) => s + it.expected, 0);
+  const packedQty = normalItems.reduce((s, it) => s + it.packed, 0);
   const pct = expectedQty > 0 ? Math.round((packedQty / expectedQty) * 100) : 0;
   document.getElementById("done-count").textContent = doneSku;
   document.getElementById("total-count").textContent = totalSku;
@@ -1807,6 +1930,15 @@ function applyA1MappingToPickingList() {
       items.push({ sku, name: "", expected: totals[sku], packed: 0 });
     }
   }
+  // 自動加入「必要商品」(自由計數, 無目標值)
+  for (const p of library) {
+    if (p.essential && !items.find(it => it.sku === p.sku)) {
+      items.push({
+        sku: p.sku, name: p.name, category: p.category,
+        expected: 0, packed: 0, essential: true
+      });
+    }
+  }
 
   // 若已有未完成的備貨清單, 先 confirm 避免悄悄覆蓋
   if (state.items.length > 0) {
@@ -1897,7 +2029,7 @@ function toggleScanMode() {
   }
   saveState();
   renderScanPanel();
-  if (state.scanMode) setTimeout(() => document.getElementById("scan-input").focus(), 100);
+  if (state.scanMode) setTimeout(() => document.getElementById("scan-input").focus({ preventScroll: true }), 100);
 }
 
 // 從刷槍輸入抽出真實寄件編號 (處理 7-11 JSON QR 等情況)
@@ -2024,6 +2156,26 @@ function renderScanPanel() {
   }
   document.getElementById("completed-parcels-count").textContent = state.completedParcels.length;
   renderActiveParcel();
+  renderCompletedParcelsList();
+}
+
+function renderCompletedParcelsList() {
+  const list = document.getElementById("completed-parcels-list");
+  if (!list) return;
+  const parcels = state.completedParcels || [];
+  if (parcels.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-soft); text-align:center; padding:8px;">尚無已完成訂單</div>';
+    return;
+  }
+  list.innerHTML = parcels.slice().reverse().map(p => {
+    const t = new Date(p.completedAt);
+    const timeStr = t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const itemsStr = Object.entries(p.items || {}).map(([sku, q]) => `${sku}×${q}`).join("、");
+    return `<div class="completed-parcel">
+      <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span><span class="completed-parcel-time">${timeStr}</span></div>
+      <div class="completed-parcel-items">${escapeHtml(itemsStr)}</div>
+    </div>`;
+  }).join("");
 }
 
 function renderActiveParcel() {
@@ -2065,7 +2217,7 @@ function render() {
   updateResumeBanner();
   if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); }
   else if (inMapping && !homeOverride) renderA1Mapping();
-  else { renderMenu(); renderSpecMapList(); renderHistory(); }
+  else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
 }
 
 function updateResumeBanner() {
@@ -2077,13 +2229,14 @@ function updateResumeBanner() {
     if (headerStatus) headerStatus.hidden = true;
     return;
   }
-  const expectedSum = state.items.reduce((s, it) => s + it.expected, 0);
-  const packedSum = state.items.reduce((s, it) => s + it.packed, 0);
+  const normalForBanner = state.items.filter(it => !it.essential);
+  const expectedSum = normalForBanner.reduce((s, it) => s + it.expected, 0);
+  const packedSum = normalForBanner.reduce((s, it) => s + it.packed, 0);
   const remaining = Math.max(0, expectedSum - packedSum);
   if (banner) {
     banner.hidden = false;
     document.getElementById("resume-meta").textContent =
-      `${state.items.length} 個 SKU · 還差 ${remaining} 件未裝`;
+      `${normalForBanner.length} 個 SKU · 還差 ${remaining} 件未裝`;
   }
   // header 徽章: 只要有未完成清單就顯示, 不論在哪個畫面
   if (headerStatus) {
@@ -2093,6 +2246,19 @@ function updateResumeBanner() {
     const inPicking = !document.getElementById("picking-view").hidden;
     headerStatus.classList.toggle("subtle", inPicking);
   }
+}
+
+function renderEssentialList() {
+  const list = document.getElementById("essential-list");
+  const count = document.getElementById("essential-count");
+  if (!list || !count) return;
+  const essentials = library.filter(p => p.essential);
+  count.textContent = essentials.length;
+  if (essentials.length === 0) {
+    list.innerHTML = "尚無";
+    return;
+  }
+  list.innerHTML = essentials.map(p => `<div style="padding:3px 0;font-size:12px;"><strong style="color:var(--primary);">${escapeHtml(p.sku)}</strong> · ${escapeHtml(p.name || "")}</div>`).join("");
 }
 
 function renderSpecMapList() {
@@ -2126,6 +2292,15 @@ function renderSpecMapList() {
 function bumpPickItem(idx, delta) {
   const it = state.items[idx];
   if (!it) return;
+  // 不可減到「已確認出貨」以下 (包括必要商品)
+  if (delta < 0) {
+    const shipped = getShippedBySkuMap();
+    const skuShipped = shipped[it.sku] || 0;
+    if (it.packed - 1 < skuShipped) {
+      showToast(`⛔ ${it.sku} 已確認 ${skuShipped} 件無法減少`);
+      return;
+    }
+  }
   it.packed = Math.max(0, it.packed + delta);
   // 若在掃描模式且有 active parcel, 紀錄到當前訂單
   if (state.scanMode && state.activeParcel && delta !== 0) {
@@ -2626,6 +2801,18 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
 });
 
 document.getElementById("lib-items").addEventListener("click", (e) => {
+  // essential toggle
+  const tog = e.target.closest("button[data-lib-toggle-essential]");
+  if (tog) {
+    const idx = parseInt(tog.dataset.libToggleEssential, 10);
+    if (library[idx]) {
+      library[idx].essential = !library[idx].essential;
+      saveLibrary();
+      renderLibrary();
+      showToast(library[idx].essential ? `✓ ${library[idx].sku} 設為必要商品` : `✓ ${library[idx].sku} 取消必要商品`);
+    }
+    return;
+  }
   const b = e.target.closest("button[data-lib-remove]");
   if (!b) return;
   const idx = parseInt(b.dataset.libRemove, 10);
@@ -2688,6 +2875,13 @@ function applyQtyModal() {
   const v = parseInt(document.getElementById("qty-modal-input").value, 10);
   if (isNaN(v) || v < 0) { showToast("請輸入有效數字"); return; }
   const it = state.items[editingItemIdx];
+  // 防呆: 不可低於已確認出貨 (含必要商品)
+  const shipped = getShippedBySkuMap();
+  const skuShipped = shipped[it.sku] || 0;
+  if (v < skuShipped) {
+    showToast(`⛔ 不可低於已確認的 ${skuShipped} 件`);
+    return;
+  }
   const oldPacked = it.packed;
   it.packed = v;
   // 掃描模式: 把差量加進 active parcel
@@ -2768,7 +2962,7 @@ document.getElementById("scan-input").addEventListener("keydown", (e) => {
     const v = e.target.value;
     e.target.value = "";
     if (v.trim()) processScan(v);
-    setTimeout(() => e.target.focus(), 50);
+    setTimeout(() => e.target.focus({ preventScroll: true }), 50);
   }
 });
 
@@ -2778,7 +2972,7 @@ document.getElementById("scan-input").addEventListener("blur", () => {
     // 在裝箱進行中時, 略延遲 refocus 以免阻擋其他點擊
     setTimeout(() => {
       if (state.scanMode && document.getElementById("scan-input"))
-        document.getElementById("scan-input").focus();
+        document.getElementById("scan-input").focus({ preventScroll: true });
     }, 200);
   }
 });
@@ -2790,20 +2984,10 @@ document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   saveState();
   renderScanPanel();
   showToast("✓ 訂單 " + id + " 已完成");
-  setTimeout(() => document.getElementById("scan-input").focus(), 100);
+  setTimeout(() => document.getElementById("scan-input").focus({ preventScroll: true }), 100);
 });
 
-document.getElementById("show-parcels-btn").addEventListener("click", () => {
-  if (state.completedParcels.length === 0) { showToast("尚無已完成訂單"); return; }
-  let msg = `本次共 ${state.completedParcels.length} 筆已完成:\n\n`;
-  for (const p of state.completedParcels) {
-    const t = new Date(p.completedAt);
-    msg += `${p.id} (${t.toLocaleTimeString("zh-TW")})\n`;
-    for (const sku in p.items) msg += `  ${sku} × ${p.items[sku]}\n`;
-    msg += "\n";
-  }
-  alert(msg);
-});
+// (移除 show-parcels-btn handler, 已改成 details 展開)
 
 // 🏠 首頁按鈕：暫離備貨頁去瀏覽商品庫 (state 保留)
 document.getElementById("home-btn").addEventListener("click", () => {
