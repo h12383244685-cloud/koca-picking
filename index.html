@@ -2119,6 +2119,7 @@ function processScan(code) {
   }
   saveState();
   renderScanPanel();
+  renderPicking(); // 重要: SKU 列表也要重繪, 顯示「已出 X」「0/餘」
 }
 
 function startParcel(id) {
@@ -2315,8 +2316,11 @@ function bumpPickItem(idx, delta) {
   if (delta > 0 && navigator.vibrate) navigator.vibrate(12);
   saveState();
   renderPicking();
-  if (delta > 0 && it.packed === it.expected) showToast("✓ " + it.sku + " 已完成");
-  else if (delta > 0 && it.packed > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  // 必要商品 (自由計數) 不跳「已完成」或「超過」提示, 因為沒有目標值
+  if (delta > 0 && !it.essential) {
+    if (it.packed === it.expected) showToast("✓ " + it.sku + " 已完成");
+    else if (it.packed > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  }
 }
 
 // (移除菜單手動模式相關死碼: bumpMenuQty / setMenuQty / startFromMenu)
@@ -2957,8 +2961,10 @@ function applyQtyModal() {
   saveState();
   closeQtyModal();
   renderPicking();
-  if (v === it.expected) showToast("✓ " + it.sku + " 已完成");
-  else if (v > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  if (!it.essential) {
+    if (v === it.expected) showToast("✓ " + it.sku + " 已完成");
+    else if (v > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  }
 }
 
 document.getElementById("qty-modal-apply").addEventListener("click", applyQtyModal);
@@ -3078,8 +3084,8 @@ document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   finalizeActiveParcel(false);
   saveState();
   renderScanPanel();
+  renderPicking(); // 重要: 確認完訂單後重繪 SKU 列表
   showToast("✓ 訂單 " + id + " 已完成");
-  // (移除 refocus: 全域 keydown 監聽會自動處理刷槍輸入)
 });
 
 // (移除 show-parcels-btn handler, 已改成 details 展開)
