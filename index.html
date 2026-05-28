@@ -2013,7 +2013,7 @@ function renderHistory() {
         </div>
         <div class="history-item-actions">
           <button class="btn outline sm" data-hist-toggle="${e.id}">${expanded ? '收起' : '展開明細'}</button>
-          <button class="btn outline sm" data-hist-copy="${e.id}">📋 複製</button>
+          <button class="btn outline sm" data-hist-export="${e.id}">📦 明細</button>
           <button class="btn outline sm danger" data-hist-delete="${e.id}">🗑</button>
         </div>
         ${detail}
@@ -2435,26 +2435,51 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     if (entry) { entry._expanded = !entry._expanded; renderHistory(); }
     return;
   }
-  const copy = e.target.closest("button[data-hist-copy]");
-  if (copy) {
-    const entry = history.find(h => h.id === copy.dataset.histCopy);
+  const exportBtn = e.target.closest("button[data-hist-export]");
+  if (exportBtn) {
+    const entry = history.find(h => h.id === exportBtn.dataset.histExport);
     if (!entry) return;
+    // 單筆明細 CSV
+    const rows = [["出貨日期", "通路", "寄件單號", "寄件時間", "商品編號", "商品名稱", "分類", "數量"]];
     const d = new Date(entry.completedAt);
-    let txt = `📦 出貨紀錄 ${d.toLocaleString("zh-TW")}\n`;
-    txt += `通路: ${entry.platform}\n`;
-    txt += `應出 ${entry.summary.totalSku} SKU / ${entry.summary.totalExpected} 件\n`;
-    txt += `已裝 ${entry.summary.completedSku} SKU / ${entry.summary.totalPacked} 件 (${entry.summary.completionRate}%)\n\n`;
-    for (const it of entry.items) {
-      txt += `${it.sku} ${it.name}: ${it.packed}/${it.expected}\n`;
-    }
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(txt).then(() => showToast("已複製"));
+    const dateStr = d.toLocaleString("zh-TW");
+    const parcels = entry.parcels || [];
+    if (parcels.length === 0) {
+      // 無寄件單資料, 用 items
+      for (const it of entry.items) {
+        if (it.packed > 0) {
+          rows.push([dateStr, entry.platform, "(無寄件單)", "",
+            it.sku, (it.name || "").replace(/[\r\n]+/g, " "), it.category || "", it.packed]);
+        }
+      }
     } else {
-      const ta = document.createElement("textarea");
-      ta.value = txt; document.body.appendChild(ta); ta.select();
-      document.execCommand("copy"); document.body.removeChild(ta);
-      showToast("已複製");
+      for (const p of parcels) {
+        const pt = p.completedAt ? new Date(p.completedAt) : null;
+        const pTimeStr = pt ? pt.toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+        for (const sku in (p.items || {})) {
+          const itemInfo = entry.items.find(it => it.sku === sku) || {};
+          rows.push([dateStr, entry.platform, p.id, pTimeStr,
+            sku, (itemInfo.name || "").replace(/[\r\n]+/g, " "), itemInfo.category || "",
+            p.items[sku]]);
+        }
+      }
     }
+    if (rows.length === 1) { showToast("沒有明細資料"); return; }
+    const csv = "\ufeff" + rows.map(r => r.map(cell => {
+      const s = String(cell);
+      if (/[,"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `出貨明細_${d.toISOString().slice(0,10)}_${d.toTimeString().slice(0,5).replace(":", "")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`✓ 已匯出 ${rows.length - 1} 列明細`);
     return;
   }
   const del = e.target.closest("button[data-hist-delete]");
@@ -2482,14 +2507,45 @@ document.getElementById("clear-history-btn").addEventListener("click", () => {
 
 document.getElementById("export-history-btn").addEventListener("click", () => {
   if (history.length === 0) { showToast("沒有資料可匯出"); return; }
-  // CSV 格式: 日期, 通路, SKU, 商品名, 分類, 應出, 已裝, 狀態
-  const rows = [["出貨日期", "通路", "商品編號", "商品名", "分類", "應出", "已裝", "狀態"]];
+  // 每筆 (SKU × 寄件單) 獨立一列, 應出/已裝/狀態 repeat per row
+  const rows = [["出貨日期", "通路", "寄件單號", "寄件時間", "商品編號", "商品名", "分類", "此筆數量", "應出(總)", "已裝(總)", "狀態"]];
   for (const e of history) {
     const d = new Date(e.completedAt);
     const dateStr = d.toLocaleString("zh-TW");
+    // 預先建立: 每個 SKU 對應的寄件單號 + 數量 + 完成時間
+    const skuToParcels = {};
+    for (const p of (e.parcels || [])) {
+      for (const sku in (p.items || {})) {
+        if (!skuToParcels[sku]) skuToParcels[sku] = [];
+        skuToParcels[sku].push({ id: p.id, time: p.completedAt, qty: p.items[sku] });
+      }
+    }
     for (const it of e.items) {
-      const status = it.packed === it.expected ? "完成" : (it.packed < it.expected ? "未完成" : "多裝");
-      rows.push([dateStr, e.platform, it.sku, (it.name || "").replace(/[\r\n]+/g, " "), it.category || "", it.expected, it.packed, status]);
+      let status;
+      if (it.essential) {
+        status = it.packed > 0 ? "已使用" : "未使用";
+      } else {
+        status = it.packed === it.expected ? "完成" : (it.packed < it.expected ? "未完成" : "多裝");
+      }
+      const name = (it.name || "").replace(/[\r\n]+/g, " ");
+      const parcels = skuToParcels[it.sku] || [];
+      if (parcels.length === 0) {
+        // 沒寄件單資料 (例如沒用裝箱掃描就完成), 仍輸出一列
+        rows.push([
+          dateStr, e.platform, "(無寄件單)", "",
+          it.sku, name, it.category || "",
+          it.packed, it.expected, it.packed, status
+        ]);
+      } else {
+        for (const p of parcels) {
+          const pTimeStr = p.time ? new Date(p.time).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+          rows.push([
+            dateStr, e.platform, p.id, pTimeStr,
+            it.sku, name, it.category || "",
+            p.qty, it.expected, it.packed, status
+          ]);
+        }
+      }
     }
   }
   // CSV 轉換 (含跳脫)
