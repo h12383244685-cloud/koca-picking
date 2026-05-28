@@ -1042,4 +1042,31 @@ document.getElementById("copy-report").addEventListener("click", () => {
   let txt = `📦 備貨報告 ${new Date().toLocaleString("zh-TW")}\n`;
   txt += `應出 ${state.items.length} SKU / ${state.items.reduce((s,it)=>s+it.expected,0)} 件\n`;
   txt += `已裝 ${dones.length} SKU / ${state.items.reduce((s,it)=>s+it.packed,0)} 件\n\n`;
-  if (misses.length) { txt += `❌ 未完成：\n`; misses.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}/${it.expected} (還差${it.expected-it.packed})\n
+  if (misses.length) { txt += `❌ 未完成：\n`; misses.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}/${it.expected} (還差${it.expected-it.packed})\n`); txt += `\n`; }
+  if (overs.length) { txt += `⚠ 多裝：\n`; overs.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}/${it.expected} (多${it.packed-it.expected})\n`); txt += `\n`; }
+  if (dones.length) { txt += `✓ 完成：\n`; dones.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}\n`); }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(txt).then(() => showToast("已複製到剪貼簿"));
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    showToast("已複製");
+  }
+});
+
+// Close modals on backdrop tap
+[libModal, settingsModal, reportModal].forEach(m => {
+  m.addEventListener("click", (e) => {
+    if (e.target === m) m.hidden = true;
+  });
+});
+
+// ---- Init ----
+loadState();
+loadLibrary();
+loadMenuQty();
+render();
+</script>
+</body>
+</html>
