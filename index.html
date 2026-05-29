@@ -1232,6 +1232,7 @@ let currentPlatform = "a1";
 // A1 規格 → SKU 對應預設 (依據實際 A1 揀貨單預先建立)
 const DEFAULT_SPEC_MAP = {
   "Joy Lite 1 白色單主機 ●現貨": [{ sku: "KPJ-40MV47", qty: 1 }],
+  "Joy Lite 1 白色單主機 ●現": [{ sku: "KPJ-40MV47", qty: 1 }],
   "Joy Lite 1隨行組 ●現貨":     [{ sku: "KPJ-40MV47", qty: 1 }, { sku: "KPJ-40MV47-BAG", qty: 1 }],
   "濾芯5個":                  [{ sku: "KVC-18MV45-HEPA", qty: 5 }],
   "Dusty MINI 1收納包及濾芯4組": [{ sku: "KVC-18MV45", qty: 1 }, { sku: "KVCBG-18MV45", qty: 1 }, { sku: "KVC-18MV45-HEPA", qty: 4 }],
@@ -1506,6 +1507,18 @@ function loadSpecMap() {
       }
       try { localStorage.setItem(SPEC_FIX_KEY_2, "1"); } catch(e) {}
     }
+    // 一次性修正 v4: 撤回前次錯誤遷移, 把「Joy Lite 1 白色單主機 ●現」補回 (v2026-05-28)
+    // 之前我誤把 ●現 改名為 ●現貨, 但實際 CSV 規格文字是 ●現, 改了反而對不上
+    const SPEC_FIX_KEY_4 = "picking_spec_fix_joylite_revert_v1";
+    if (!localStorage.getItem(SPEC_FIX_KEY_4)) {
+      const spec = "Joy Lite 1 白色單主機 ●現";
+      if (!(spec in specMap)) {
+        specMap[spec] = [{ sku: "KPJ-40MV47", qty: 1 }];
+        mapMigrated = true;
+        console.log("[migration] 補回規格", spec);
+      }
+      try { localStorage.setItem(SPEC_FIX_KEY_4, "1"); } catch(e) {}
+    }
     if (mapMigrated) saveSpecMap();
   } catch(e) {}
 }
@@ -1608,10 +1621,13 @@ function parseLibraryData(text) {
 // ---- Helpers ----
 function getShippedBySkuMap() {
   const shipped = {};
-  for (const p of (state.completedParcels || [])) {
-    if (!p.items) continue;
+  const parcels = state.completedParcels;
+  if (!Array.isArray(parcels)) return shipped;
+  for (const p of parcels) {
+    if (!p || !p.items || typeof p.items !== "object") continue;
     for (const sku in p.items) {
-      shipped[sku] = (shipped[sku] || 0) + p.items[sku];
+      const v = parseFloat(p.items[sku]);
+      if (!isNaN(v) && v > 0) shipped[sku] = (shipped[sku] || 0) + v;
     }
   }
   return shipped;
@@ -1802,8 +1818,10 @@ function renderPicking() {
           </div>
         </div>`;
       }).join("");
-      const doneInCat = g.items.filter(it => statusOf(it) === "done").length;
-      const allDone = doneInCat === g.items.length && g.items.length > 0;
+      // 計算分類完成: 排除 essential (它沒目標, 永遠不會變 done 狀態)
+      const nonEssentialItems = g.items.filter(it => !it.essential);
+      const doneInCat = nonEssentialItems.filter(it => statusOf(it, shipped) === "done").length;
+      const allDone = nonEssentialItems.length > 0 && doneInCat === nonEssentialItems.length;
       return `
         <div class="cat-group">
           <button class="cat-header ${allDone ? "has-selected" : ""}" data-cat-toggle="${escapeHtml(g.name)}">
@@ -2550,7 +2568,9 @@ document.getElementById("export-history-btn").addEventListener("click", () => {
   }
   // CSV 轉換 (含跳脫)
   const csv = "\ufeff" + rows.map(r => r.map(cell => {
-    const s = String(cell);
+    let s = String(cell);
+    // CSV injection 防護: 開頭是 = + - @ 時前面加單引號
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
     if (/[,"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   }).join(",")).join("\r\n");
@@ -2608,7 +2628,9 @@ document.getElementById("export-detail-btn").addEventListener("click", () => {
     return;
   }
   const csv = "\ufeff" + rows.map(r => r.map(cell => {
-    const s = String(cell);
+    let s = String(cell);
+    // CSV injection 防護: 開頭是 = + - @ 時前面加單引號
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
     if (/[,"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   }).join(",")).join("\r\n");
@@ -3032,6 +3054,12 @@ document.getElementById("qty-modal-zero").addEventListener("click", () => {
 document.getElementById("qty-modal-full").addEventListener("click", () => {
   if (editingItemIdx < 0) return;
   const it = state.items[editingItemIdx];
+  // essential 沒有 expected 目標, 「全部完成」改成 +1 操作
+  if (it.essential) {
+    const cur = parseInt(document.getElementById("qty-modal-input").value, 10) || 0;
+    document.getElementById("qty-modal-input").value = cur + 1;
+    return;
+  }
   document.getElementById("qty-modal-input").value = it.expected;
   applyQtyModal();
 });
@@ -3086,19 +3114,22 @@ let _scanBuffer = "";
 let _scanBufferTimer = null;
 document.addEventListener("keydown", (e) => {
   if (!state.scanMode) return;
+  // 排除 Ctrl/Cmd/Alt 組合鍵 (避免吞掉重整、貼上等快捷鍵)
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const ae = document.activeElement;
   // 若使用者正在某個 input/textarea/select 中, 由原本元素處理 (不攔截)
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  // 若 modal 開啟中, 不攔截 (避免衝突)
-  if (!document.getElementById("qty-modal").hidden) return;
-  if (!document.getElementById("spec-edit-modal").hidden) return;
-  if (!document.getElementById("settings-modal").hidden) return;
-  if (!document.getElementById("report-modal").hidden) return;
-  if (!document.getElementById("lib-modal").hidden) return;
+  // 若任何 modal 開啟中, 不攔截 (避免衝突)
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal"];
+  for (const id of modals) {
+    const el = document.getElementById(id);
+    if (el && !el.hidden) return;
+  }
 
   if (e.key === "Enter") {
     if (_scanBuffer.length > 0) {
       e.preventDefault();
+      clearTimeout(_scanBufferTimer); // 防 race: 清掉等待中的 timer
       processScan(_scanBuffer);
       _scanBuffer = "";
       const inp = document.getElementById("scan-input");
@@ -3188,9 +3219,10 @@ document.getElementById("resume-btn").addEventListener("click", () => {
 // Final report
 const reportModal = document.getElementById("report-modal");
 document.getElementById("finish-btn").addEventListener("click", () => {
-  const dones = state.items.filter(it => statusOf(it) === "done");
-  const misses = state.items.filter(it => { const s = statusOf(it); return s === "pending" || s === "partial"; });
-  const overs = state.items.filter(it => statusOf(it) === "over");
+  const _shipped = getShippedBySkuMap();
+  const dones = state.items.filter(it => statusOf(it, _shipped) === "done");
+  const misses = state.items.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = state.items.filter(it => statusOf(it, _shipped) === "over");
 
   let html = "";
   html += `<div class="report-section"><h3>📊 總結</h3>
@@ -3225,7 +3257,8 @@ document.getElementById("finish-btn").addEventListener("click", () => {
 });
 document.getElementById("close-report").addEventListener("click", () => reportModal.hidden = true);
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
-  const dones = state.items.filter(it => statusOf(it) === "done").length;
+  const _shipped2 = getShippedBySkuMap();
+  const dones = state.items.filter(it => statusOf(it, _shipped2) === "done").length;
   const total = state.items.length;
   let msg = `確定本次出貨已完成?`;
   if (dones < total) msg += `\n\n⚠ 還有 ${total - dones} 個 SKU 未完成 (狀態不是「✓ 完成」)。`;
@@ -3243,9 +3276,10 @@ document.getElementById("complete-shipping-btn").addEventListener("click", () =>
 });
 
 document.getElementById("copy-report").addEventListener("click", () => {
-  const dones = state.items.filter(it => statusOf(it) === "done");
-  const misses = state.items.filter(it => { const s = statusOf(it); return s === "pending" || s === "partial"; });
-  const overs = state.items.filter(it => statusOf(it) === "over");
+  const _shipped = getShippedBySkuMap();
+  const dones = state.items.filter(it => statusOf(it, _shipped) === "done");
+  const misses = state.items.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = state.items.filter(it => statusOf(it, _shipped) === "over");
   let txt = `📦 備貨報告 ${new Date().toLocaleString("zh-TW")}\n`;
   txt += `應出 ${state.items.length} SKU / ${state.items.reduce((s,it)=>s+it.expected,0)} 件\n`;
   txt += `已裝 ${dones.length} SKU / ${state.items.reduce((s,it)=>s+it.packed,0)} 件\n\n`;
@@ -3276,8 +3310,13 @@ if (state.items.length === 0) {
   const backup = tryRestoreFromBackup();
   if (backup) {
     state = backup;
+    // 補齊新欄位 (舊備份相容)
+    if (typeof state.scanMode === "undefined") state.scanMode = false;
+    if (typeof state.activeParcel === "undefined") state.activeParcel = null;
+    if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
     saveState();
-    setTimeout(() => showToast(`✓ 已從備份還原 ${backup.items.length} 個 SKU 的備貨清單`), 500);
+    const _savedDate = backup.savedAt ? new Date(backup.savedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "?";
+    setTimeout(() => showToast(`✓ 已從備份還原 ${backup.items.length} 個 SKU (備份於 ${_savedDate})`), 500);
     console.log("[state] restored from backup", backup.items.length, "items, savedAt:", backup.savedAt);
   }
 }
