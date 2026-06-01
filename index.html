@@ -562,6 +562,158 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .spec-map-icon-btn.danger { color: var(--danger); }
 .spec-map-icon-btn.danger:active { background: var(--danger-bg); }
 
+/* SKU 條碼列印視圖 */
+#barcode-print-view {
+  position: fixed; inset: 0;
+  background: white;
+  z-index: 100;
+  overflow-y: auto;
+  padding: 0;
+}
+.barcode-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+  position: sticky; top: 0;
+  flex-wrap: wrap;
+}
+.barcode-info {
+  padding: 10px 16px;
+  background: var(--primary-light);
+  font-size: 12px;
+  color: var(--primary);
+}
+
+/* 分類區塊 (book mode) */
+.barcode-category {
+  padding: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.barcode-category-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 22px; font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 3px solid var(--primary);
+}
+.barcode-category-header .cat-emoji { font-size: 28px; }
+.barcode-category-header .cat-name { flex: 1; }
+.barcode-category-header .cat-count {
+  font-size: 14px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 4px 12px;
+  border-radius: 14px;
+}
+
+/* 分類本模式: 每個 SKU 一橫列 */
+.barcode-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 8px;
+  border-bottom: 1px dashed #ddd;
+}
+.barcode-row:last-child { border-bottom: 0; }
+.barcode-row-left {
+  flex: 0 0 110px;
+  text-align: center;
+}
+.barcode-row-left .shortcode {
+  font-family: ui-monospace, monospace;
+  font-weight: 900;
+  font-size: 28px;
+  color: var(--primary);
+  letter-spacing: 2px;
+}
+.barcode-row-mid {
+  flex: 1;
+  text-align: center;
+}
+.barcode-row-mid svg {
+  max-width: 100%;
+  height: 60px;
+}
+.barcode-row-right {
+  flex: 0 0 180px;
+  font-size: 12px;
+}
+.barcode-row-right .sku {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.barcode-row-right .name {
+  color: var(--text-soft);
+  line-height: 1.3;
+}
+
+/* 緊湊模式: 格子排列 */
+.barcode-dense-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+}
+.barcode-cell {
+  border: 1px solid #ccc;
+  padding: 10px 8px;
+  text-align: center;
+  background: white;
+  border-radius: 4px;
+  page-break-inside: avoid;
+}
+.barcode-cell .shortcode {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--primary);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.barcode-cell svg {
+  width: 100%;
+  height: 50px;
+}
+.barcode-cell .sku {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+.barcode-cell .name {
+  font-size: 9px;
+  color: var(--text-soft);
+  margin-top: 2px;
+  line-height: 1.2;
+  min-height: 22px;
+}
+
+@media print {
+  body > *:not(#barcode-print-view) { display: none !important; }
+  .no-print, .barcode-info { display: none !important; }
+  #barcode-print-view {
+    position: static;
+    padding: 0;
+  }
+  /* book mode: 每個分類獨立頁 */
+  .barcode-category {
+    page-break-after: always;
+    border-bottom: 0;
+    padding: 10mm;
+  }
+  .barcode-category:last-child { page-break-after: auto; }
+  .barcode-row { page-break-inside: avoid; }
+  /* dense mode 列印格式 */
+  .barcode-dense-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3mm;
+    padding: 5mm;
+  }
+}
+
 /* 已完成訂單明細 */
 .completed-parcels-list {
   max-height: 200px;
@@ -1092,6 +1244,25 @@ footer.summary-bar {
   </footer>
 </div>
 
+<!-- SKU 條碼列印視圖 -->
+<div id="barcode-print-view" hidden>
+  <div class="barcode-toolbar no-print">
+    <button class="btn sm" onclick="window.print()">🖨 列印</button>
+    <button class="btn outline sm" id="barcode-close-btn">關閉</button>
+    <select id="barcode-layout-mode" style="margin-left:8px; padding:6px; font-family:inherit; border:1px solid var(--border); border-radius:6px;">
+      <option value="book" selected>📖 分類本 (每類獨立頁)</option>
+      <option value="dense">📋 緊湊 (全部一頁)</option>
+    </select>
+    <span style="margin-left:auto; font-size:12px; color: var(--text-soft);">
+      <span id="barcode-count">0</span> 個 SKU
+    </span>
+  </div>
+  <div class="barcode-info no-print">
+    💡 集中放在包貨桌或裝訂成本子。刷槍掃 SKU 條碼 = 當前訂單該 SKU +1（需先刷寄件單）。
+  </div>
+  <div id="barcode-content"></div>
+</div>
+
 <!-- 商品庫管理 modal -->
 <div class="modal-backdrop" id="lib-modal" hidden>
   <div class="modal">
@@ -1118,6 +1289,8 @@ footer.summary-bar {
     <div style="height: 12px"></div>
     <button class="btn full outline sm" id="restore-defaults-btn">↻ 補回 Koca 預設庫 (15 個主賣商品)</button>
     <div style="height: 12px"></div>
+    <button class="btn full outline" id="auto-shortcode-btn" style="margin-bottom: 8px;">🪄 自動產生分類短碼</button>
+    <button class="btn full outline" id="print-barcodes-btn" style="margin-bottom: 12px;">📇 列印 SKU 條碼</button>
     <button class="btn full secondary" id="close-lib">完成</button>
   </div>
 </div>
@@ -1395,6 +1568,17 @@ function loadLibrary() {
         }
       }
       try { localStorage.setItem(essentialMigKey, "1"); } catch(e) {}
+    }
+    // 一次性遷移: 補 barcode 欄位 (預設 = sku)
+    const barcodeMigKey = "lib_barcode_mig_v1";
+    if (!localStorage.getItem(barcodeMigKey)) {
+      for (const it of library) {
+        if (!it.barcode) {
+          it.barcode = it.sku;
+          migrated = true;
+        }
+      }
+      try { localStorage.setItem(barcodeMigKey, "1"); } catch(e) {}
     }
     if (migrated) saveLibrary();
   } catch(e) {}
@@ -1723,15 +1907,24 @@ function renderLibrary() {
   if (library.length === 0) {
     container.innerHTML = `<div class="empty-state" style="padding: 20px;"><div>還沒有任何商品</div></div>`;
   } else {
-    container.innerHTML = library.map((p, idx) => `
+    container.innerHTML = library.map((p, idx) => {
+      const bc = p.barcode || p.sku;
+      const customBc = bc !== p.sku;
+      return `
       <div class="lib-item">
         <div class="item-info">
           <div class="item-sku">${escapeHtml(p.sku)}${p.essential ? ' <span class="essential-badge">必要</span>' : ''}</div>
           <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
+          <div style="font-size:10px; color:var(--text-soft); margin-top:2px;">
+            條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>
+            ${customBc ? ' (自訂)' : ''}
+          </div>
         </div>
+        <button class="btn sm outline" data-lib-edit-bc="${idx}" title="編輯條碼">📇</button>
         <button class="btn sm outline" data-lib-toggle-essential="${idx}" title="標記為必要商品">${p.essential ? "★" : "☆"}</button>
         <button class="btn sm danger" data-lib-remove="${idx}">移除</button>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   }
 }
 
@@ -2057,11 +2250,14 @@ function extractParcelId(raw) {
   if (!raw) return "";
   const s = String(raw).trim();
   if (!s) return "";
+  // 注意: 7-11 QR 不含「交貨便服務代碼」(被 7-11 保護), QR 只有內部 code1/code2/code3
+  // 對 7-11 訂單建議手動輸入交貨便服務代碼 (印在出貨單上)
   // 1. 蝦皮店到家物流條碼: TW + 12 位數字 + 字母 (例: TW262445297876H) - 最高優先, 避免被「12 位純數字」regex 截掉
   const shopeeLog = s.match(/TW\d{12}[A-Z]/);
   if (shopeeLog) return shopeeLog[0];
-  // 2. 7-11 交貨便服務代碼: C + 10-12 位數字 (例: C04888507520)
-  const c711 = s.match(/C\d{10,12}/);
+  // 2. 7-11 系列代碼: C + 10-15 位數字 (例: C04888507520 / C1156358600000)
+  // 加邊界檢查避免在更長數字串中被截斷
+  const c711 = s.match(/(?<!\d)C\d{10,15}(?!\d)/);
   if (c711) return c711[0];
   // 3. 國際小包: 2 字母 + 9-12 位數字 + TW 結尾 (例: EE123456789TW)
   const intl = s.match(/[A-Z]{2}\d{9,12}TW\b/);
@@ -2112,6 +2308,29 @@ function processScan(code) {
   if (!code) return;
   if (original !== code) console.log("[scan] extracted", code, "from", original.substring(0, 60) + (original.length > 60 ? "..." : ""));
   console.log("[scan]", code);
+
+  // 新增: 檢查是否為商品條碼 (先比 barcode, 再比 sku)
+  // 雙重比對: 支援自訂 barcode + fallback SKU
+  let matchedProd = library.find(p => p.barcode === code);
+  if (!matchedProd) matchedProd = library.find(p => p.sku === code);
+  if (matchedProd) {
+    if (!state.activeParcel) {
+      showToast("⚠ 請先刷寄件單再加 SKU");
+      return;
+    }
+    const idx = state.items.findIndex(it => it.sku === matchedProd.sku);
+    if (idx >= 0) {
+      bumpPickItem(idx, 1);
+      const it = state.items[idx];
+      if (it.essential || (it.packed < it.expected)) {
+        showToast(`+1 ${matchedProd.sku}`);
+      }
+      return;
+    } else {
+      showToast(`⚠ ${matchedProd.sku} 不在今日備貨清單`);
+      return;
+    }
+  }
   if (state.activeParcel) {
     // 已有 active parcel
     if (state.activeParcel.id === code) {
@@ -2920,7 +3139,8 @@ document.getElementById("add-fav-btn").addEventListener("click", () => {
   const name = document.getElementById("new-name").value.trim();
   if (!sku) { showToast("請輸入商品編號"); return; }
   if (library.some(p => p.sku === sku)) { showToast("這個 SKU 已在商品庫"); return; }
-  library.push({ sku, name });
+  // barcode 預設 = sku (打基礎: 之後可在管理頁修改)
+  library.push({ sku, name, barcode: sku });
   saveLibrary();
   document.getElementById("new-sku").value = "";
   document.getElementById("new-name").value = "";
@@ -2934,6 +3154,8 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
   let added = 0;
   for (const p of parsed) {
     if (!library.some(x => x.sku === p.sku)) {
+      // 預設 barcode = sku
+      if (!p.barcode) p.barcode = p.sku;
       library.push(p);
       added++;
     }
@@ -2945,6 +3167,32 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
 });
 
 document.getElementById("lib-items").addEventListener("click", (e) => {
+  // 編輯 barcode
+  const editBc = e.target.closest("button[data-lib-edit-bc]");
+  if (editBc) {
+    const idx = parseInt(editBc.dataset.libEditBc, 10);
+    const p = library[idx];
+    if (!p) return;
+    const cur = p.barcode || p.sku;
+    const newBc = prompt(`編輯「${p.sku}」的條碼\n\n預設與 SKU 相同。可改成原廠條碼、短碼等。\n條碼必須全庫唯一。`, cur);
+    if (newBc === null) return; // 取消
+    const trimmed = newBc.trim();
+    if (!trimmed) { showToast("條碼不能空白"); return; }
+    // 唯一性檢查
+    if (library.some((other, i) => i !== idx && (other.barcode || other.sku) === trimmed)) {
+      showToast(`⛔ 條碼 ${trimmed} 已被其他商品使用`);
+      return;
+    }
+    if (library.some((other, i) => i !== idx && other.sku === trimmed)) {
+      showToast(`⛔ 條碼 ${trimmed} 與其他商品的 SKU 衝突`);
+      return;
+    }
+    p.barcode = trimmed;
+    saveLibrary();
+    renderLibrary();
+    showToast(trimmed === p.sku ? "已重設為 SKU" : `已更新為 ${trimmed}`);
+    return;
+  }
   // essential toggle
   const tog = e.target.closest("button[data-lib-toggle-essential]");
   if (tog) {
@@ -3220,9 +3468,12 @@ document.getElementById("resume-btn").addEventListener("click", () => {
 const reportModal = document.getElementById("report-modal");
 document.getElementById("finish-btn").addEventListener("click", () => {
   const _shipped = getShippedBySkuMap();
-  const dones = state.items.filter(it => statusOf(it, _shipped) === "done");
-  const misses = state.items.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
-  const overs = state.items.filter(it => statusOf(it, _shipped) === "over");
+  // 報告計算: essential 商品另外處理, 不算進 done/miss/over
+  const _normalItems = state.items.filter(it => !it.essential);
+  const _essentialItems = state.items.filter(it => it.essential && it.packed > 0);
+  const dones = _normalItems.filter(it => statusOf(it, _shipped) === "done");
+  const misses = _normalItems.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = _normalItems.filter(it => statusOf(it, _shipped) === "over");
 
   let html = "";
   html += `<div class="report-section"><h3>📊 總結</h3>
@@ -3258,8 +3509,10 @@ document.getElementById("finish-btn").addEventListener("click", () => {
 document.getElementById("close-report").addEventListener("click", () => reportModal.hidden = true);
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
   const _shipped2 = getShippedBySkuMap();
-  const dones = state.items.filter(it => statusOf(it, _shipped2) === "done").length;
-  const total = state.items.length;
+  // 必要商品(自由計數)沒有目標, 不計入「未完成」判斷
+  const _normalItems = state.items.filter(it => !it.essential);
+  const dones = _normalItems.filter(it => statusOf(it, _shipped2) === "done").length;
+  const total = _normalItems.length;
   let msg = `確定本次出貨已完成?`;
   if (dones < total) msg += `\n\n⚠ 還有 ${total - dones} 個 SKU 未完成 (狀態不是「✓ 完成」)。`;
   msg += `\n\n清空後會存到出貨紀錄。`;
@@ -3277,9 +3530,12 @@ document.getElementById("complete-shipping-btn").addEventListener("click", () =>
 
 document.getElementById("copy-report").addEventListener("click", () => {
   const _shipped = getShippedBySkuMap();
-  const dones = state.items.filter(it => statusOf(it, _shipped) === "done");
-  const misses = state.items.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
-  const overs = state.items.filter(it => statusOf(it, _shipped) === "over");
+  // 報告計算: essential 商品另外處理, 不算進 done/miss/over
+  const _normalItems = state.items.filter(it => !it.essential);
+  const _essentialItems = state.items.filter(it => it.essential && it.packed > 0);
+  const dones = _normalItems.filter(it => statusOf(it, _shipped) === "done");
+  const misses = _normalItems.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = _normalItems.filter(it => statusOf(it, _shipped) === "over");
   let txt = `📦 備貨報告 ${new Date().toLocaleString("zh-TW")}\n`;
   txt += `應出 ${state.items.length} SKU / ${state.items.reduce((s,it)=>s+it.expected,0)} 件\n`;
   txt += `已裝 ${dones.length} SKU / ${state.items.reduce((s,it)=>s+it.packed,0)} 件\n\n`;
@@ -3301,6 +3557,168 @@ document.getElementById("copy-report").addEventListener("click", () => {
   m.addEventListener("click", (e) => {
     if (e.target === m) m.hidden = true;
   });
+});
+
+// ---- Code 39 條碼 ----
+const CODE39_TABLE = {
+  "0":"nnnwwnwnn","1":"wnnwnnnnw","2":"nnwwnnnnw","3":"wnwwnnnnn","4":"nnnwwnnnw",
+  "5":"wnnwwnnnn","6":"nnwwwnnnn","7":"nnnwnnwnw","8":"wnnwnnwnn","9":"nnwwnnwnn",
+  "A":"wnnnnwnnw","B":"nnwnnwnnw","C":"wnwnnwnnn","D":"nnnnwwnnw","E":"wnnnwwnnn",
+  "F":"nnwnwwnnn","G":"nnnnnwwnw","H":"wnnnnwwnn","I":"nnwnnwwnn","J":"nnnnwwwnn",
+  "K":"wnnnnnnww","L":"nnwnnnnww","M":"wnwnnnnwn","N":"nnnnwnnww","O":"wnnnwnnwn",
+  "P":"nnwnwnnwn","Q":"nnnnnnwww","R":"wnnnnnwwn","S":"nnwnnnwwn","T":"nnnnwnwwn",
+  "U":"wwnnnnnnw","V":"nwwnnnnnw","W":"wwwnnnnnn","X":"nwnnwnnnw","Y":"wwnnwnnnn",
+  "Z":"nwwnwnnnn","-":"nwnnnnwnw",".":"wwnnnnwnn"," ":"nwwnnnwnn",
+  "$":"nwnwnwnnn","/":"nwnwnnnwn","+":"nwnnnwnwn","%":"nnnwnwnwn",
+  "*":"nwnnwnwnn"
+};
+function code39Svg(text) {
+  const narrow = 1.5, wide = 4, height = 60, gap = 1.5;
+  const code = "*" + String(text).toUpperCase() + "*";
+  const bars = [];
+  let x = 0;
+  for (const c of code) {
+    const pattern = CODE39_TABLE[c];
+    if (!pattern) continue;
+    for (let j = 0; j < 9; j++) {
+      const w = pattern[j] === "w" ? wide : narrow;
+      if (j % 2 === 0) bars.push({ x, w });
+      x += w;
+    }
+    x += gap;
+  }
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x.toFixed(1)} ${height}" preserveAspectRatio="xMidYMid meet">`;
+  for (const b of bars) {
+    svg += `<rect x="${b.x.toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
+  }
+  svg += "</svg>";
+  return svg;
+}
+
+function renderBarcodeContent(mode) {
+  const wrapper = document.getElementById("barcode-content");
+  if (!wrapper) return;
+  document.getElementById("barcode-count").textContent = library.length;
+  if (mode === "dense") {
+    // 緊湊模式: 格子排列
+    wrapper.innerHTML = '<div class="barcode-dense-grid">' + library.map(p => {
+      const bc = p.barcode || p.sku;
+      return `<div class="barcode-cell">
+        <div class="shortcode">${escapeHtml(bc)}</div>
+        ${code39Svg(bc)}
+        <div class="sku">${escapeHtml(p.sku)}</div>
+        <div class="name">${escapeHtml(p.name || "")}</div>
+      </div>`;
+    }).join("") + '</div>';
+  } else {
+    // 分類本模式: 依分類分頁
+    const groups = groupByCategory(library);
+    wrapper.innerHTML = groups.map(g => {
+      const items = g.items.map(p => {
+        const bc = p.barcode || p.sku;
+        return `<div class="barcode-row">
+          <div class="barcode-row-left"><div class="shortcode">${escapeHtml(bc)}</div></div>
+          <div class="barcode-row-mid">${code39Svg(bc)}</div>
+          <div class="barcode-row-right">
+            <div class="sku">${escapeHtml(p.sku)}</div>
+            <div class="name">${escapeHtml(p.name || "")}</div>
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="barcode-category">
+        <div class="barcode-category-header">
+          <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
+          <span class="cat-name">${escapeHtml(g.name)}</span>
+          <span class="cat-count">${g.items.length} 個 SKU</span>
+        </div>
+        ${items}
+      </div>`;
+    }).join("");
+  }
+}
+
+function openBarcodePrintView() {
+  const view = document.getElementById("barcode-print-view");
+  const select = document.getElementById("barcode-layout-mode");
+  renderBarcodeContent(select.value);
+  view.hidden = false;
+}
+
+document.getElementById("barcode-layout-mode").addEventListener("change", (e) => {
+  renderBarcodeContent(e.target.value);
+});
+
+document.getElementById("print-barcodes-btn").addEventListener("click", () => {
+  libModal.hidden = true;
+  openBarcodePrintView();
+});
+
+// === 自動產生分類短碼 ===
+const CATEGORY_SHORTCODE_PREFIX = {
+  "包裝": "P",
+  "吹風機": "D",  // Dryer
+  "投影機": "J",  // Joy Lite
+  "吸塵器": "V",  // Vacuum
+  "加購品": "F",  // Fan / 贈品
+  "其他": "X",
+};
+
+function generateShortcodes() {
+  // 依分類順序遍歷, 每類獨立計數
+  const result = []; // [{sku, oldBarcode, newBarcode, name, category}]
+  const categoryCounters = {};
+  // 依 CATEGORY_ORDER 順序
+  const sortedLib = [...library].sort((a, b) => {
+    const ca = CATEGORY_ORDER.indexOf(a.category || "其他");
+    const cb = CATEGORY_ORDER.indexOf(b.category || "其他");
+    if (ca !== cb) return ca - cb;
+    return a.sku.localeCompare(b.sku);
+  });
+  for (const p of sortedLib) {
+    const cat = p.category || "其他";
+    const prefix = CATEGORY_SHORTCODE_PREFIX[cat] || "X";
+    if (!categoryCounters[prefix]) categoryCounters[prefix] = 0;
+    categoryCounters[prefix]++;
+    const newBc = prefix + String(categoryCounters[prefix]).padStart(2, "0");
+    result.push({
+      sku: p.sku,
+      oldBarcode: p.barcode || p.sku,
+      newBarcode: newBc,
+      name: p.name || "",
+      category: cat,
+      changed: (p.barcode || p.sku) !== newBc,
+    });
+  }
+  return result;
+}
+
+document.getElementById("auto-shortcode-btn").addEventListener("click", () => {
+  const preview = generateShortcodes();
+  // 顯示預覽 + 確認對話框
+  let html = "<strong>分類短碼預覽：</strong>\n\n";
+  let lastCat = "";
+  for (const r of preview) {
+    if (r.category !== lastCat) {
+      html += "\n【" + r.category + "】\n";
+      lastCat = r.category;
+    }
+    const arrow = r.changed ? "→" : "=";
+    html += `  ${r.sku}  ${arrow}  ${r.newBarcode}\n`;
+  }
+  const changedCount = preview.filter(r => r.changed).length;
+  html += `\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
+  if (!confirm(html)) return;
+  // 套用
+  for (const r of preview) {
+    const idx = library.findIndex(p => p.sku === r.sku);
+    if (idx >= 0) library[idx].barcode = r.newBarcode;
+  }
+  saveLibrary();
+  renderLibrary();
+  showToast(`✓ 已產生 ${preview.length} 個分類短碼`);
+});
+document.getElementById("barcode-close-btn").addEventListener("click", () => {
+  document.getElementById("barcode-print-view").hidden = true;
 });
 
 // ---- Init ----
