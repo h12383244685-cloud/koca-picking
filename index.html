@@ -3592,13 +3592,11 @@ function code39Svg(text) {
     x += gap;
   }
   const contentWidth = x;
-  // 固定 viewBox 寬度: 容納最長條碼 (約 KPJ-40MV47-BAG 14 字) + 邊距
-  const FIXED_W = 400;
-  const viewBoxW = Math.max(FIXED_W, contentWidth + 20);
-  const offsetX = (viewBoxW - contentWidth) / 2;
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW.toFixed(1)} ${height}" preserveAspectRatio="xMidYMid meet">`;
+  // viewBox = 實際內容寬度, preserveAspectRatio="none" 讓 CSS 設定的固定寬度強制撐滿
+  // 短編碼會被橫向放大 (bar 變粗), 長編碼接近原比例 (bar 較細), 視覺上所有條碼同寬
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${contentWidth.toFixed(1)} ${height}" preserveAspectRatio="none">`;
   for (const b of bars) {
-    svg += `<rect x="${(b.x + offsetX).toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
+    svg += `<rect x="${b.x.toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
   }
   svg += "</svg>";
   return svg;
@@ -3662,39 +3660,29 @@ document.getElementById("print-barcodes-btn").addEventListener("click", () => {
   openBarcodePrintView();
 });
 
-// === 自動產生分類短碼 ===
-const CATEGORY_SHORTCODE_PREFIX = {
-  "包裝": "P",
-  "吹風機": "D",  // Dryer
-  "投影機": "J",  // Joy Lite
-  "吸塵器": "V",  // Vacuum
-  "加購品": "F",  // Fan / 贈品
-  "其他": "X",
-};
+// === 自動產生流水號短碼 (F + 10 位數字, 固定 11 字元等寬) ===
+const SHORTCODE_PREFIX = "F";  // 固定前綴 (可改成其他單字母)
+const SHORTCODE_DIGITS = 10;   // 序號位數
 
 function generateShortcodes() {
-  // 依分類順序遍歷, 每類獨立計數
-  const result = []; // [{sku, oldBarcode, newBarcode, name, category}]
-  const categoryCounters = {};
-  // 依 CATEGORY_ORDER 順序
+  // 依分類順序遍歷 (分類僅用於排序, 不影響編碼), 全庫共用一個遞增計數器
+  const result = []; // [{sku, oldBarcode, newBarcode, name, category, changed}]
   const sortedLib = [...library].sort((a, b) => {
     const ca = CATEGORY_ORDER.indexOf(a.category || "其他");
     const cb = CATEGORY_ORDER.indexOf(b.category || "其他");
     if (ca !== cb) return ca - cb;
     return a.sku.localeCompare(b.sku);
   });
+  let counter = 0;
   for (const p of sortedLib) {
-    const cat = p.category || "其他";
-    const prefix = CATEGORY_SHORTCODE_PREFIX[cat] || "X";
-    if (!categoryCounters[prefix]) categoryCounters[prefix] = 0;
-    categoryCounters[prefix]++;
-    const newBc = prefix + String(categoryCounters[prefix]).padStart(2, "0");
+    counter++;
+    const newBc = SHORTCODE_PREFIX + String(counter).padStart(SHORTCODE_DIGITS, "0");
     result.push({
       sku: p.sku,
       oldBarcode: p.barcode || p.sku,
       newBarcode: newBc,
       name: p.name || "",
-      category: cat,
+      category: p.category || "其他",
       changed: (p.barcode || p.sku) !== newBc,
     });
   }
@@ -3715,7 +3703,7 @@ document.getElementById("auto-shortcode-btn").addEventListener("click", () => {
     html += `  ${r.sku}  ${arrow}  ${r.newBarcode}\n`;
   }
   const changedCount = preview.filter(r => r.changed).length;
-  html += `\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
+  html += `\n編碼格式: ${SHORTCODE_PREFIX}+${SHORTCODE_DIGITS}位流水號 (共 ${SHORTCODE_DIGITS + 1} 字元, 等寬條碼)\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
   if (!confirm(html)) return;
   // 套用
   for (const r of preview) {
