@@ -610,9 +610,9 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 
 /* 分類本模式: 每個 SKU 一橫列 */
 .barcode-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px 8px;
-  border-bottom: 1px dashed #ddd;
+  display: flex; align-items: center; gap: 16px;
+  padding: 22px 8px;
+  border-bottom: 1px dashed #ccc;
 }
 .barcode-row:last-child { border-bottom: 0; }
 .barcode-row-left {
@@ -627,12 +627,16 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   letter-spacing: 2px;
 }
 .barcode-row-mid {
-  flex: 1;
+  flex: 1 1 320px;
   text-align: center;
+  min-width: 250px;
 }
 .barcode-row-mid svg {
-  max-width: 100%;
-  height: 60px;
+  width: 100%;
+  max-width: 320px;
+  height: 75px;
+  display: block;
+  margin: 0 auto;
 }
 .barcode-row-right {
   flex: 0 0 180px;
@@ -3587,9 +3591,14 @@ function code39Svg(text) {
     }
     x += gap;
   }
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x.toFixed(1)} ${height}" preserveAspectRatio="xMidYMid meet">`;
+  const contentWidth = x;
+  // 固定 viewBox 寬度: 容納最長條碼 (約 KPJ-40MV47-BAG 14 字) + 邊距
+  const FIXED_W = 400;
+  const viewBoxW = Math.max(FIXED_W, contentWidth + 20);
+  const offsetX = (viewBoxW - contentWidth) / 2;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW.toFixed(1)} ${height}" preserveAspectRatio="xMidYMid meet">`;
   for (const b of bars) {
-    svg += `<rect x="${b.x.toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
+    svg += `<rect x="${(b.x + offsetX).toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
   }
   svg += "</svg>";
   return svg;
