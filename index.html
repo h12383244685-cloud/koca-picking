@@ -1308,6 +1308,67 @@ footer.summary-bar {
     </p>
     <p class="hint" style="margin-top: 12px;">⚠ 若本次出貨還沒完成、你需要中止整個流程 (例如資料錯了想重來)，才按這個取消：</p>
     <button class="btn full danger" id="reset-btn">✕ 取消出貨 (清空當前清單)</button>
+
+    <div style="height: 18px"></div>
+    <details>
+      <summary>🔊 聲音提示</summary>
+      <label style="display:flex; align-items:center; gap:8px; padding: 8px 0;">
+        <input type="checkbox" id="sound-enabled-input"> 開啟刷槍/完成聲音
+      </label>
+      <button class="btn outline sm" id="sound-test-btn" style="margin-top:4px;">🔉 測試聲音</button>
+    </details>
+
+    <details>
+      <summary>🌐 外部整合 (Discord / Google Sheets)</summary>
+      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 8px; border-radius: 6px;">
+        ⚠ 注意: Cowork 預覽版會擋外部請求 (Failed to fetch)。<br>
+        只有實際部署版 (koca-picking.pages.dev) 才能正常推送。
+      </p>
+      <p class="hint">每次「出貨完成」自動推送資料。</p>
+      <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:8px;">Discord Webhook URL</label>
+      <input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="margin-bottom:4px;">
+      <button class="btn outline sm" id="discord-test-btn">📡 測試 Discord</button>
+      <div style="height: 12px"></div>
+      <label style="display:block; font-size:12px; color:var(--text-soft);">Google Apps Script Web App URL</label>
+      <input type="text" id="sheets-webhook-input" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:4px;">
+      <button class="btn outline sm" id="sheets-test-btn">📊 測試 Sheets</button>
+      <details style="margin-top:10px;">
+        <summary>📖 Google Sheets 設定教學</summary>
+        <p class="hint" style="font-size:11px; line-height:1.6;">
+          1. 開新的 Google Sheets<br>
+          2. 選單「擴充功能 → Apps Script」<br>
+          3. 貼以下程式碼:<br>
+        </p>
+        <pre style="background:#f5f7fa; padding:10px; font-size:10px; overflow-x:auto; border-radius:6px; line-height:1.4;">function doPost(e) {
+  const d = JSON.parse(e.postData.contents);
+  const sheet = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getActiveSheet();
+  // 主表: 每筆出貨一列
+  if (d.type === "shipping_complete") {
+    sheet.appendRow([
+      new Date(d.completedAt),
+      d.platform,
+      d.summary.totalSku,
+      d.summary.totalExpected,
+      d.summary.totalPacked,
+      d.summary.completionRate + "%",
+      d.summary.parcelCount,
+      d.items.map(i =>
+        i.sku + "x" + i.packed
+      ).join(", ")
+    ]);
+  }
+  return ContentService
+    .createTextOutput("OK");
+}</pre>
+        <p class="hint" style="font-size:11px;">
+          4. 「部署 → 新增部署」, 類型「網頁應用程式」<br>
+          5. 「執行身分: 我」, 「存取權: 任何人」<br>
+          6. 部署 → 複製 Web App 網址 → 貼到上方
+        </p>
+      </details>
+    </details>
     <div style="height: 16px"></div>
     <button class="btn full outline" id="close-settings">關閉</button>
   </div>
@@ -1356,6 +1417,20 @@ footer.summary-bar {
     <div style="height: 8px"></div>
     <button class="btn full sm outline" id="spec-edit-skip" style="background: var(--warn-bg); color: #92400e; border-color: var(--warn);">標記為「略過此規格」</button>
     <p class="hint" style="margin-top:6px;">略過 = 看到這個規格時系統會自動跳過、不算進備貨清單。</p>
+  </div>
+</div>
+
+<!-- 出貨前健康檢查 modal -->
+<div class="modal-backdrop" id="health-modal" hidden>
+  <div class="modal">
+    <h2>⚠ 出貨前健康檢查</h2>
+    <p class="hint" style="margin-bottom: 12px;">系統發現以下異常, 強烈建議先處理再完成出貨:</p>
+    <div id="health-content" style="max-height: 50vh; overflow-y: auto;"></div>
+    <div style="height: 12px"></div>
+    <div class="row">
+      <button class="btn outline" id="health-back" style="flex:1;">回去修正</button>
+      <button class="btn danger" id="health-force" style="flex:1;">⚠ 仍要強制完成</button>
+    </div>
   </div>
 </div>
 
@@ -1462,6 +1537,102 @@ let history = []; // [{id, completedAt, platform, items: [...], summary: {totalS
 // ---- Storage ----
 const STATE_BACKUP_KEY = "picking_state_backup_v1";
 const HISTORY_KEY = "picking_history_v1";
+const SETTINGS_KEY = "picking_settings_v1";
+
+// 設定 (聲音/webhook 等)
+let settings = {
+  soundEnabled: true,
+  discordWebhook: "",
+  sheetsWebhook: "",
+};
+function loadSettings() {
+  try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
+}
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) { console.warn("[settings] save failed", e); }
+}
+
+// ===== Web Audio 聲音提示 =====
+let _audioCtx = null;
+function playBeep(freq, duration, vol) {
+  if (!settings.soundEnabled) return;
+  vol = vol || 0.25;
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    const o = _audioCtx.createOscillator();
+    const g = _audioCtx.createGain();
+    o.connect(g); g.connect(_audioCtx.destination);
+    o.frequency.value = freq;
+    o.type = "sine";
+    g.gain.setValueAtTime(0, _audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(vol, _audioCtx.currentTime + 0.01);
+    g.gain.linearRampToValueAtTime(0, _audioCtx.currentTime + duration / 1000);
+    o.start();
+    o.stop(_audioCtx.currentTime + duration / 1000 + 0.05);
+  } catch(e) { console.warn("[sound] failed", e); }
+}
+const SOUND = {
+  scanSku: () => playBeep(880, 80),                           // 高音叮 (刷 SKU 成功 +1)
+  scanError: () => { playBeep(220, 150); setTimeout(() => playBeep(220, 150), 180); }, // 雙低音 (錯誤)
+  parcelStart: () => playBeep(660, 100),                       // 中音 (開始訂單)
+  parcelFinish: () => { playBeep(660, 80); setTimeout(() => playBeep(990, 200), 100); }, // 叮-噹 (完成訂單)
+  shipDone: () => { playBeep(523, 120); setTimeout(() => playBeep(659, 120), 130); setTimeout(() => playBeep(784, 250), 260); }, // 成功三連音 (出貨完成)
+};
+
+// ===== Webhook 推送 =====
+async function pushToDiscord(payload) {
+  if (!settings.discordWebhook) return { ok: false, error: "no_url" };
+  const url = settings.discordWebhook.trim();
+  if (!/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(url)) {
+    return { ok: false, error: "invalid_url", detail: "URL 不像 Discord webhook (應為 https://discord.com/api/webhooks/...)" };
+  }
+  try {
+    const embed = {
+      title: payload.title || "📦 出貨完成通知",
+      description: payload.description || "",
+      color: payload.color || 0x16a34a,
+      fields: payload.fields || [],
+      timestamp: new Date().toISOString(),
+      footer: { text: "Koca 出貨雙重確認" },
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn("[discord]", res.status, text);
+      return { ok: false, error: "http_" + res.status, detail: text.substring(0, 200) };
+    }
+    console.log("[discord] sent OK");
+    return { ok: true };
+  } catch(e) {
+    console.warn("[discord] failed", e);
+    return { ok: false, error: "network", detail: String(e.message || e) };
+  }
+}
+async function pushToSheets(payload) {
+  if (!settings.sheetsWebhook) return { ok: false, error: "no_url" };
+  const url = settings.sheetsWebhook.trim();
+  if (!/script\.google\.com\/macros\/s\//.test(url)) {
+    return { ok: false, error: "invalid_url", detail: "URL 不像 Google Apps Script (應為 https://script.google.com/macros/s/.../exec)" };
+  }
+  try {
+    // Google Apps Script 用 no-cors, 無法讀 response, 但能成功送出
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // GAS 偏好這格式才不會觸發 CORS preflight
+      body: JSON.stringify(payload),
+    });
+    console.log("[sheets] sent");
+    return { ok: true };
+  } catch(e) {
+    console.warn("[sheets] failed", e);
+    return { ok: false, error: "network", detail: String(e.message || e) };
+  }
+}
 function saveState() {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -1638,6 +1809,7 @@ function appendHistory() {
   history.unshift(entry); // 新的放最前面
   saveHistory();
   console.log("[history] saved entry", entry.id, "items:", items.length);
+  return entry;
 }
 
 // 安全網：確保 specMap 有所有 DEFAULT_SPEC_MAP 的預設項目
@@ -1804,6 +1976,56 @@ function parseLibraryData(text) {
     out.push({ sku, name });
   }
   return out;
+}
+
+// ---- 商品連動規則 (基於歷史出貨資料分析, 100% 配對驗證) ----
+const BUNDLE_RULES = [
+  {
+    trigger: "KVCBG-18MV45",
+    triggerName: "Dusty Mini 收納包",
+    child: "KVC-18MV45-HEPA",
+    childName: "Mini 濾芯",
+    childQtyPerTrigger: 4,
+    note: "歷史 25 筆訂單 1:4 配對 100% 成立",
+  },
+  {
+    trigger: "KPJ-40MV47-BAG",
+    triggerName: "Joy Lite 1 投影機收納包",
+    child: "KPJ-40MV47",
+    childName: "Joy Lite 1 主機",
+    childQtyPerTrigger: 1,
+    note: "歷史 16 筆加購單 1:1 配對 100% 成立",
+  },
+];
+
+function checkBundleRule(triggerIdx, deltaAdded) {
+  const triggerIt = state.items[triggerIdx];
+  if (!triggerIt || triggerIt.essential) return;
+  const rule = BUNDLE_RULES.find(r => r.trigger === triggerIt.sku);
+  if (!rule) return;
+  const childIdx = state.items.findIndex(it => it.sku === rule.child);
+  const totalChildQty = rule.childQtyPerTrigger * deltaAdded;
+  if (childIdx < 0) {
+    showToast(`⚠ ${rule.triggerName} 通常搭 ${rule.childName} × ${totalChildQty}, 但不在今日清單`);
+    return;
+  }
+  // 詢問 (延遲執行避免阻塞掃描 buffer)
+  setTimeout(() => {
+    const ok = confirm(
+      `✓ ${rule.triggerName} 已加 ${deltaAdded} 個\n\n` +
+      `📦 連動規則: ${rule.note}\n\n` +
+      `要同步加入 ${totalChildQty} 個「${rule.childName}」嗎?`
+    );
+    if (ok) {
+      // 重新驗證 childIdx (因 setTimeout 中可能 state 已變)
+      const recheckIdx = state.items.findIndex(it => it.sku === rule.child);
+      if (recheckIdx >= 0) {
+        bumpPickItem(recheckIdx, totalChildQty, { suppressBundle: true });
+      } else {
+        showToast(`⚠ ${rule.childName} 不在清單, 無法加入`);
+      }
+    }
+  }, 50);
 }
 
 // ---- Helpers ----
@@ -2324,6 +2546,7 @@ function processScan(code) {
     }
     const idx = state.items.findIndex(it => it.sku === matchedProd.sku);
     if (idx >= 0) {
+      SOUND.scanSku();
       bumpPickItem(idx, 1);
       const it = state.items[idx];
       if (it.essential || (it.packed < it.expected)) {
@@ -2331,6 +2554,7 @@ function processScan(code) {
       }
       return;
     } else {
+      SOUND.scanError();
       showToast(`⚠ ${matchedProd.sku} 不在今日備貨清單`);
       return;
     }
@@ -2340,6 +2564,7 @@ function processScan(code) {
     if (state.activeParcel.id === code) {
       // 同一張 -> 結束此筆
       finalizeActiveParcel(false);
+      SOUND.parcelFinish();
       showToast("✓ 訂單 " + code + " 已完成");
     } else {
       // 不同張 -> 警告
@@ -2351,11 +2576,30 @@ function processScan(code) {
   } else {
     // 沒有 active parcel
     // 檢查是否已完成過此編號
-    if (state.completedParcels.some(p => p.id === code)) {
-      if (!confirm(`寄件編號 ${code} 之前已完成過。要重新打開嗎？(會從紀錄中移除舊資料)`)) return;
+    const oldParcel = state.completedParcels.find(p => p.id === code);
+    if (oldParcel) {
+      const itemsSummary = Object.entries(oldParcel.items || {}).map(([s,q]) => `${s}×${q}`).join(", ");
+      if (!confirm(`寄件編號 ${code} 之前已完成過 (含 ${itemsSummary})。\n\n重新打開會撤銷該筆數量, 確定?`)) return;
+      // 真正撤銷: 把該 parcel 的 items 從 state.items.packed 扣回去
+      const orphanSkus = [];
+      for (const sku in (oldParcel.items || {})) {
+        const idx = state.items.findIndex(it => it.sku === sku);
+        if (idx >= 0) {
+          state.items[idx].packed = Math.max(0, state.items[idx].packed - oldParcel.items[sku]);
+        } else {
+          orphanSkus.push(`${sku}×${oldParcel.items[sku]}`);
+        }
+      }
+      // 從 completedParcels 移除
       state.completedParcels = state.completedParcels.filter(p => p.id !== code);
+      console.log("[parcel] 重新打開, 已撤銷 packed:", oldParcel.items);
+      if (orphanSkus.length > 0) {
+        // 提醒: 該 parcel 含當前清單沒有的 SKU
+        setTimeout(() => alert(`⚠ 注意: 該 parcel 含 ${orphanSkus.join(", ")} 的 SKU 已不在當前清單, 無法撤銷該部分計數。`), 100);
+      }
     }
     startParcel(code);
+    SOUND.parcelStart();
     showToast("📦 開始裝箱 " + code);
   }
   saveState();
@@ -2533,7 +2777,8 @@ function renderSpecMapList() {
 }
 
 // ---- Actions ----
-function bumpPickItem(idx, delta) {
+function bumpPickItem(idx, delta, options) {
+  options = options || {};
   const it = state.items[idx];
   if (!it) return;
   // 不可減到「已確認出貨」以下 (包括必要商品)
@@ -2541,7 +2786,8 @@ function bumpPickItem(idx, delta) {
     const shipped = getShippedBySkuMap();
     const skuShipped = shipped[it.sku] || 0;
     if (it.packed - 1 < skuShipped) {
-      showToast(`⛔ ${it.sku} 已確認 ${skuShipped} 件無法減少`);
+      const label = it.essential ? "已使用" : "已確認出貨";
+      showToast(`⛔ ${it.sku} ${label} ${skuShipped} 件無法減少`);
       return;
     }
   }
@@ -2561,6 +2807,10 @@ function bumpPickItem(idx, delta) {
   if (delta > 0 && !it.essential) {
     if (it.packed === it.expected) showToast("✓ " + it.sku + " 已完成");
     else if (it.packed > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  }
+  // 連動規則檢查 (不在遞迴 child 加單時觸發)
+  if (delta > 0 && !options.suppressBundle) {
+    checkBundleRule(idx, delta);
   }
 }
 
@@ -3289,11 +3539,17 @@ function applyQtyModal() {
     renderActiveParcel();
   }
   saveState();
+  const _idxForBundle = editingItemIdx; // 在 close 之前抓住 idx
   closeQtyModal();
   renderPicking();
   if (!it.essential) {
     if (v === it.expected) showToast("✓ " + it.sku + " 已完成");
     else if (v > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
+  }
+  // 連動規則檢查 (qty modal 套用後)
+  const _delta = v - oldPacked;
+  if (_delta > 0) {
+    checkBundleRule(_idxForBundle, _delta);
   }
 }
 
@@ -3306,10 +3562,9 @@ document.getElementById("qty-modal-zero").addEventListener("click", () => {
 document.getElementById("qty-modal-full").addEventListener("click", () => {
   if (editingItemIdx < 0) return;
   const it = state.items[editingItemIdx];
-  // essential 沒有 expected 目標, 「全部完成」改成 +1 操作
+  // essential 沒有 expected 目標, 「全部完成」對必要商品無意義
   if (it.essential) {
-    const cur = parseInt(document.getElementById("qty-modal-input").value, 10) || 0;
-    document.getElementById("qty-modal-input").value = cur + 1;
+    showToast("必要商品為自由計數, 沒有「全部完成」目標");
     return;
   }
   document.getElementById("qty-modal-input").value = it.expected;
@@ -3377,6 +3632,9 @@ document.addEventListener("keydown", (e) => {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
   }
+  // 條碼列印視圖開啟時也不攔截 (避免測試刷剛印的條碼污染備貨狀態)
+  const bpv = document.getElementById("barcode-print-view");
+  if (bpv && !bpv.hidden) return;
 
   if (e.key === "Enter") {
     if (_scanBuffer.length > 0) {
@@ -3423,7 +3681,8 @@ document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   finalizeActiveParcel(false);
   saveState();
   renderScanPanel();
-  renderPicking(); // 重要: 確認完訂單後重繪 SKU 列表
+  renderPicking();
+  SOUND.parcelFinish();
   showToast("✓ 訂單 " + id + " 已完成");
 });
 
@@ -3437,7 +3696,76 @@ document.getElementById("home-btn").addEventListener("click", () => {
 });
 
 const settingsModal = document.getElementById("settings-modal");
-document.getElementById("settings-btn").addEventListener("click", () => settingsModal.hidden = false);
+document.getElementById("settings-btn").addEventListener("click", () => {
+  settingsModal.hidden = false;
+  // 載入當前設定到 UI
+  document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
+  document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
+  document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
+});
+
+document.getElementById("sound-enabled-input").addEventListener("change", (e) => {
+  settings.soundEnabled = e.target.checked;
+  saveSettings();
+  if (e.target.checked) SOUND.scanSku();
+});
+document.getElementById("sound-test-btn").addEventListener("click", () => {
+  SOUND.shipDone();
+});
+
+document.getElementById("discord-webhook-input").addEventListener("input", (e) => {
+  settings.discordWebhook = e.target.value.trim();
+  saveSettings();
+});
+document.getElementById("discord-test-btn").addEventListener("click", async () => {
+  // 即時從 input 抓 URL (避免 change 事件還沒 fire)
+  const url = document.getElementById("discord-webhook-input").value.trim();
+  settings.discordWebhook = url;
+  saveSettings();
+  if (!url) { showToast("⚠ 請先輸入 Discord Webhook URL"); return; }
+  showToast("📡 發送測試訊息中...");
+  const result = await pushToDiscord({
+    title: "🔔 測試訊息",
+    description: "Koca 出貨確認 App 連線成功!",
+    color: 0x3b82f6,
+    fields: [{ name: "時間", value: new Date().toLocaleString("zh-TW"), inline: false }],
+  });
+  if (result.ok) {
+    showToast("✓ 已送出 (檢查 Discord 頻道)");
+  } else {
+    let msg = "⚠ 失敗: ";
+    if (result.error === "invalid_url") msg = "⚠ URL 格式錯誤\n" + result.detail;
+    else if (result.error === "network") msg = "⚠ 網路錯誤\n" + (result.detail || "");
+    else if (result.error.startsWith("http_")) msg = "⚠ Discord 拒絕 (" + result.error + ")\n" + (result.detail || "");
+    alert(msg);
+  }
+});
+
+document.getElementById("sheets-test-btn").addEventListener("click", async () => {
+  const url = document.getElementById("sheets-webhook-input").value.trim();
+  settings.sheetsWebhook = url;
+  saveSettings();
+  if (!url) { showToast("⚠ 請先輸入 Google Sheets URL"); return; }
+  showToast("📊 發送測試中...");
+  const result = await pushToSheets({
+    type: "test",
+    completedAt: new Date().toISOString(),
+    platform: "test",
+    summary: { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 100, parcelCount: 0 },
+    items: [],
+    parcels: [],
+  });
+  if (result.ok) {
+    showToast("✓ 已送出 (請檢查 Google Sheet)");
+  } else {
+    alert("⚠ " + (result.detail || result.error));
+  }
+});
+
+document.getElementById("sheets-webhook-input").addEventListener("input", (e) => {
+  settings.sheetsWebhook = e.target.value.trim();
+  saveSettings();
+});
 document.getElementById("close-settings").addEventListener("click", () => settingsModal.hidden = true);
 document.getElementById("reset-btn").addEventListener("click", () => {
   if (state.items.length === 0) { showToast("目前沒有備貨清單"); return; }
@@ -3470,6 +3798,95 @@ document.getElementById("resume-btn").addEventListener("click", () => {
 
 // Final report
 const reportModal = document.getElementById("report-modal");
+// ===== 出貨前健康檢查 =====
+function runHealthCheck() {
+  const shipped = getShippedBySkuMap();
+  const issues = [];
+  // 1. active parcel 未收尾
+  if (state.activeParcel) {
+    const items = state.activeParcel.items || {};
+    const itemList = Object.entries(items).map(([s, q]) => `${s}×${q}`).join(", ");
+    issues.push({
+      level: "critical",
+      icon: "🚨",
+      title: `當前訂單 ${state.activeParcel.id} 還沒結束`,
+      detail: itemList ? `已加入: ${itemList}` : "尚未加入任何商品",
+    });
+  }
+  // 2. SKU over (packed > expected, 非 essential)
+  const overItems = state.items.filter(it => !it.essential && it.packed > it.expected);
+  if (overItems.length > 0) {
+    overItems.forEach(it => {
+      issues.push({
+        level: "warning",
+        icon: "❗",
+        title: `${it.sku} 多裝 ${it.packed - it.expected} 件`,
+        detail: `已裝 ${it.packed} / 應出 ${it.expected} (${it.name || ""})`,
+      });
+    });
+  }
+  // 3. SKU under (packed < expected, 非 essential)
+  const underItems = state.items.filter(it => !it.essential && it.packed < it.expected);
+  if (underItems.length > 0) {
+    underItems.forEach(it => {
+      issues.push({
+        level: "warning",
+        icon: "⚠",
+        title: `${it.sku} 還差 ${it.expected - it.packed} 件未裝`,
+        detail: `已裝 ${it.packed} / 應出 ${it.expected} (${it.name || ""})`,
+      });
+    });
+  }
+  // 4. 鬼計數: packed > sum of parcels
+  const parcelTotals = {};
+  for (const p of (state.completedParcels || [])) {
+    for (const sku in (p.items || {})) {
+      parcelTotals[sku] = (parcelTotals[sku] || 0) + p.items[sku];
+    }
+  }
+  // 加上 active parcel 的暫存
+  if (state.activeParcel) {
+    for (const sku in (state.activeParcel.items || {})) {
+      parcelTotals[sku] = (parcelTotals[sku] || 0) + state.activeParcel.items[sku];
+    }
+  }
+  const ghosts = [];
+  for (const it of state.items) {
+    const pTotal = parcelTotals[it.sku] || 0;
+    if (it.packed > pTotal) {
+      ghosts.push({ sku: it.sku, packed: it.packed, inParcels: pTotal, ghost: it.packed - pTotal });
+    }
+  }
+  if (ghosts.length > 0) {
+    issues.push({
+      level: "critical",
+      icon: "👻",
+      title: `${ghosts.length} 個 SKU 有「鬼計數」 (沒進任何 parcel 的數量)`,
+      detail: ghosts.slice(0, 5).map(g => `${g.sku}: 計數 ${g.packed}, 但 parcel 內只 ${g.inParcels}, 鬼 ${g.ghost}`).join("\n") + (ghosts.length > 5 ? `\n... 及其他 ${ghosts.length - 5} 個` : ""),
+    });
+  }
+  return issues;
+}
+
+function showHealthCheck(issues, onForce) {
+  const wrapper = document.getElementById("health-content");
+  wrapper.innerHTML = issues.map(it => {
+    const bg = it.level === "critical" ? "var(--danger-bg)" : "var(--warn-bg)";
+    const fg = it.level === "critical" ? "var(--danger)" : "#92400e";
+    return `<div style="background: ${bg}; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+      <div style="color: ${fg}; font-weight: 600; font-size: 14px;">${it.icon} ${escapeHtml(it.title)}</div>
+      <div style="color: var(--text-soft); font-size: 12px; margin-top: 4px; white-space: pre-wrap;">${escapeHtml(it.detail)}</div>
+    </div>`;
+  }).join("");
+  const modal = document.getElementById("health-modal");
+  modal.hidden = false;
+  document.getElementById("health-back").onclick = () => { modal.hidden = true; };
+  document.getElementById("health-force").onclick = () => {
+    modal.hidden = true;
+    onForce();
+  };
+}
+
 document.getElementById("finish-btn").addEventListener("click", () => {
   const _shipped = getShippedBySkuMap();
   // 報告計算: essential 商品另外處理, 不算進 done/miss/over
@@ -3511,25 +3928,52 @@ document.getElementById("finish-btn").addEventListener("click", () => {
   reportModal.hidden = false;
 });
 document.getElementById("close-report").addEventListener("click", () => reportModal.hidden = true);
-document.getElementById("complete-shipping-btn").addEventListener("click", () => {
-  const _shipped2 = getShippedBySkuMap();
-  // 必要商品(自由計數)沒有目標, 不計入「未完成」判斷
-  const _normalItems = state.items.filter(it => !it.essential);
-  const dones = _normalItems.filter(it => statusOf(it, _shipped2) === "done").length;
-  const total = _normalItems.length;
-  let msg = `確定本次出貨已完成?`;
-  if (dones < total) msg += `\n\n⚠ 還有 ${total - dones} 個 SKU 未完成 (狀態不是「✓ 完成」)。`;
-  msg += `\n\n清空後會存到出貨紀錄。`;
-  if (!confirm(msg)) return;
-  // 存入歷史紀錄
-  appendHistory();
+function actuallyCompleteShipping() {
+  // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
+  const entry = appendHistory();
   console.log("[state] shipping completed, archived to history, clearing state");
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
   render();
+  SOUND.shipDone();
   showToast("✓ 本次出貨完成，已存入紀錄");
+  // Webhook 推送
+  if (entry && (settings.discordWebhook || settings.sheetsWebhook)) {
+    const summary = entry.summary;
+    const fields = entry.items.filter(it => it.packed > 0).slice(0, 25).map(it => ({
+      name: it.sku, value: `${it.packed} / ${it.expected || "—"}`, inline: true,
+    }));
+    pushToDiscord({
+      title: "📦 出貨完成",
+      description: `**${summary.totalSku}** SKU · 應出 **${summary.totalExpected}** · 已裝 **${summary.totalPacked}** · 完成率 **${summary.completionRate}%**` +
+                   (summary.parcelCount ? `\n📦 共 ${summary.parcelCount} 張寄件單` : ""),
+      color: summary.completionRate === 100 ? 0x16a34a : 0xf59e0b,
+      fields,
+    });
+    pushToSheets({
+      type: "shipping_complete",
+      completedAt: entry.completedAt,
+      platform: entry.platform,
+      summary: entry.summary,
+      items: entry.items,
+      parcels: entry.parcels,
+    });
+  }
+}
+
+document.getElementById("complete-shipping-btn").addEventListener("click", () => {
+  // 先跑健康檢查
+  const issues = runHealthCheck();
+  if (issues.length > 0) {
+    SOUND.scanError();
+    showHealthCheck(issues, actuallyCompleteShipping);
+    return;
+  }
+  // 無異常, 直接 confirm
+  if (!confirm("✓ 健康檢查通過。確定完成本次出貨? 清空後會存到出貨紀錄。")) return;
+  actuallyCompleteShipping();
 });
 
 document.getElementById("copy-report").addEventListener("click", () => {
@@ -3592,8 +4036,13 @@ function code39Svg(text) {
     x += gap;
   }
   const contentWidth = x;
+  // 守備: 內容寬度為 0 (空字串或全部字元都不在 CODE39_TABLE) 時回傳警示佔位 SVG
+  if (contentWidth <= 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 ${height}" preserveAspectRatio="none">` +
+           `<rect x="0" y="0" width="100" height="${height}" fill="#fee2e2"/>` +
+           `<text x="50" y="${height/2 + 4}" text-anchor="middle" font-size="12" fill="#dc2626">無法編碼</text></svg>`;
+  }
   // viewBox = 實際內容寬度, preserveAspectRatio="none" 讓 CSS 設定的固定寬度強制撐滿
-  // 短編碼會被橫向放大 (bar 變粗), 長編碼接近原比例 (bar 較細), 視覺上所有條碼同寬
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${contentWidth.toFixed(1)} ${height}" preserveAspectRatio="none">`;
   for (const b of bars) {
     svg += `<rect x="${b.x.toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
@@ -3703,7 +4152,7 @@ document.getElementById("auto-shortcode-btn").addEventListener("click", () => {
     html += `  ${r.sku}  ${arrow}  ${r.newBarcode}\n`;
   }
   const changedCount = preview.filter(r => r.changed).length;
-  html += `\n編碼格式: ${SHORTCODE_PREFIX}+${SHORTCODE_DIGITS}位流水號 (共 ${SHORTCODE_DIGITS + 1} 字元, 等寬條碼)\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
+  html += `\n編碼格式: ${SHORTCODE_PREFIX}+${SHORTCODE_DIGITS}位流水號 (共 ${SHORTCODE_DIGITS + 1} 字元, 等寬條碼)\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n⚠ 套用後, 之前列印的條碼貼紙會全部失效, 需要重新列印!\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
   if (!confirm(html)) return;
   // 套用
   for (const r of preview) {
@@ -3719,6 +4168,7 @@ document.getElementById("barcode-close-btn").addEventListener("click", () => {
 });
 
 // ---- Init ----
+loadSettings();
 loadState();
 // 自動還原: 若主資料空但備份有, 還原 + 提示
 if (state.items.length === 0) {
@@ -3753,3 +4203,4 @@ render();
 </script>
 </body>
 </html>
+
