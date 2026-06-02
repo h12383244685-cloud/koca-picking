@@ -1572,6 +1572,57 @@ function playBeep(freq, duration, vol) {
     o.stop(_audioCtx.currentTime + duration / 1000 + 0.05);
   } catch(e) { console.warn("[sound] failed", e); }
 }
+// 平台 → customer 名稱對應 (給 AI Agent 用)
+const PLATFORM_TO_CUSTOMER = {
+  a1: "蝦皮",        // A1 系統匯總蝦皮訂單為主
+  momo: "MOMO",
+  coupang: "酷澎",
+  koca: "KOCA官網",
+};
+
+// 產生今日的 doc_no (YYYYMMDD + 3 位流水)
+function generateDocNo(completedAt) {
+  const d = new Date(completedAt);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const datePrefix = `${yyyy}${mm}${dd}`;
+  // 從 history 數今天已有幾筆 (含這筆)
+  const todayCount = (history || []).filter(h => {
+    const hd = new Date(h.completedAt);
+    return hd.getFullYear() === d.getFullYear() &&
+           hd.getMonth() === d.getMonth() &&
+           hd.getDate() === d.getDate();
+  }).length;
+  // 已含本次 (本次剛 unshift 進去) + 防呆從 1 開始
+  const seq = Math.max(1, todayCount);
+  return `${datePrefix}${String(seq).padStart(3, "0")}`;
+}
+
+// 從 history entry 建 picking_outbound JSON
+function buildPickingOutboundPayload(entry) {
+  const d = new Date(entry.completedAt);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
+  const customer = PLATFORM_TO_CUSTOMER[entry.platform] || entry.platform || "其他";
+  const items = entry.items.filter(it => it.packed > 0).map(it => {
+    const libItem = library.find(p => p.sku === it.sku);
+    return {
+      sku: it.sku,
+      name: it.name || "",
+      qty: it.packed,
+      price: libItem ? (libItem.price || 0) : 0,
+      remark: "",
+    };
+  });
+  return {
+    type: "picking_outbound",
+    date: dateStr,
+    doc_no: generateDocNo(entry.completedAt),
+    customer,
+    items,
+  };
+}
+
 const SOUND = {
   scanSku: () => playBeep(880, 80),                           // 高音叮 (刷 SKU 成功 +1)
   scanError: () => { playBeep(220, 150); setTimeout(() => playBeep(220, 150), 180); }, // 雙低音 (錯誤)
@@ -1581,6 +1632,31 @@ const SOUND = {
 };
 
 // ===== Webhook 推送 =====
+async function pushToDiscordRaw(body) {
+  if (!settings.discordWebhook) return { ok: false, error: "no_url" };
+  const url = settings.discordWebhook.trim();
+  if (!/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(url)) {
+    return { ok: false, error: "invalid_url" };
+  }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn("[discord]", res.status, text);
+      return { ok: false, error: "http_" + res.status, detail: text.substring(0, 200) };
+    }
+    console.log("[discord-raw] sent OK");
+    return { ok: true };
+  } catch(e) {
+    console.warn("[discord-raw] failed", e);
+    return { ok: false, error: "network", detail: String(e.message || e) };
+  }
+}
+
 async function pushToDiscord(payload) {
   if (!settings.discordWebhook) return { ok: false, error: "no_url" };
   const url = settings.discordWebhook.trim();
@@ -1754,6 +1830,17 @@ function loadLibrary() {
         }
       }
       try { localStorage.setItem(barcodeMigKey, "1"); } catch(e) {}
+    }
+    // 一次性遷移: 補 price 欄位 (預設 0)
+    const priceMigKey = "lib_price_mig_v1";
+    if (!localStorage.getItem(priceMigKey)) {
+      for (const it of library) {
+        if (typeof it.price !== "number") {
+          it.price = 0;
+          migrated = true;
+        }
+      }
+      try { localStorage.setItem(priceMigKey, "1"); } catch(e) {}
     }
     if (migrated) saveLibrary();
   } catch(e) {}
@@ -2136,16 +2223,18 @@ function renderLibrary() {
     container.innerHTML = library.map((p, idx) => {
       const bc = p.barcode || p.sku;
       const customBc = bc !== p.sku;
+      const price = p.price || 0;
       return `
       <div class="lib-item">
         <div class="item-info">
           <div class="item-sku">${escapeHtml(p.sku)}${p.essential ? ' <span class="essential-badge">必要</span>' : ''}</div>
           <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
-          <div style="font-size:10px; color:var(--text-soft); margin-top:2px;">
-            條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>
-            ${customBc ? ' (自訂)' : ''}
+          <div style="font-size:10px; color:var(--text-soft); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap;">
+            <span>條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>${customBc ? ' (自訂)' : ''}</span>
+            <span>單價: <span style="font-family:monospace; color:${price > 0 ? 'var(--success)' : 'var(--danger)'};">$${price.toFixed(2)}</span></span>
           </div>
         </div>
+        <button class="btn sm outline" data-lib-edit-price="${idx}" title="編輯單價">💰</button>
         <button class="btn sm outline" data-lib-edit-bc="${idx}" title="編輯條碼">📇</button>
         <button class="btn sm outline" data-lib-toggle-essential="${idx}" title="標記為必要商品">${p.essential ? "★" : "☆"}</button>
         <button class="btn sm danger" data-lib-remove="${idx}">移除</button>
@@ -3421,6 +3510,23 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
 });
 
 document.getElementById("lib-items").addEventListener("click", (e) => {
+  // 編輯 price
+  const editPrice = e.target.closest("button[data-lib-edit-price]");
+  if (editPrice) {
+    const idx = parseInt(editPrice.dataset.libEditPrice, 10);
+    const p = library[idx];
+    if (!p) return;
+    const cur = p.price || 0;
+    const newPrice = prompt(`編輯「${p.sku}」的單價\n\n用於 Discord/Sheets 推送的 picking_outbound 格式。`, cur);
+    if (newPrice === null) return;
+    const v = parseFloat(newPrice);
+    if (isNaN(v) || v < 0) { showToast("⛔ 請輸入有效金額"); return; }
+    p.price = v;
+    saveLibrary();
+    renderLibrary();
+    showToast(`✓ ${p.sku} 單價 $${v.toFixed(2)}`);
+    return;
+  }
   // 編輯 barcode
   const editBc = e.target.closest("button[data-lib-edit-bc]");
   if (editBc) {
@@ -3724,11 +3830,18 @@ document.getElementById("discord-test-btn").addEventListener("click", async () =
   saveSettings();
   if (!url) { showToast("⚠ 請先輸入 Discord Webhook URL"); return; }
   showToast("📡 發送測試訊息中...");
-  const result = await pushToDiscord({
-    title: "🔔 測試訊息",
-    description: "Koca 出貨確認 App 連線成功!",
-    color: 0x3b82f6,
-    fields: [{ name: "時間", value: new Date().toLocaleString("zh-TW"), inline: false }],
+  // 測試訊息: 用真實 picking_outbound 格式給 AI Agent 看
+  const testPayload = {
+    type: "picking_outbound",
+    date: new Date().toISOString().slice(0,10).replace(/-/g,"/"),
+    doc_no: "TEST" + Date.now().toString().slice(-6),
+    customer: "測試",
+    items: [
+      { sku: "KPJ-40MV47", name: "Joy Lite 1 白色單主機", qty: 1, price: 2256.45, remark: "測試訊息" }
+    ]
+  };
+  const result = await pushToDiscordRaw({
+    content: "🔔 **連線測試** Koca 出貨確認 App\n```json\n" + JSON.stringify(testPayload, null, 2) + "\n```",
   });
   if (result.ok) {
     showToast("✓ 已送出 (檢查 Discord 頻道)");
@@ -3939,27 +4052,15 @@ function actuallyCompleteShipping() {
   render();
   SOUND.shipDone();
   showToast("✓ 本次出貨完成，已存入紀錄");
-  // Webhook 推送
+  // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
   if (entry && (settings.discordWebhook || settings.sheetsWebhook)) {
-    const summary = entry.summary;
-    const fields = entry.items.filter(it => it.packed > 0).slice(0, 25).map(it => ({
-      name: it.sku, value: `${it.packed} / ${it.expected || "—"}`, inline: true,
-    }));
-    pushToDiscord({
-      title: "📦 出貨完成",
-      description: `**${summary.totalSku}** SKU · 應出 **${summary.totalExpected}** · 已裝 **${summary.totalPacked}** · 完成率 **${summary.completionRate}%**` +
-                   (summary.parcelCount ? `\n📦 共 ${summary.parcelCount} 張寄件單` : ""),
-      color: summary.completionRate === 100 ? 0x16a34a : 0xf59e0b,
-      fields,
+    const outbound = buildPickingOutboundPayload(entry);
+    // Discord: JSON 包在 code block 讓 AI Agent 解析
+    pushToDiscordRaw({
+      content: "```json\n" + JSON.stringify(outbound, null, 2) + "\n```",
     });
-    pushToSheets({
-      type: "shipping_complete",
-      completedAt: entry.completedAt,
-      platform: entry.platform,
-      summary: entry.summary,
-      items: entry.items,
-      parcels: entry.parcels,
-    });
+    // Sheets: 直接送 outbound JSON
+    pushToSheets(outbound);
   }
 }
 
@@ -4203,4 +4304,3 @@ render();
 </script>
 </body>
 </html>
-
