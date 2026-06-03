@@ -369,6 +369,47 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   overflow-y: auto;
 }
 .active-parcel-items .empty { color: var(--text-soft); }
+.ap-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px dashed rgba(0,0,0,.08);
+}
+.ap-row:last-child { border-bottom: 0; }
+.ap-info { flex: 1; min-width: 0; }
+.ap-row .ap-sku {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--primary);
+}
+.ap-row .ap-name {
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-left: 6px;
+}
+.ap-row .ap-qty {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  flex-shrink: 0;
+  min-width: 35px;
+  text-align: right;
+}
+.ap-btn {
+  background: white;
+  border: 1px solid var(--border);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+}
+.ap-btn:active { background: #f1f5f9; transform: scale(.92); }
+.ap-btn.danger { color: var(--danger); }
+.ap-btn.danger:active { background: var(--danger-bg); }
 .scan-stats {
   display: flex; align-items: center; gap: 8px;
   font-size: 13px;
@@ -2806,7 +2847,16 @@ function renderActiveParcel() {
   } else {
     itemsEl.innerHTML = skus.map(sku => {
       const prod = state.items.find(it => it.sku === sku) || { name: "" };
-      return `<div>${escapeHtml(sku)} (${escapeHtml(prod.name)}) × ${items[sku]}</div>`;
+      const qty = items[sku];
+      return `<div class="ap-row">
+        <div class="ap-info">
+          <span class="ap-sku">${escapeHtml(sku)}</span>
+          <span class="ap-name">${escapeHtml(prod.name || "")}</span>
+        </div>
+        <span class="ap-qty">× ${qty}</span>
+        <button class="ap-btn" data-ap-minus="${escapeHtml(sku)}" title="−1 (刷錯一筆)">−</button>
+        <button class="ap-btn danger" data-ap-clear="${escapeHtml(sku)}" title="清除整個 SKU 從此訂單">🗑</button>
+      </div>`;
     }).join("");
   }
 }
@@ -3498,6 +3548,35 @@ document.getElementById("mapping-cards").addEventListener("change", (e) => {
     const v = Math.max(1, parseInt(inpQty.value, 10) || 1);
     specMap[key][mi].qty = v;
     saveSpecMap();
+    return;
+  }
+});
+
+// 當前訂單面板 - SKU 撤銷按鈕
+document.getElementById("active-parcel-items").addEventListener("click", (e) => {
+  const minusBtn = e.target.closest("button[data-ap-minus]");
+  if (minusBtn) {
+    const sku = minusBtn.dataset.apMinus;
+    const idx = state.items.findIndex(it => it.sku === sku);
+    if (idx >= 0) {
+      bumpPickItem(idx, -1);
+      SOUND.scanError();
+      showToast(`−1 ${sku}`);
+    }
+    return;
+  }
+  const clearBtn = e.target.closest("button[data-ap-clear]");
+  if (clearBtn) {
+    const sku = clearBtn.dataset.apClear;
+    const qty = (state.activeParcel && state.activeParcel.items && state.activeParcel.items[sku]) || 0;
+    if (qty <= 0) return;
+    if (!confirm(`從這筆訂單清除 ${sku} × ${qty}?`)) return;
+    const idx = state.items.findIndex(it => it.sku === sku);
+    if (idx >= 0) {
+      bumpPickItem(idx, -qty);
+      SOUND.scanError();
+      showToast(`已清除 ${sku} × ${qty}`);
+    }
     return;
   }
 });
@@ -4416,3 +4495,4 @@ render();
 </script>
 </body>
 </html>
+
