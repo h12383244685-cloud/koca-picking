@@ -1420,6 +1420,24 @@ footer.summary-bar {
   </div>
 </div>
 
+<!-- A1 匯入合併模式選擇 modal -->
+<div class="modal-backdrop" id="merge-modal" hidden>
+  <div class="modal">
+    <h2>📥 已有備貨清單</h2>
+    <p class="hint" id="merge-modal-summary"></p>
+    <div style="height: 12px"></div>
+    <button class="btn full" id="merge-append" style="background: var(--success); margin-bottom: 8px;">
+      ➕ 追加合併
+      <span style="display:block; font-size:11px; font-weight:normal; margin-top:2px;">應出量累加, 已裝資料保留 (適合中午後新訂單)</span>
+    </button>
+    <button class="btn full danger" id="merge-replace" style="margin-bottom: 8px;">
+      🔄 覆蓋現有
+      <span style="display:block; font-size:11px; font-weight:normal; margin-top:2px;">清空舊清單, 重新開始 (適合重新匯入)</span>
+    </button>
+    <button class="btn full outline" id="merge-cancel">取消</button>
+  </div>
+</div>
+
 <!-- 出貨前健康檢查 modal -->
 <div class="modal-backdrop" id="health-modal" hidden>
   <div class="modal">
@@ -2035,12 +2053,28 @@ function parseA1CSV(text) {
     if (!r || r.length < 6) continue;
     const sn = clean(r[0]);
     if (!/^\d+$/.test(sn)) continue;
+    const productName = clean(r[2]); // 商品名稱
     const spec = clean(r[4]);
     const qty = parseFloat(clean(r[5]).replace(/,/g, ""));
     if (!spec || isNaN(qty) || qty <= 0) continue;
-    items.push({ spec, orderQty: qty });
+    items.push({ spec, productName, orderQty: qty });
   }
   return items;
+}
+
+const AMBIGUOUS_SPECS = ["無", "无", "-", "—", "(無)", "N/A", "n/a"];
+function isAmbiguousSpec(spec) {
+  if (!spec) return true;
+  const s = String(spec).trim();
+  if (!s) return true;
+  return AMBIGUOUS_SPECS.includes(s);
+}
+function getLookupKey(item) {
+  if (isAmbiguousSpec(item.spec)) {
+    if (item.productName) return `[商品] ${item.productName}`;
+    return item.spec || "(無)";
+  }
+  return item.spec;
 }
 
 // Parse name list (for library bulk import): just SKU + name, no quantity required
@@ -2377,7 +2411,9 @@ function renderA1Mapping() {
   ).join("");
 
   container.innerHTML = pendingA1.map((item, idx) => {
-    const mapping = specMap[item.spec] || null;
+    const key = item.lookupKey || getLookupKey(item);
+    const mapping = specMap[key] || null;
+    const isAmbig = isAmbiguousSpec(item.spec);
     const isSkipped = mapping && mapping.length === 0;
     const cls = mapping ? (isSkipped ? "skipped" : "mapped") : "";
 
@@ -2406,7 +2442,7 @@ function renderA1Mapping() {
 
     return `
       <div class="map-card ${cls}" data-idx="${idx}">
-        <div class="map-spec">${escapeHtml(item.spec)}</div>
+        <div class="map-spec">${escapeHtml(item.spec)}${isAmbig && item.productName ? `<div style="font-size:11px; color:var(--text-soft); margin-top:4px;">⚠ 規格「${escapeHtml(item.spec)}」, 改用商品名稱識別:<br>📦 ${escapeHtml(item.productName)}</div>` : ''}</div>
         <div class="map-meta">
           <span class="badge">${item.orderQty} 筆訂單</span>
         </div>
@@ -2430,9 +2466,10 @@ function applyA1MappingToPickingList() {
   const totals = {}; // sku -> qty
   let unmappedCount = 0;
   for (const item of pendingA1) {
-    const mapping = specMap[item.spec];
+    const key = item.lookupKey || getLookupKey(item);
+    const mapping = specMap[key];
     if (!mapping) { unmappedCount++; continue; }
-    if (mapping.length === 0) continue; // 略過
+    if (mapping.length === 0) continue;
     for (const m of mapping) {
       totals[m.sku] = (totals[m.sku] || 0) + m.qty * item.orderQty;
     }
@@ -2468,13 +2505,9 @@ function applyA1MappingToPickingList() {
     }
   }
 
-  // 若已有未完成的備貨清單, 先 confirm 避免悄悄覆蓋
+  // 若已有未完成的備貨清單, 跳 merge modal 讓使用者選
   if (state.items.length > 0) {
-    const remaining = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
-    if (remaining > 0 && !confirm(`你目前還有 ${remaining} 件未裝箱完成的備貨清單，匯入新清單會覆蓋它，確定?`)) {
-      pendingA1 = [];
-      return false;
-    }
+    return showMergeModal(items);
   }
 
   state.items = items;
@@ -2778,6 +2811,82 @@ function renderActiveParcel() {
   }
 }
 
+// ===== A1 追加合併邏輯 =====
+let _pendingMergeItems = null; // 暫存等待合併的 items
+
+function showMergeModal(items) {
+  _pendingMergeItems = items;
+  // 計算預覽: 哪些 SKU 會被加多少
+  const newTotals = {};
+  for (const it of items) newTotals[it.sku] = it.expected;
+  const currentSkus = state.items.map(i => i.sku);
+  const newSkus = items.map(i => i.sku).filter(s => !currentSkus.includes(s));
+  const increases = state.items.filter(cur => newTotals[cur.sku] && newTotals[cur.sku] > 0);
+  const summary = `現有 ${state.items.length} 個 SKU, 新清單 ${items.length} 個 SKU。\n` +
+                  `若追加: ${increases.length} 個 SKU 累加, ${newSkus.length} 個是新 SKU。`;
+  document.getElementById("merge-modal-summary").textContent = summary;
+  document.getElementById("merge-modal").hidden = false;
+  return true; // 表示已開啟 modal, 不要清 pendingA1
+}
+
+function doMergeAppend() {
+  if (!_pendingMergeItems) return;
+  const items = _pendingMergeItems;
+  const totalsByNewSku = {};
+  for (const it of items) totalsByNewSku[it.sku] = (totalsByNewSku[it.sku] || 0) + it.expected;
+  // 對每個現有 SKU, 累加 expected
+  for (const cur of state.items) {
+    if (totalsByNewSku[cur.sku]) {
+      cur.expected = cur.expected + totalsByNewSku[cur.sku];
+      delete totalsByNewSku[cur.sku];
+    }
+  }
+  // 剩下的是「新 SKU」, append 到 state.items
+  for (const it of items) {
+    if (totalsByNewSku[it.sku] !== undefined) {
+      // 是新 SKU 且還沒處理
+      state.items.push({ ...it, packed: 0 });
+      delete totalsByNewSku[it.sku];
+    }
+  }
+  // 補入必要商品 (若 library 有 essential 但不在 state.items 中)
+  for (const p of library) {
+    if (p.essential && !state.items.find(it => it.sku === p.sku)) {
+      state.items.push({
+        sku: p.sku, name: p.name, category: p.category,
+        expected: 0, packed: 0, essential: true
+      });
+    }
+  }
+  state.loadedDate = new Date().toISOString().slice(0, 10);
+  saveState();
+  pendingA1 = [];
+  _pendingMergeItems = null;
+  document.getElementById("merge-modal").hidden = true;
+  showToast(`✓ 已追加合併 ${items.length} 個 SKU`);
+  render();
+}
+
+function doMergeReplace() {
+  if (!_pendingMergeItems) return;
+  const items = _pendingMergeItems;
+  state.items = items;
+  state.loadedDate = new Date().toISOString().slice(0, 10);
+  saveState();
+  pendingA1 = [];
+  _pendingMergeItems = null;
+  document.getElementById("merge-modal").hidden = true;
+  showToast(`✓ 已覆蓋, 共 ${items.length} 個 SKU`);
+  render();
+}
+
+function doMergeCancel() {
+  _pendingMergeItems = null;
+  pendingA1 = [];
+  document.getElementById("merge-modal").hidden = true;
+  render();
+}
+
 // ---- Master render ----
 function render() {
   const hasList = state.items.length > 0;
@@ -2942,12 +3051,11 @@ function processA1Items(items, sourceLabel) {
     showToast("⚠ 解析不到資料，請確認檔案格式");
     return;
   }
-  // 安全網：確保預設對應存在
   ensureSpecMapDefaults();
   console.log("[A1] 目前 specMap 大小:", Object.keys(specMap).length);
+  for (const it of items) { it.lookupKey = getLookupKey(it); }
   pendingA1 = items;
-  // 檢查是否每筆規格都有對應 (空陣列也算「已決定」)
-  const unmapped = items.filter(it => !(it.spec in specMap));
+  const unmapped = items.filter(it => !(it.lookupKey in specMap));
   console.log("[A1] 未對應規格:", unmapped);
   if (unmapped.length === 0) {
     // 全對應 → 直接套用 → 進備貨列表
@@ -3369,15 +3477,14 @@ document.getElementById("mapping-cards").addEventListener("change", (e) => {
     const idx = parseInt(selAdd.dataset.idx, 10);
     const sku = selAdd.value;
     if (!sku) return;
-    const spec = pendingA1[idx].spec;
-    if (!specMap[spec] || specMap[spec].length === 0) specMap[spec] = [];
-    // 不重複加同一個 SKU
-    if (specMap[spec].some(m => m.sku === sku)) {
+    const key = pendingA1[idx].lookupKey || getLookupKey(pendingA1[idx]);
+    if (!specMap[key] || specMap[key].length === 0) specMap[key] = [];
+    if (specMap[key].some(m => m.sku === sku)) {
       showToast("這個 SKU 已經對應過了");
       selAdd.value = "";
       return;
     }
-    specMap[spec].push({ sku, qty: 1 });
+    specMap[key].push({ sku, qty: 1 });
     saveSpecMap();
     selAdd.value = "";
     renderA1Mapping();
@@ -3387,9 +3494,9 @@ document.getElementById("mapping-cards").addEventListener("change", (e) => {
   if (inpQty) {
     const idx = parseInt(inpQty.dataset.idx, 10);
     const mi = parseInt(inpQty.dataset.mi, 10);
-    const spec = pendingA1[idx].spec;
+    const key = pendingA1[idx].lookupKey || getLookupKey(pendingA1[idx]);
     const v = Math.max(1, parseInt(inpQty.value, 10) || 1);
-    specMap[spec][mi].qty = v;
+    specMap[key][mi].qty = v;
     saveSpecMap();
     return;
   }
@@ -3400,9 +3507,9 @@ document.getElementById("mapping-cards").addEventListener("click", (e) => {
   if (rm) {
     const idx = parseInt(rm.dataset.idx, 10);
     const mi = parseInt(rm.dataset.mi, 10);
-    const spec = pendingA1[idx].spec;
-    specMap[spec].splice(mi, 1);
-    if (specMap[spec].length === 0) delete specMap[spec];
+    const key = pendingA1[idx].lookupKey || getLookupKey(pendingA1[idx]);
+    specMap[key].splice(mi, 1);
+    if (specMap[key].length === 0) delete specMap[key];
     saveSpecMap();
     renderA1Mapping();
     return;
@@ -3410,8 +3517,8 @@ document.getElementById("mapping-cards").addEventListener("click", (e) => {
   const skip = e.target.closest("button[data-map-skip]");
   if (skip) {
     const idx = parseInt(skip.dataset.idx, 10);
-    const spec = pendingA1[idx].spec;
-    specMap[spec] = []; // 空陣列代表略過
+    const key = pendingA1[idx].lookupKey || getLookupKey(pendingA1[idx]);
+    specMap[key] = []; // 空陣列代表略過
     saveSpecMap();
     renderA1Mapping();
     return;
@@ -3999,6 +4106,11 @@ function showHealthCheck(issues, onForce) {
     onForce();
   };
 }
+
+// merge modal 事件
+document.getElementById("merge-append").addEventListener("click", doMergeAppend);
+document.getElementById("merge-replace").addEventListener("click", doMergeReplace);
+document.getElementById("merge-cancel").addEventListener("click", doMergeCancel);
 
 document.getElementById("finish-btn").addEventListener("click", () => {
   const _shipped = getShippedBySkuMap();
