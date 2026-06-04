@@ -2869,6 +2869,7 @@ function renderActiveParcel() {
 
 // ===== A1 追加合併邏輯 =====
 let _pendingMergeItems = null; // 暫存等待合併的 items
+let _pendingMergeEntryId = null; // 暫存追加的 history entry id (iOS Safari 順序處理)
 
 function showMergeModal(items) {
   _pendingMergeItems = items;
@@ -3232,36 +3233,10 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     const entryId = merge.dataset.histMerge;
     const entry = history.find(h => h.id === entryId);
     if (!entry) return;
-    // 若 state.items 有資料, 警告會被覆蓋
-    if (state.items.length > 0) {
-      const r = state.items.reduce((s,it) => s + Math.max(0, it.expected - it.packed), 0);
-      if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entry.summary.totalSku} SKU 的舊紀錄, 確定?`)) return;
-    }
-    // 還原 entry 為 state.items
-    state.items = entry.items.map(it => ({
-      sku: it.sku,
-      name: it.name || "",
-      category: it.category || "其他",
-      expected: it.expected,
-      packed: it.packed || 0,
-      essential: !!it.essential,
-    }));
-    // 還原已完成 parcels (要看得到歷史已裝)
-    state.completedParcels = (entry.parcels || []).map(p => ({ ...p }));
-    state.activeParcel = null;
-    state.scanMode = false;
-    // 標記為「追加自此筆」
-    state.continuationOf = entry.id;
-    state.appendLevel = (entry.appendLevel || 1) + 1;
-    state.continuationDate = entry.completedAt; // 保留原日期用於檔名
-    state.loadedDate = new Date().toISOString().slice(0, 10);
-    saveState();
-    // 從 history 移除 (避免重複, 完成時會新存一筆)
-    history = history.filter(h => h.id !== entryId);
-    saveHistory();
-    showToast(`✓ 已還原至備貨頁, 請選新 CSV 追加`);
-    // 立即開啟檔案選擇
-    setTimeout(() => document.getElementById("history-merge-file").click(), 300);
+    // iOS Safari 限制: 必須在使用者點擊事件「同一個 call stack」開啟檔案選擇器
+    // 因此把 entryId 暫存, 直接觸發 file input, 確認與還原延後到 change 事件
+    _pendingMergeEntryId = entryId;
+    document.getElementById("history-merge-file").click();
     return;
   }
   const del = e.target.closest("button[data-hist-delete]");
@@ -3280,7 +3255,42 @@ document.getElementById("history-list").addEventListener("click", (e) => {
 
 document.getElementById("history-merge-file").addEventListener("change", (e) => {
   const f = e.target.files[0];
-  if (!f) return;
+  if (!f) {
+    _pendingMergeEntryId = null;
+    return;
+  }
+  // 若是從 history 追加按鈕觸發 → 先處理還原邏輯
+  if (_pendingMergeEntryId) {
+    const entryId = _pendingMergeEntryId;
+    _pendingMergeEntryId = null;
+    const entry = history.find(h => h.id === entryId);
+    if (!entry) { showToast("⚠ 找不到該紀錄"); e.target.value = ""; return; }
+    // 此時才警告會覆蓋
+    if (state.items.length > 0) {
+      const r = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
+      if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entry.summary.totalSku} SKU 的舊紀錄, 確定?`)) {
+        e.target.value = "";
+        return;
+      }
+    }
+    // 還原 entry 為 state.items
+    state.items = entry.items.map(it => ({
+      sku: it.sku, name: it.name || "", category: it.category || "其他",
+      expected: it.expected, packed: it.packed || 0, essential: !!it.essential,
+    }));
+    state.completedParcels = (entry.parcels || []).map(p => ({ ...p }));
+    state.activeParcel = null;
+    state.scanMode = false;
+    state.continuationOf = entry.id;
+    state.appendLevel = (entry.appendLevel || 1) + 1;
+    state.continuationDate = entry.completedAt;
+    state.loadedDate = new Date().toISOString().slice(0, 10);
+    saveState();
+    history = history.filter(h => h.id !== entryId);
+    saveHistory();
+    console.log("[history-merge] restored entry", entryId, "appendLevel=", state.appendLevel);
+  }
+
   showToast("📂 讀取中...");
   const reader = new FileReader();
   reader.onerror = () => { showToast("⚠ 檔案讀取失敗"); };
