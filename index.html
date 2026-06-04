@@ -1176,6 +1176,9 @@ footer.summary-bar {
     <!-- Tab: 出貨紀錄 -->
   <div class="panel" id="tab-content-history" hidden>
     <h2>📜 出貨紀錄</h2>
+
+    <input type="file" id="history-merge-file" accept=".csv,.txt" style="display: none;">
+
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
       尚無紀錄
     </div>
@@ -1944,6 +1947,8 @@ function appendHistory() {
     platform: currentPlatform || "unknown",
     items,
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
+    appendLevel: state.appendLevel || 1,
+    continuationOf: state.continuationOf || null,
     summary: {
       totalSku: items.length,
       completedSku: completedSkus,
@@ -2603,7 +2608,7 @@ function renderHistory() {
     return `
       <div class="history-item ${isPartial ? 'partial' : ''}">
         <div class="history-item-header">
-          <div class="history-item-date">${dateStr}</div>
+          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}</div>
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
         </div>
         <div class="history-item-summary">
@@ -2614,6 +2619,7 @@ function renderHistory() {
         <div class="history-item-actions">
           <button class="btn outline sm" data-hist-toggle="${e.id}">${expanded ? '收起' : '展開明細'}</button>
           <button class="btn outline sm" data-hist-export="${e.id}">📦 明細</button>
+          <button class="btn outline sm" data-hist-merge="${e.id}" style="color: var(--success); border-color: var(--success);">📥 追加</button>
           <button class="btn outline sm danger" data-hist-delete="${e.id}">🗑</button>
         </div>
         ${detail}
@@ -3212,12 +3218,50 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `出貨明細_${d.toISOString().slice(0,10)}_${d.toTimeString().slice(0,5).replace(":", "")}.csv`;
+    const lvlSuffix = (entry.appendLevel && entry.appendLevel > 1) ? `(${entry.appendLevel})` : '';
+    a.download = `出貨明細_${d.toISOString().slice(0,10)}${lvlSuffix}_${d.toTimeString().slice(0,5).replace(":", "")}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast(`✓ 已匯出 ${rows.length - 1} 列明細`);
+    return;
+  }
+  const merge = e.target.closest("button[data-hist-merge]");
+  if (merge) {
+    const entryId = merge.dataset.histMerge;
+    const entry = history.find(h => h.id === entryId);
+    if (!entry) return;
+    // 若 state.items 有資料, 警告會被覆蓋
+    if (state.items.length > 0) {
+      const r = state.items.reduce((s,it) => s + Math.max(0, it.expected - it.packed), 0);
+      if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entry.summary.totalSku} SKU 的舊紀錄, 確定?`)) return;
+    }
+    // 還原 entry 為 state.items
+    state.items = entry.items.map(it => ({
+      sku: it.sku,
+      name: it.name || "",
+      category: it.category || "其他",
+      expected: it.expected,
+      packed: it.packed || 0,
+      essential: !!it.essential,
+    }));
+    // 還原已完成 parcels (要看得到歷史已裝)
+    state.completedParcels = (entry.parcels || []).map(p => ({ ...p }));
+    state.activeParcel = null;
+    state.scanMode = false;
+    // 標記為「追加自此筆」
+    state.continuationOf = entry.id;
+    state.appendLevel = (entry.appendLevel || 1) + 1;
+    state.continuationDate = entry.completedAt; // 保留原日期用於檔名
+    state.loadedDate = new Date().toISOString().slice(0, 10);
+    saveState();
+    // 從 history 移除 (避免重複, 完成時會新存一筆)
+    history = history.filter(h => h.id !== entryId);
+    saveHistory();
+    showToast(`✓ 已還原至備貨頁, 請選新 CSV 追加`);
+    // 立即開啟檔案選擇
+    setTimeout(() => document.getElementById("history-merge-file").click(), 300);
     return;
   }
   const del = e.target.closest("button[data-hist-delete]");
@@ -3232,6 +3276,74 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     renderHistory();
     showToast("已刪除");
   }
+});
+
+document.getElementById("history-merge-file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  showToast("📂 讀取中...");
+  const reader = new FileReader();
+  reader.onerror = () => { showToast("⚠ 檔案讀取失敗"); };
+  reader.onload = () => {
+    try {
+      const rawItems = parserFor(currentPlatform)(reader.result);
+      if (!rawItems || rawItems.length === 0) { showToast("⚠ 解析不到資料"); return; }
+      // 把 raw items 套用 specMap → 取得 SKU 級別的 items
+      ensureSpecMapDefaults();
+      for (const it of rawItems) { it.lookupKey = getLookupKey(it); }
+      // 計算: 用 specMap 把 spec → SKU 累加成 totals
+      const totals = {};
+      let unmappedCount = 0;
+      for (const item of rawItems) {
+        const key = item.lookupKey;
+        const mapping = specMap[key];
+        if (!mapping) { unmappedCount++; continue; }
+        if (mapping.length === 0) continue;
+        for (const m of mapping) {
+          totals[m.sku] = (totals[m.sku] || 0) + m.qty * item.orderQty;
+        }
+      }
+      if (unmappedCount > 0) {
+        if (!confirm(`有 ${unmappedCount} 筆規格找不到對應, 會被忽略。仍要追加合併嗎?`)) return;
+      }
+      // 轉成 items 陣列
+      const newItems = [];
+      for (const p of library) {
+        if (totals[p.sku] && totals[p.sku] > 0) {
+          newItems.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0 });
+        }
+      }
+      for (const sku in totals) {
+        if (!library.find(p => p.sku === sku)) {
+          newItems.push({ sku, name: "", expected: totals[sku], packed: 0 });
+        }
+      }
+      // 若無現有清單 → 當作普通匯入
+      if (state.items.length === 0) {
+        for (const p of library) {
+          if (p.essential && !newItems.find(it => it.sku === p.sku)) {
+            newItems.push({ sku: p.sku, name: p.name, category: p.category, expected: 0, packed: 0, essential: true });
+          }
+        }
+        state.items = newItems;
+        state.loadedDate = new Date().toISOString().slice(0, 10);
+        saveState();
+        SOUND.parcelStart();
+        showToast(`✓ 已建立新清單, 共 ${newItems.length} 個 SKU`);
+        render();
+        return;
+      }
+      // 有現有清單 → 追加合併
+      _pendingMergeItems = newItems;
+      doMergeAppend(); // 直接合併, 不再問
+      SOUND.parcelFinish();
+    } catch(err) {
+      console.error("[history-merge]", err);
+      showToast("⚠ 處理錯誤: " + err.message);
+    }
+  };
+  reader.readAsText(f, "UTF-8");
+  setTimeout(() => { e.target.value = ""; }, 100);
 });
 
 document.getElementById("clear-history-btn").addEventListener("click", () => {
@@ -4236,7 +4348,7 @@ function actuallyCompleteShipping() {
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   console.log("[state] shipping completed, archived to history, clearing state");
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
@@ -4495,4 +4607,3 @@ render();
 </script>
 </body>
 </html>
-
