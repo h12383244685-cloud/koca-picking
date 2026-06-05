@@ -1151,6 +1151,12 @@ footer.summary-bar {
 
     <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 8px 0;">
 
+    <!-- 手動建單入口 -->
+    <div style="margin: 14px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
+      <button class="btn full" id="open-manual-order-btn" style="background: var(--primary);">📝 手動建單 (小單)</button>
+      <p class="hint" style="font-size: 11px; margin-top: 6px;">少量出貨不想搞 CSV? 點此填寄件單號後, 在備貨頁直接刷商品條碼自動建立 SKU 清單。</p>
+    </div>
+
     <details>
       <summary>或直接貼上 CSV 內容</summary>
       <textarea id="a1-paste-area" placeholder="把整份 CSV 貼到這裡..."></textarea>
@@ -1496,6 +1502,35 @@ footer.summary-bar {
   </div>
 </div>
 
+<!-- 手動建單 modal -->
+<div class="modal-backdrop" id="manual-order-modal" hidden>
+  <div class="modal" style="max-width: 480px;">
+    <h2>📝 手動建單</h2>
+    <p class="hint">適合 1-3 件的小單。建立後在備貨頁刷商品條碼自動加入清單, 每刷一次 +1。</p>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">通路</label>
+    <select id="manual-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="a1">🏢 鼎新 A1</option>
+      <option value="momo">🛍 MOMO</option>
+      <option value="coupang">🅒 酷澎</option>
+      <option value="koca">🌐 KOCA官網</option>
+    </select>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 / 訂單編號 <span style="color: var(--danger);">*</span></label>
+    <input type="text" id="manual-parcel-id" placeholder="例如: TW2659... 或 手-20260604-001"
+           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+           autocapitalize="characters" spellcheck="false"
+           style="width: 100%; padding: 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+    <p class="hint" style="font-size: 11px; margin-top: 4px;">可直接刷寄件單條碼或手動輸入 (按 Enter 直接建立)。</p>
+
+    <div style="height: 16px"></div>
+    <div class="row">
+      <button class="btn outline" id="manual-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="manual-create" style="flex:2; background: var(--success);">▶ 建立 + 開始裝箱</button>
+    </div>
+  </div>
+</div>
+
 <!-- Final report modal -->
 <div class="modal-backdrop" id="report-modal" hidden>
   <div class="modal">
@@ -1587,7 +1622,7 @@ const CATEGORY_EMOJI = {
 };
 const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
 
-let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
+let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false };
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -1643,22 +1678,26 @@ const PLATFORM_TO_CUSTOMER = {
 };
 
 // 產生今日的 doc_no (YYYYMMDD + 3 位流水)
-function generateDocNo(completedAt) {
+// 修正: 用「today 既有 doc_no 的最大流水 + 1」, 避免追加合併後 history 數量回落造成重複流水
+function generateDocNo(completedAt, currentEntryId) {
   const d = new Date(completedAt);
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const datePrefix = `${yyyy}${mm}${dd}`;
-  // 從 history 數今天已有幾筆 (含這筆)
-  const todayCount = (history || []).filter(h => {
+  let maxSeq = 0;
+  for (const h of (history || [])) {
+    if (currentEntryId && h.id === currentEntryId) continue;
     const hd = new Date(h.completedAt);
-    return hd.getFullYear() === d.getFullYear() &&
-           hd.getMonth() === d.getMonth() &&
-           hd.getDate() === d.getDate();
-  }).length;
-  // 已含本次 (本次剛 unshift 進去) + 防呆從 1 開始
-  const seq = Math.max(1, todayCount);
-  return `${datePrefix}${String(seq).padStart(3, "0")}`;
+    if (hd.getFullYear() !== d.getFullYear() || hd.getMonth() !== d.getMonth() || hd.getDate() !== d.getDate()) continue;
+    let seq = 0;
+    if (h.doc_no && typeof h.doc_no === "string" && h.doc_no.startsWith(datePrefix)) {
+      seq = parseInt(h.doc_no.slice(datePrefix.length), 10) || 0;
+    }
+    if (seq === 0) seq = maxSeq + 1; // 沒 doc_no 的舊紀錄, 用累積值填補
+    if (seq > maxSeq) maxSeq = seq;
+  }
+  return `${datePrefix}${String(maxSeq + 1).padStart(3, "0")}`;
 }
 
 // 從 history entry 建 picking_outbound JSON
@@ -1676,10 +1715,16 @@ function buildPickingOutboundPayload(entry) {
       remark: "",
     };
   });
+  // 持久化 doc_no 在 entry 上, 之後重發或追加合併都能用回同一個
+  const doc_no = entry.doc_no || generateDocNo(entry.completedAt, entry.id);
+  if (!entry.doc_no) {
+    entry.doc_no = doc_no;
+    try { saveHistory(); } catch(e) {}
+  }
   return {
     type: "picking_outbound",
     date: dateStr,
-    doc_no: generateDocNo(entry.completedAt),
+    doc_no,
     customer,
     items,
   };
@@ -1792,7 +1837,8 @@ function loadState() {
         if (typeof state.scanMode === "undefined") state.scanMode = false;
         if (typeof state.activeParcel === "undefined") state.activeParcel = null;
         if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
-        console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels");
+        if (typeof state.manualMode === "undefined") state.manualMode = false;
+        console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels", state.manualMode ? "(手建模式)" : "");
       }
     }
   } catch(e) { console.warn("[storage] loadState failed", e); }
@@ -2105,6 +2151,25 @@ function parseA1CSV(text) {
     if (!spec || isNaN(qty) || qty <= 0) continue;
     items.push({ spec, productName, orderQty: qty });
   }
+  // 解析失敗時的偵測 (給使用者明確的提示)
+  if (items.length === 0 && rows.length > 0) {
+    const firstRow = rows[0] || [];
+    const headers = firstRow.map(c => clean(c)).join(",");
+    // 偵測常見格式
+    if (headers.includes("出貨日期") && headers.includes("寄件單號")) {
+      console.warn("[parseA1CSV] 偵測到 App 自己匯出的「出貨明細 CSV」, 此格式不能匯入");
+      window._lastParseError = "這是 App 自己匯出的「出貨明細 CSV」(用於 ERP), 不是 A1 揀貨單格式";
+    } else if (headers.includes("出貨日期") && headers.includes("應出")) {
+      window._lastParseError = "這是 App 自己匯出的「出貨摘要 CSV」, 不是 A1 揀貨單格式";
+    } else if (rows.length < 5) {
+      window._lastParseError = `檔案只有 ${rows.length} 列, 可能是空檔案或非 CSV 格式`;
+    } else {
+      window._lastParseError = `偵測到 ${rows.length} 列但沒有符合「序號+規格+數量」結構的資料行。請確認是 A1 揀貨單 CSV (從 A1 雲端「揀貨單合併列印」匯出)`;
+    }
+    console.warn("[parseA1CSV] 失敗原因:", window._lastParseError, "首列:", headers.substring(0, 200));
+  } else {
+    window._lastParseError = null;
+  }
   return items;
 }
 
@@ -2227,6 +2292,12 @@ function statusOf(it, shippedMap) {
     const skuShipped = (shippedMap && shippedMap[it.sku]) || 0;
     const currentActive = it.packed - skuShipped;
     return currentActive > 0 ? "essential-used" : "essential-pending";
+  }
+  // 手建模式: expected=0 視為自由計數, 有裝就 done, 沒裝就 pending, 永不 over
+  if (it.expected === 0) {
+    const skuShipped = (shippedMap && shippedMap[it.sku]) || 0;
+    const currentActive = it.packed - skuShipped;
+    return currentActive > 0 ? "done" : "pending";
   }
   // 新模式: 已確認出貨的部分 + 當前活動 vs 剩餘目標
   const shipped = (shippedMap && shippedMap[it.sku]) || 0;
@@ -2386,13 +2457,21 @@ function renderPicking() {
         const currentActive = it.packed - skuShipped;
         const remaining = it.expected - skuShipped;
         const allDone = skuShipped >= it.expected;
-        const qtyHtml = allDone
-          ? `<span class="current done">${skuShipped}</span><span class="sep">/</span><span class="expected done">${it.expected}</span>`
-          : `<span class="current">${currentActive}</span><span class="sep">/</span><span class="expected shipped-remaining">${remaining}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
+        // 手建模式 item (expected=0): 顯示為「✓ X」沒有目標分母
+        let qtyHtml;
+        let manualBadge = "";
+        if (it.expected === 0) {
+          qtyHtml = `<span class="current ${currentActive > 0 ? 'done' : ''}">${currentActive}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
+          manualBadge = ' <span class="essential-badge" style="background: var(--primary-light); color: var(--primary);">📝 手建</span>';
+        } else {
+          qtyHtml = allDone
+            ? `<span class="current done">${skuShipped}</span><span class="sep">/</span><span class="expected done">${it.expected}</span>`
+            : `<span class="current">${currentActive}</span><span class="sep">/</span><span class="expected shipped-remaining">${remaining}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
+        }
         return `
         <div class="item status-${s}">
           <div class="item-info">
-            <div class="item-sku">${escapeHtml(it.sku)}</div>
+            <div class="item-sku">${escapeHtml(it.sku)}${manualBadge}</div>
             <div class="item-name">${escapeHtml(it.name || "(無名稱)")}</div>
           </div>
           <div class="item-counter">
@@ -2718,11 +2797,26 @@ function processScan(code) {
       SOUND.scanSku();
       bumpPickItem(idx, 1);
       const it = state.items[idx];
-      if (it.essential || (it.packed < it.expected)) {
+      if (it.essential || (it.packed < it.expected) || it.expected === 0) {
         showToast(`+1 ${matchedProd.sku}`);
       }
       return;
     } else {
+      // 手建模式: 自動新增此 SKU 到清單 (expected=0 自由計數)
+      if (state.manualMode) {
+        state.items.push({
+          sku: matchedProd.sku,
+          name: matchedProd.name || "",
+          category: matchedProd.category || "其他",
+          expected: 0,
+          packed: 0,
+        });
+        const newIdx = state.items.length - 1;
+        SOUND.scanSku();
+        bumpPickItem(newIdx, 1);
+        showToast(`📝 加入 ${matchedProd.sku} ×1`);
+        return;
+      }
       SOUND.scanError();
       showToast(`⚠ ${matchedProd.sku} 不在今日備貨清單`);
       return;
@@ -2946,7 +3040,7 @@ function doMergeCancel() {
 
 // ---- Master render ----
 function render() {
-  const hasList = state.items.length > 0;
+  const hasList = state.items.length > 0 || !!state.manualMode;
   const inMapping = pendingA1.length > 0;
   // 保險：有未完成清單時優先顯示備貨頁
   // (除非使用者透過 home-btn 暫時切到首頁瀏覽, 才會 force 顯示 import-view)
@@ -3037,12 +3131,13 @@ function bumpPickItem(idx, delta, options) {
   const it = state.items[idx];
   if (!it) return;
   // 不可減到「已確認出貨」以下 (包括必要商品)
+  // 修正: 使用 delta 而非寫死 -1, 否則 -qty 多筆撤銷時檢查失準
   if (delta < 0) {
     const shipped = getShippedBySkuMap();
     const skuShipped = shipped[it.sku] || 0;
-    if (it.packed - 1 < skuShipped) {
+    if (it.packed + delta < skuShipped) {
       const label = it.essential ? "已使用" : "已確認出貨";
-      showToast(`⛔ ${it.sku} ${label} ${skuShipped} 件無法減少`);
+      showToast(`⛔ ${it.sku} ${label} ${skuShipped} 件無法減到那麼少`);
       return;
     }
   }
@@ -3105,7 +3200,11 @@ document.getElementById("parse-btn").addEventListener("click", () => {
 function processA1Items(items, sourceLabel) {
   console.log(`[A1] ${sourceLabel} 解析結果:`, items);
   if (!items || items.length === 0) {
-    showToast("⚠ 解析不到資料，請確認檔案格式");
+    if (window._lastParseError) {
+      alert("⚠ 解析不到資料\n\n" + window._lastParseError);
+    } else {
+      showToast("⚠ 解析不到資料，請確認檔案格式");
+    }
     return;
   }
   ensureSpecMapDefaults();
@@ -3259,36 +3358,15 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
     _pendingMergeEntryId = null;
     return;
   }
-  // 若是從 history 追加按鈕觸發 → 先處理還原邏輯
+  // 先把 entry 資訊保留下來, 但「不」立即還原/移除 history
+  // 必須等到 CSV 成功解析後再動 history, 否則格式錯誤會破壞資料
+  let entryToRestore = null;
+  let entryIdToMerge = null;
   if (_pendingMergeEntryId) {
-    const entryId = _pendingMergeEntryId;
+    entryIdToMerge = _pendingMergeEntryId;
     _pendingMergeEntryId = null;
-    const entry = history.find(h => h.id === entryId);
-    if (!entry) { showToast("⚠ 找不到該紀錄"); e.target.value = ""; return; }
-    // 此時才警告會覆蓋
-    if (state.items.length > 0) {
-      const r = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
-      if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entry.summary.totalSku} SKU 的舊紀錄, 確定?`)) {
-        e.target.value = "";
-        return;
-      }
-    }
-    // 還原 entry 為 state.items
-    state.items = entry.items.map(it => ({
-      sku: it.sku, name: it.name || "", category: it.category || "其他",
-      expected: it.expected, packed: it.packed || 0, essential: !!it.essential,
-    }));
-    state.completedParcels = (entry.parcels || []).map(p => ({ ...p }));
-    state.activeParcel = null;
-    state.scanMode = false;
-    state.continuationOf = entry.id;
-    state.appendLevel = (entry.appendLevel || 1) + 1;
-    state.continuationDate = entry.completedAt;
-    state.loadedDate = new Date().toISOString().slice(0, 10);
-    saveState();
-    history = history.filter(h => h.id !== entryId);
-    saveHistory();
-    console.log("[history-merge] restored entry", entryId, "appendLevel=", state.appendLevel);
+    entryToRestore = history.find(h => h.id === entryIdToMerge);
+    if (!entryToRestore) { showToast("⚠ 找不到該紀錄"); e.target.value = ""; return; }
   }
 
   showToast("📂 讀取中...");
@@ -3297,7 +3375,15 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
   reader.onload = () => {
     try {
       const rawItems = parserFor(currentPlatform)(reader.result);
-      if (!rawItems || rawItems.length === 0) { showToast("⚠ 解析不到資料"); return; }
+      if (!rawItems || rawItems.length === 0) {
+        // 解析失敗 → 不動 state / history, 給明確錯誤
+        if (window._lastParseError) {
+          alert("⚠ 解析不到資料\n\n" + window._lastParseError);
+        } else {
+          showToast("⚠ 解析不到資料");
+        }
+        return;
+      }
       // 把 raw items 套用 specMap → 取得 SKU 級別的 items
       ensureSpecMapDefaults();
       for (const it of rawItems) { it.lookupKey = getLookupKey(it); }
@@ -3328,6 +3414,32 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
           newItems.push({ sku, name: "", expected: totals[sku], packed: 0 });
         }
       }
+
+      // 解析成功 → 此時才動 history & state (BUG #2 修正: 之前是在解析前就還原 entry, 格式錯誤時會破壞資料)
+      if (entryToRestore) {
+        if (state.items.length > 0) {
+          const r = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
+          if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entryToRestore.summary.totalSku} SKU 的舊紀錄, 確定?`)) {
+            return;
+          }
+        }
+        state.items = entryToRestore.items.map(it => ({
+          sku: it.sku, name: it.name || "", category: it.category || "其他",
+          expected: it.expected, packed: it.packed || 0, essential: !!it.essential,
+        }));
+        state.completedParcels = (entryToRestore.parcels || []).map(p => ({ ...p }));
+        state.activeParcel = null;
+        state.scanMode = false;
+        state.continuationOf = entryToRestore.id;
+        state.appendLevel = (entryToRestore.appendLevel || 1) + 1;
+        state.continuationDate = entryToRestore.completedAt;
+        state.loadedDate = new Date().toISOString().slice(0, 10);
+        saveState();
+        history = history.filter(h => h.id !== entryIdToMerge);
+        saveHistory();
+        console.log("[history-merge] restored entry", entryIdToMerge, "appendLevel=", state.appendLevel);
+      }
+
       // 若無現有清單 → 當作普通匯入
       if (state.items.length === 0) {
         for (const p of library) {
@@ -4041,7 +4153,8 @@ document.addEventListener("keydown", (e) => {
   // 若使用者正在某個 input/textarea/select 中, 由原本元素處理 (不攔截)
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
   // 若任何 modal 開啟中, 不攔截 (避免衝突)
-  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal"];
+  // 補上 merge-modal, health-modal (追加合併確認 / 出貨健康檢查), 避免在 modal 中刷錯
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal"];
   for (const id of modals) {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
@@ -4234,8 +4347,8 @@ function runHealthCheck() {
       detail: itemList ? `已加入: ${itemList}` : "尚未加入任何商品",
     });
   }
-  // 2. SKU over (packed > expected, 非 essential)
-  const overItems = state.items.filter(it => !it.essential && it.packed > it.expected);
+  // 2. SKU over (packed > expected, 非 essential, 排除 expected=0 的手建項目)
+  const overItems = state.items.filter(it => !it.essential && it.expected > 0 && it.packed > it.expected);
   if (overItems.length > 0) {
     overItems.forEach(it => {
       issues.push({
@@ -4246,8 +4359,8 @@ function runHealthCheck() {
       });
     });
   }
-  // 3. SKU under (packed < expected, 非 essential)
-  const underItems = state.items.filter(it => !it.essential && it.packed < it.expected);
+  // 3. SKU under (packed < expected, 非 essential, 排除 expected=0 的手建項目)
+  const underItems = state.items.filter(it => !it.essential && it.expected > 0 && it.packed < it.expected);
   if (underItems.length > 0) {
     underItems.forEach(it => {
       issues.push({
@@ -4308,6 +4421,86 @@ function showHealthCheck(issues, onForce) {
   };
 }
 
+// 手動建單 modal 事件
+document.getElementById("open-manual-order-btn").addEventListener("click", () => {
+  document.getElementById("manual-platform-select").value = currentPlatform || "a1";
+  document.getElementById("manual-parcel-id").value = "";
+  document.getElementById("manual-order-modal").hidden = false;
+  setTimeout(() => {
+    const inp = document.getElementById("manual-parcel-id");
+    if (inp) inp.focus();
+  }, 100);
+});
+document.getElementById("manual-cancel").addEventListener("click", () => {
+  document.getElementById("manual-order-modal").hidden = true;
+});
+document.getElementById("manual-parcel-id").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("manual-create").click();
+  }
+});
+document.getElementById("manual-order-modal").addEventListener("click", (e) => {
+  if (e.target.id === "manual-order-modal") document.getElementById("manual-order-modal").hidden = true;
+});
+document.getElementById("manual-create").addEventListener("click", () => {
+  const platform = document.getElementById("manual-platform-select").value;
+  const rawId = document.getElementById("manual-parcel-id").value.trim();
+  if (!rawId) {
+    showToast("⚠ 寄件單號必填");
+    document.getElementById("manual-parcel-id").focus();
+    return;
+  }
+  const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
+
+  // 若已有未完成清單, 警告會覆蓋
+  if (state.items.length > 0) {
+    if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU)。\n\n繼續建立手建單會放棄目前清單, 確定?`)) return;
+  }
+  // 檢查是否已有此寄件單在當前批次完成過
+  if ((state.completedParcels || []).find(p => p.id === parcelId)) {
+    if (!confirm(`寄件單號 ${parcelId} 在當前批次已完成過, 仍要建立新單?`)) return;
+  }
+
+  // 切換通路
+  currentPlatform = platform;
+  try { localStorage.setItem(PLATFORM_KEY, platform); } catch(err) {}
+  document.getElementById("platform-select").value = platform;
+  document.getElementById("platform-hint").textContent = PLATFORMS[platform].hint;
+
+  // 初始化手建模式 state
+  state = {
+    items: [],
+    filter: "all",
+    loadedDate: new Date().toISOString().slice(0, 10),
+    scanMode: true,
+    activeParcel: { id: parcelId, items: {}, startedAt: new Date().toISOString() },
+    completedParcels: [],
+    appendLevel: 1,
+    continuationOf: null,
+    manualMode: true,
+  };
+
+  // 必要商品自動帶入 (跟 CSV 匯入流程一致)
+  for (const p of library) {
+    if (p.essential) {
+      state.items.push({
+        sku: p.sku, name: p.name, category: p.category,
+        expected: 0, packed: 0, essential: true,
+      });
+    }
+  }
+
+  saveState();
+  document.getElementById("manual-order-modal").hidden = true;
+  SOUND.parcelStart();
+  showToast(`📝 手建單 ${parcelId} 已建立, 開始刷商品條碼`);
+  // 切到備貨頁 (其實會自動顯示 picking-view 因為 manualMode=true)
+  if (window.__homeOverride) window.__homeOverride = false;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
 // merge modal 事件
 document.getElementById("merge-append").addEventListener("click", doMergeAppend);
 document.getElementById("merge-replace").addEventListener("click", doMergeReplace);
@@ -4358,7 +4551,7 @@ function actuallyCompleteShipping() {
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   console.log("[state] shipping completed, archived to history, clearing state");
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
