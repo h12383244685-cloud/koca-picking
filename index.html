@@ -1261,13 +1261,13 @@ footer.summary-bar {
 
     <label style="display:block; font-size:13px; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
     <select id="platform-select" style="width:100%; padding:12px; font-size:15px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
-      <option value="a1">🏢 鼎新 A1</option>
+      <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎 (Coupang)</option>
       <option value="koca">🌐 KOCA 官網</option>
     </select>
 
-    <p class="hint" id="platform-hint">把從 A1 雲端匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
+    <p class="hint" id="platform-hint">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
 
     <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 8px 0;">
 
@@ -1718,7 +1718,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">通路</label>
     <select id="manual-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
-      <option value="a1">🏢 鼎新 A1</option>
+      <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
       <option value="koca">🌐 KOCA官網</option>
@@ -1747,7 +1747,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">原通路</label>
     <select id="repl-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
-      <option value="a1">🏢 鼎新 A1 (蝦皮)</option>
+      <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
       <option value="koca">🌐 KOCA官網</option>
@@ -1825,7 +1825,7 @@ const PLATFORM_KEY = "picking_platform_v1";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 const PLATFORMS = {
-  a1:      { label: "鼎新 A1",       hint: "把從 A1 雲端匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。" },
+  a1:      { label: "蝦皮",       hint: "把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。" },
   momo:    { label: "MOMO",          hint: "從 MOMO 後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 MOMO 客製化，會用 A1 邏輯嘗試。如果失敗請把 CSV 給開發者。" },
   coupang: { label: "酷澎 Coupang",  hint: "從酷澎賣家中心匯出訂單 CSV 上傳。⚠ 解析器尚未針對酷澎客製化。" },
   koca:    { label: "KOCA 官網",     hint: "從 KOCA 自架官網後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 KOCA 客製化。" },
@@ -1938,7 +1938,7 @@ function playBeep(freq, duration, vol) {
 }
 // 平台 → customer 名稱對應 (給 AI Agent 用)
 const PLATFORM_TO_CUSTOMER = {
-  a1: "蝦皮",        // A1 系統匯總蝦皮訂單為主
+  a1: "蝦皮",        // 蝦皮訂單 (從蝦皮後台匯出的 CSV)
   momo: "MOMO",
   coupang: "酷澎",
   koca: "KOCA官網",
@@ -2974,7 +2974,7 @@ function renderInventory() {
   }, null);
   if (sumEl) {
     if (stockSkuCount === 0) {
-      sumEl.innerHTML = '尚未匯入庫存資料。點「📥 匯入庫存 CSV」上傳鼎新匯出檔, 或從 ERP 匯出。';
+      sumEl.innerHTML = '尚未匯入庫存資料。點「📥 匯入庫存 CSV」上傳商品庫存 CSV。';
     } else {
       const updateStr = lastUpdated ? new Date(lastUpdated).toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12: false }) : "—";
       sumEl.innerHTML = `<div><strong>庫存 SKU</strong> ${stockSkuCount} 個 · <strong>總件數</strong> ${stockTotal.toLocaleString()} 件 · ⚠ 低 ${cntLow} · 缺 ${cntOut}</div><div style="font-size:11px; color:var(--text-soft); margin-top:4px;">最後更新: ${updateStr}</div>`;
@@ -3050,7 +3050,7 @@ function renderInventory() {
   }).join("");
 }
 
-// 解析 ERP 庫存 CSV (鼎新格式: 產品編號,品名規格,現有數量,)
+// 解析庫存 CSV (格式: 產品編號,品名規格,現有數量,)
 // 跳過空行與表頭, 容錯處理多種變體
 function parseStockCsv(text) {
   text = text.replace(/^\ufeff/, "");
@@ -3147,7 +3147,7 @@ function renderHistory() {
   }
 
   // 列表
-  const PLATFORM_LABELS = { a1: "🏢 鼎新A1", momo: "🛍 MOMO", coupang: "🅒 酷澎", koca: "🌐 KOCA官網", unknown: "—" };
+  const PLATFORM_LABELS = { a1: "🛒 蝦皮", momo: "🛍 MOMO", coupang: "🅒 酷澎", koca: "🌐 KOCA官網", unknown: "—" };
   list.innerHTML = displayed.map(e => {
     const date = new Date(e.completedAt);
     const dateStr = date.toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -3788,7 +3788,7 @@ document.getElementById("inv-import-file").addEventListener("change", (e) => {
     try {
       const items = parseStockCsv(reader.result);
       if (!items || items.length === 0) {
-        alert("⚠ 解析不到資料\n\n預期格式 (鼎新 ERP):\n  產品編號, 品名規格, 現有數量\n\n請確認 CSV 內容後再試一次。");
+        alert("⚠ 解析不到資料\n\n預期格式 (商品庫存 CSV):\n  產品編號, 品名規格, 現有數量\n\n請確認 CSV 內容後再試一次。");
         return;
       }
       // 統計即將套用的變化
