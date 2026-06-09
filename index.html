@@ -1381,7 +1381,7 @@ footer.summary-bar {
   <!-- Tab 1: 我的商品庫 (純瀏覽模式) -->
   <div class="panel" id="tab-content-menu">
     <h2>我的商品庫</h2>
-    <p class="hint">這是你所有商品依分類分組顯示。想開始備貨，請切到上方的 <strong>📥 A1 揀貨單</strong> 上傳 CSV 檔。</p>
+    <p class="hint">這是你所有商品依分類分組顯示。想開始備貨，請切到上方的 <strong>📥 通路匯入</strong> 上傳蝦皮 CSV 檔。</p>
     <div id="menu-items"></div>
     <div class="section-actions">
       <button class="btn outline sm" id="manage-lib-btn">📚 管理商品庫</button>
@@ -1495,7 +1495,7 @@ footer.summary-bar {
 <div id="a1-mapping-view" hidden>
   <div class="panel standalone">
     <h2>① 設定規格對應</h2>
-    <p class="hint">下方列出 A1 揀貨單的每個「規格」。請選擇它對應到你商品庫的哪些 SKU、每筆訂單要出幾件。設定一次後系統會記住，下次自動套用。</p>
+    <p class="hint">下方列出蝦皮揀貨單的每個「規格」。請選擇它對應到你商品庫的哪些 SKU、每筆訂單要出幾件。設定一次後系統會記住，下次自動套用。</p>
   </div>
   <div id="mapping-cards"></div>
   <div class="panel standalone">
@@ -1668,6 +1668,11 @@ footer.summary-bar {
           <div class="card-title">外部整合</div>
           <div class="card-desc">Discord · Sheets</div>
         </button>
+        <button class="settings-card wide" data-settings-view="backup">
+          <div class="card-icon">💾</div>
+          <div class="card-title">資料搬家 / 備份</div>
+          <div class="card-desc">換網址或換手機時, 用這個搬移商品庫 + 庫存 + 紀錄</div>
+        </button>
         <button class="settings-card danger wide" data-settings-view="danger">
           <div class="card-icon">⚠</div>
           <div class="card-title">取消出貨</div>
@@ -1789,6 +1794,37 @@ footer.summary-bar {
           5. 「執行身分: 我」, 「存取權: 任何人」<br>
           6. 複製 Web App 網址 → 貼上方
         </p>
+      </details>
+    </div>
+
+    <!-- 子視圖: 資料搬家 / 備份 -->
+    <div id="settings-view-backup" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">💾 資料搬家 / 備份</h3>
+      <p class="hint">把整個 App 的資料 (商品庫 + 庫存 + 規格對應 + 出貨紀錄 + 設定) 存成一個 JSON 檔, 之後可以在另一個網址 / 手機匯入。</p>
+
+      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 10px; border-radius: 8px; font-size: 12px; margin-top: 12px;">
+        ⚠ <strong>瀏覽器資料依「網址」分開</strong>。例如 koca-picking.pages.dev 跟 xxx.workers.dev 是兩個獨立的資料盒, 互相看不到。換網址前先匯出, 在新網址匯入, 才能延續。
+      </p>
+
+      <input type="file" id="backup-import-file" accept=".json" style="display: none;">
+      <div style="margin-top: 14px;">
+        <button class="btn full" id="backup-export-btn" style="background: var(--success);">📤 匯出全部資料 (JSON)</button>
+      </div>
+      <div style="margin-top: 10px;">
+        <button class="btn full outline" id="backup-import-btn">📥 從 JSON 檔匯入</button>
+      </div>
+
+      <details style="margin-top: 14px;">
+        <summary>包含哪些資料?</summary>
+        <ul style="font-size: 12px; color: var(--text-soft); line-height: 1.7; margin: 6px 0 0 18px; padding: 0;">
+          <li>商品庫 (SKU + 名稱 + 分類 + 條碼 + 必要商品標記)</li>
+          <li>倉庫清冊 (75 SKU 的現有庫存)</li>
+          <li>規格 → SKU 對應 (蝦皮揀貨單用)</li>
+          <li>出貨紀錄 (一般 + 補寄)</li>
+          <li>設定 (聲音 / Webhook / 主題)</li>
+          <li>當前未完成的備貨清單 (state)</li>
+        </ul>
       </details>
     </div>
 
@@ -5153,7 +5189,7 @@ const settingsModal = document.getElementById("settings-modal");
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
   // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
-  ["stocktake", "sound", "theme", "integration", "danger"].forEach(v => {
+  ["stocktake", "sound", "theme", "integration", "backup", "danger"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
@@ -5166,6 +5202,73 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
   document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
   document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
+});
+
+// ===== 資料搬家 (匯出 / 匯入 全部 localStorage) =====
+const BACKUP_KEYS = [
+  STATE_KEY, STATE_BACKUP_KEY, LIB_KEY, LIB_INIT_KEY, LIB_DELETED_KEY,
+  MENU_QTY_KEY, COLLAPSED_KEY, SPEC_MAP_KEY, HISTORY_KEY, SETTINGS_KEY,
+  STOCK_KEY, PLATFORM_KEY,
+];
+
+document.getElementById("backup-export-btn").addEventListener("click", () => {
+  const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString() } };
+  let count = 0;
+  for (const k of BACKUP_KEYS) {
+    const v = localStorage.getItem(k);
+    if (v !== null) { dump[k] = v; count++; }
+  }
+  const json = JSON.stringify(dump, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  a.download = `picking_backup_${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✓ 已匯出 ${count} 項資料`);
+});
+
+document.getElementById("backup-import-btn").addEventListener("click", () => {
+  document.getElementById("backup-import-file").click();
+});
+document.getElementById("backup-import-file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onerror = () => showToast("⚠ 讀取失敗");
+  reader.onload = () => {
+    try {
+      const dump = JSON.parse(reader.result);
+      if (!dump || typeof dump !== "object") throw new Error("不是有效的 JSON");
+      // 計算會匯入幾項
+      const incoming = BACKUP_KEYS.filter(k => k in dump);
+      if (incoming.length === 0) {
+        alert("⚠ 這個 JSON 沒有 App 的資料 (找不到任何 picking_* 欄位)");
+        return;
+      }
+      const meta = dump._meta || {};
+      const exportedAt = meta.exportedAt ? new Date(meta.exportedAt).toLocaleString("zh-TW") : "未知時間";
+      if (!confirm(`📥 準備匯入 ${incoming.length} 項資料\n\n備份時間: ${exportedAt}\n\n⚠ 會覆蓋目前 App 內所有資料 (商品庫 / 庫存 / 紀錄等)。\n\n確定匯入嗎?`)) {
+        e.target.value = "";
+        return;
+      }
+      // 套用
+      for (const k of incoming) {
+        localStorage.setItem(k, dump[k]);
+      }
+      showToast(`✓ 已匯入 ${incoming.length} 項, 3 秒後重新載入`);
+      setTimeout(() => location.reload(), 3000);
+    } catch(err) {
+      console.error("[backup-import]", err);
+      alert("⚠ 匯入失敗\n\n" + (err.message || err));
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(f, "UTF-8");
 });
 
 // 設定 modal - 卡片點擊 / 返回鈕事件代理
@@ -5873,4 +5976,8 @@ try {
 // 最後保險: 若 currentPlatform 不存在於 PLATFORMS, 退回 a1
 if (!PLATFORMS[currentPlatform]) currentPlatform = "a1";
 document.getElementById("platform-select").value = currentPlatform;
-document.ge
+document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
+render();
+</script>
+</body>
+</html>
