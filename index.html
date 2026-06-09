@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%231F4E78'/><text x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='110'>📦</text></svg>">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4E78'/><text x='50%25' y='56%25' text-anchor='middle' dominant-baseline='middle' font-size='40'>📦</text></svg>">
 <style>
-:root {
+:root, [data-theme="default"] {
   color-scheme: light;
   --bg: #f5f7fa;
   --surface: #ffffff;
@@ -30,6 +30,78 @@
   --warn-bg: #fef3c7;
   --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
 }
+
+/* 🟡 柔和米 - 暖色調, 低對比, 護眼 */
+[data-theme="warm"] {
+  color-scheme: light;
+  --bg: #efe8d3;
+  --surface: #faf3df;
+  --primary: #5c4a2f;
+  --primary-light: #f0e6c8;
+  --text: #3d3325;
+  --text-soft: #7a6e5b;
+  --border: #d9ccb0;
+  --success: #5d7a3a;
+  --success-bg: #e3eccc;
+  --danger: #a83838;
+  --danger-bg: #f5dcdc;
+  --warn: #c47a16;
+  --warn-bg: #f4e5c0;
+  --shadow: 0 1px 3px rgba(80,60,30,.08), 0 1px 2px rgba(80,60,30,.04);
+}
+
+/* ⚫ 深色 - OLED 護眼 + 省電 */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0e14;
+  --surface: #161b22;
+  --primary: #5da9ff;
+  --primary-light: #1a2b4e;
+  --text: #e6edf3;
+  --text-soft: #8b949e;
+  --border: #30363d;
+  --success: #3fb950;
+  --success-bg: #0d2916;
+  --danger: #f85149;
+  --danger-bg: #2e1212;
+  --warn: #d29922;
+  --warn-bg: #2e1f08;
+  --shadow: 0 2px 6px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+}
+/* 暗色模式: 內嵌 white 背景的元素改用 surface */
+[data-theme="dark"] [style*="background: white"],
+[data-theme="dark"] [style*="background:white"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background:#ffffff"] {
+  background: var(--surface) !important;
+  color: var(--text);
+}
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+[data-theme="dark"] input:focus,
+[data-theme="dark"] textarea:focus,
+[data-theme="dark"] select:focus {
+  background: #1f2937;
+  border-color: var(--primary);
+}
+[data-theme="dark"] .scan-input {
+  background: var(--surface);
+  color: var(--text);
+}
+[data-theme="dark"] pre {
+  background: #1f2937 !important;
+  color: var(--text);
+}
+[data-theme="dark"] .settings-card {
+  background: var(--surface);
+}
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 html, body {
@@ -39,7 +111,9 @@ html, body {
   color: var(--text);
   font-size: 16px;
   line-height: 1.5;
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
+  /* 移除 text-rendering: optimizeLegibility — iPhone 14 Pro 大量文字時會嚴重拖慢渲染 */
 }
 body {
   max-width: 640px;
@@ -427,6 +501,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .ap-row .ap-name {
   font-size: 11px;
   color: var(--text-soft);
+  font-weight: 600;
   margin-left: 6px;
 }
 .ap-row .ap-qty {
@@ -483,12 +558,14 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   font-family: ui-monospace, monospace;
   font-size: 13px;
   color: var(--primary);
-  font-weight: 600;
+  font-weight: 700;
   word-break: break-all;
+  letter-spacing: 0.2px;
 }
 .item-name {
   font-size: 14px;
   color: var(--text);
+  font-weight: 600;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1002,8 +1079,8 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-left: 4px solid var(--primary);
 }
 .menu-item-info { flex: 1; min-width: 0; }
-.menu-item .item-sku { font-size: 12px; }
-.menu-item .item-name { font-size: 14px; font-weight: 500; }
+.menu-item .item-sku { font-size: 12px; font-weight: 700; }
+.menu-item .item-name { font-size: 14px; font-weight: 600; }
 .menu-qty {
   display: flex; align-items: center; gap: 4px;
 }
@@ -1105,6 +1182,9 @@ footer.summary-bar {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
+.settings-card.wide {
+  grid-column: 1 / -1;
+}
 .settings-card.danger {
   border-color: rgba(220,38,38,0.3);
 }
@@ -1144,6 +1224,59 @@ footer.summary-bar {
   font-weight: 600;
 }
 .settings-back-btn:hover { background: rgba(37, 99, 235, 0.15); }
+
+.theme-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.theme-option:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.theme-option.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.theme-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.theme-info { flex: 1; min-width: 0; }
+.theme-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.theme-desc {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+.theme-check {
+  font-size: 20px;
+  color: var(--primary);
+  font-weight: 700;
+  visibility: hidden;
+}
+.theme-option.active .theme-check { visibility: visible; }
 
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -1525,12 +1658,17 @@ footer.summary-bar {
           <div class="card-title">聲音提示</div>
           <div class="card-desc">刷槍 / 完成提示音</div>
         </button>
+        <button class="settings-card" data-settings-view="theme">
+          <div class="card-icon">🎨</div>
+          <div class="card-title">外觀</div>
+          <div class="card-desc">主題顏色 · 護眼</div>
+        </button>
         <button class="settings-card" data-settings-view="integration">
           <div class="card-icon">🌐</div>
           <div class="card-title">外部整合</div>
           <div class="card-desc">Discord · Sheets</div>
         </button>
-        <button class="settings-card danger" data-settings-view="danger">
+        <button class="settings-card danger wide" data-settings-view="danger">
           <div class="card-icon">⚠</div>
           <div class="card-title">取消出貨</div>
           <div class="card-desc">中止當前清單</div>
@@ -1566,6 +1704,42 @@ footer.summary-bar {
         <input type="checkbox" id="sound-enabled-input" style="transform: scale(1.3);"> 開啟刷槍 / 完成聲音
       </label>
       <button class="btn full outline" id="sound-test-btn">🔉 測試出貨完成音 (3 連音)</button>
+    </div>
+
+    <!-- 子視圖: 外觀主題 -->
+    <div id="settings-view-theme" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">🎨 外觀主題</h3>
+      <p class="hint">挑一個眼睛舒服的配色。可隨時切換, 即刻套用。</p>
+
+      <div class="theme-picker" id="theme-picker">
+        <button class="theme-option" data-theme-choice="default">
+          <div class="theme-swatch" style="background: linear-gradient(135deg, #ffffff 50%, #f5f7fa 50%); border: 1px solid #e5e7eb;"></div>
+          <div class="theme-info">
+            <div class="theme-name">預設亮白</div>
+            <div class="theme-desc">原本的配色, 對比清晰</div>
+          </div>
+          <div class="theme-check">✓</div>
+        </button>
+
+        <button class="theme-option" data-theme-choice="warm">
+          <div class="theme-swatch" style="background: linear-gradient(135deg, #faf3df 50%, #efe8d3 50%); border: 1px solid #d9ccb0;"></div>
+          <div class="theme-info">
+            <div class="theme-name">柔和米 (推薦)</div>
+            <div class="theme-desc">暖色調 + 低對比, 久看不累眼</div>
+          </div>
+          <div class="theme-check">✓</div>
+        </button>
+
+        <button class="theme-option" data-theme-choice="dark">
+          <div class="theme-swatch" style="background: linear-gradient(135deg, #161b22 50%, #0a0e14 50%); border: 1px solid #30363d;"></div>
+          <div class="theme-info">
+            <div class="theme-name">深色 (OLED 省電)</div>
+            <div class="theme-desc">夜間或暗環境最舒服, iPhone OLED 省電</div>
+          </div>
+          <div class="theme-check">✓</div>
+        </button>
+      </div>
     </div>
 
     <!-- 子視圖: 外部整合 -->
@@ -1903,11 +2077,12 @@ const HISTORY_KEY = "picking_history_v1";
 const SETTINGS_KEY = "picking_settings_v1";
 const STOCK_KEY = "picking_stock_v1";
 
-// 設定 (聲音/webhook 等)
+// 設定 (聲音/webhook/主題 等)
 let settings = {
   soundEnabled: true,
   discordWebhook: "",
   sheetsWebhook: "",
+  theme: "default", // "default" | "warm" | "dark"
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
@@ -1917,13 +2092,60 @@ function saveSettings() {
 }
 
 // ===== Web Audio 聲音提示 =====
+// iOS Safari 限制: AudioContext 必須在 touch/click 事件裡建立或 resume, 藍牙條碼槍的 keydown 不算「使用者手勢」
+// 解法: 任何 touch/click 都先暖機, 之後刷槍才能出聲
 let _audioCtx = null;
+let _audioUnlocked = false;
+let _audioWarnedThisSession = false;
+
+function unlockAudio() {
+  try {
+    if (!_audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) { console.warn("[sound] 瀏覽器不支援 Web Audio"); return; }
+      _audioCtx = new Ctx();
+    }
+    if (_audioCtx.state === "suspended") {
+      _audioCtx.resume().then(() => {
+        if (_audioCtx.state === "running") {
+          if (!_audioUnlocked) console.log("[sound] AudioContext 已解鎖");
+          _audioUnlocked = true;
+        }
+      }).catch(e => console.warn("[sound] resume 失敗", e));
+    } else if (_audioCtx.state === "running") {
+      _audioUnlocked = true;
+    }
+  } catch(e) { console.warn("[sound] unlock failed", e); }
+}
+
+// 全域 touch/click 監聽 - 每次都嘗試暖機 (iOS 14+ 解鎖後通常會記住, 但保險每次都做)
+document.addEventListener("touchstart", unlockAudio, { passive: true });
+document.addEventListener("click", unlockAudio);
+
 function playBeep(freq, duration, vol) {
   if (!settings.soundEnabled) return;
   vol = vol || 0.25;
   try {
-    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    if (!_audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      _audioCtx = new Ctx();
+    }
+    // 若還在 suspended 狀態, 嘗試 resume (但不會等)
+    if (_audioCtx.state === "suspended") {
+      _audioCtx.resume();
+      // 第一次失敗時提示使用者點一下螢幕解鎖
+      if (!_audioUnlocked && !_audioWarnedThisSession) {
+        _audioWarnedThisSession = true;
+        setTimeout(() => {
+          if (_audioCtx && _audioCtx.state !== "running") {
+            showToast("🔇 聲音被 iOS 鎖住, 請輕點螢幕一下解鎖");
+          }
+        }, 100);
+        return; // 此次 beep 跳過
+      }
+    }
+    if (_audioCtx.state !== "running") return; // 真的解不開就靜悄悄跳過
     const o = _audioCtx.createOscillator();
     const g = _audioCtx.createGain();
     o.connect(g); g.connect(_audioCtx.destination);
@@ -2466,21 +2688,23 @@ function parseLibraryData(text) {
 }
 
 // ---- 商品連動規則 (基於歷史出貨資料分析, 100% 配對驗證) ----
+// 結構: 一個 trigger 可帶動多個 children
 const BUNDLE_RULES = [
   {
     trigger: "KVCBG-18MV45",
     triggerName: "Dusty Mini 收納包",
-    child: "KVC-18MV45-HEPA",
-    childName: "Mini 濾芯",
-    childQtyPerTrigger: 4,
-    note: "歷史 25 筆訂單 1:4 配對 100% 成立",
+    children: [
+      { sku: "KVC-18MV45",      name: "Dusty Mini 主機", qty: 1 },
+      { sku: "KVC-18MV45-HEPA", name: "Mini 濾芯",       qty: 4 },
+    ],
+    note: "收納包套組 = 主機 1 + 濾芯 4 (歷史訂單 100% 配對)",
   },
   {
     trigger: "KPJ-40MV47-BAG",
     triggerName: "Joy Lite 1 投影機收納包",
-    child: "KPJ-40MV47",
-    childName: "Joy Lite 1 主機",
-    childQtyPerTrigger: 1,
+    children: [
+      { sku: "KPJ-40MV47", name: "Joy Lite 1 主機", qty: 1 },
+    ],
     note: "歷史 16 筆加購單 1:1 配對 100% 成立",
   },
 ];
@@ -2489,27 +2713,48 @@ function checkBundleRule(triggerIdx, deltaAdded) {
   const triggerIt = state.items[triggerIdx];
   if (!triggerIt || triggerIt.essential) return;
   const rule = BUNDLE_RULES.find(r => r.trigger === triggerIt.sku);
-  if (!rule) return;
-  const childIdx = state.items.findIndex(it => it.sku === rule.child);
-  const totalChildQty = rule.childQtyPerTrigger * deltaAdded;
-  if (childIdx < 0) {
-    showToast(`⚠ ${rule.triggerName} 通常搭 ${rule.childName} × ${totalChildQty}, 但不在今日清單`);
-    return;
+  if (!rule || !Array.isArray(rule.children) || rule.children.length === 0) return;
+
+  // 預先檢查每個 child 是否在清單; 收集缺漏的給 toast 提醒
+  const childResolved = rule.children.map(c => {
+    const idx = state.items.findIndex(it => it.sku === c.sku);
+    return { ...c, idx, totalQty: c.qty * deltaAdded };
+  });
+  const missing = childResolved.filter(c => c.idx < 0);
+  if (missing.length > 0) {
+    const msg = missing.map(c => `${c.name} × ${c.totalQty}`).join(", ");
+    showToast(`⚠ ${rule.triggerName} 套組: ${msg} 不在今日清單`);
+    // 若全部 child 都缺, 直接 return; 否則繼續詢問
+    if (missing.length === rule.children.length) return;
   }
+  const available = childResolved.filter(c => c.idx >= 0);
+  if (available.length === 0) return;
+
   // 詢問 (延遲執行避免阻塞掃描 buffer)
   setTimeout(() => {
+    const childList = available.map(c => `  • ${c.name} × ${c.totalQty}`).join("\n");
     const ok = confirm(
       `✓ ${rule.triggerName} 已加 ${deltaAdded} 個\n\n` +
       `📦 連動規則: ${rule.note}\n\n` +
-      `要同步加入 ${totalChildQty} 個「${rule.childName}」嗎?`
+      `要同步加入:\n${childList}\n\n要一起加嗎?`
     );
     if (ok) {
-      // 重新驗證 childIdx (因 setTimeout 中可能 state 已變)
-      const recheckIdx = state.items.findIndex(it => it.sku === rule.child);
-      if (recheckIdx >= 0) {
-        bumpPickItem(recheckIdx, totalChildQty, { suppressBundle: true });
-      } else {
-        showToast(`⚠ ${rule.childName} 不在清單, 無法加入`);
+      let addedCount = 0;
+      const skipped = [];
+      for (const c of available) {
+        // 重新驗證 idx (因 setTimeout 中可能 state 已變)
+        const recheckIdx = state.items.findIndex(it => it.sku === c.sku);
+        if (recheckIdx >= 0) {
+          bumpPickItem(recheckIdx, c.totalQty, { suppressBundle: true });
+          addedCount++;
+        } else {
+          skipped.push(c.name);
+        }
+      }
+      if (skipped.length > 0) {
+        showToast(`⚠ ${skipped.join(", ")} 已不在清單, 略過`);
+      } else if (addedCount > 0) {
+        showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
       }
     }
   }, 50);
@@ -4907,7 +5152,8 @@ document.getElementById("home-btn").addEventListener("click", () => {
 const settingsModal = document.getElementById("settings-modal");
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
-  ["stocktake", "sound", "integration", "danger"].forEach(v => {
+  // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
+  ["stocktake", "sound", "theme", "integration", "danger"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
@@ -4927,6 +5173,7 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
   const card = e.target.closest("button[data-settings-view]");
   if (card) {
     showSettingsView(card.dataset.settingsView);
+    if (card.dataset.settingsView === "theme") refreshThemePicker();
     return;
   }
   const back = e.target.closest("button[data-settings-back]");
@@ -4934,7 +5181,31 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
     showSettingsView("menu");
     return;
   }
+  const themeChoice = e.target.closest("button[data-theme-choice]");
+  if (themeChoice) {
+    const theme = themeChoice.dataset.themeChoice;
+    settings.theme = theme;
+    saveSettings();
+    applyTheme(theme);
+    refreshThemePicker();
+    showToast(`✓ 已切換到「${themeChoice.querySelector(".theme-name").textContent.trim()}」`);
+    return;
+  }
 });
+
+function applyTheme(theme) {
+  if (!theme || theme === "default") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+}
+function refreshThemePicker() {
+  const current = settings.theme || "default";
+  document.querySelectorAll("#theme-picker button[data-theme-choice]").forEach(b => {
+    b.classList.toggle("active", b.dataset.themeChoice === current);
+  });
+}
 
 document.getElementById("sound-enabled-input").addEventListener("change", (e) => {
   settings.soundEnabled = e.target.checked;
@@ -5571,6 +5842,7 @@ document.getElementById("barcode-close-btn").addEventListener("click", () => {
 
 // ---- Init ----
 loadSettings();
+applyTheme(settings.theme || "default");
 loadState();
 // 自動還原: 若主資料空但備份有, 還原 + 提示
 if (state.items.length === 0) {
@@ -5601,8 +5873,4 @@ try {
 // 最後保險: 若 currentPlatform 不存在於 PLATFORMS, 退回 a1
 if (!PLATFORMS[currentPlatform]) currentPlatform = "a1";
 document.getElementById("platform-select").value = currentPlatform;
-document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
-render();
-</script>
-</body>
-</html>
+document.ge
