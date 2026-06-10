@@ -1225,6 +1225,58 @@ footer.summary-bar {
 }
 .settings-back-btn:hover { background: rgba(37, 99, 235, 0.15); }
 
+/* 房間徽章 (header 內) */
+.room-badge {
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 20px;
+  padding: 4px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-right: 8px;
+  font-family: inherit;
+  transition: background .15s;
+}
+.room-badge:hover { background: rgba(255,255,255,.28); }
+.room-badge .rb-icon { font-size: 14px; }
+.room-badge .rb-code { letter-spacing: 1px; font-family: ui-monospace, monospace; }
+.room-badge .rb-members {
+  background: rgba(255,255,255,.2);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+.room-badge.syncing { animation: roomPulse 1s infinite; }
+@keyframes roomPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 開房 / 加房 入口卡片 (插在 通路匯入 tab) */
+.room-entry {
+  margin: 12px 0;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, rgba(37, 99, 235, 0.08) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+.room-entry-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+.room-entry-desc {
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
 .theme-picker {
   display: flex;
   flex-direction: column;
@@ -1339,6 +1391,11 @@ footer.summary-bar {
 
 <header>
   <h1>📦 出貨雙重確認</h1>
+  <button id="room-badge" class="room-badge" hidden>
+    <span class="rb-icon">🏠</span>
+    <span class="rb-code" id="rb-code">—</span>
+    <span class="rb-members"><span id="rb-member-count">0</span>👤</span>
+  </button>
   <button id="header-status" class="header-status" hidden title="點此回到備貨清單">
     <span class="dot"></span>
     <span class="label">備貨中</span>
@@ -1403,6 +1460,16 @@ footer.summary-bar {
     <p class="hint" id="platform-hint">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
 
     <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 8px 0;">
+
+    <!-- 多人協作入口 -->
+    <div class="room-entry">
+      <div class="room-entry-title">👥 兩人一起包貨? (Cloudflare 同步)</div>
+      <div class="room-entry-desc">先上傳 CSV → 開房 → 拿到 4 碼邀請碼 → 分享給同事 → 兩人各刷各的。需先在「⚙ 外部整合」設定 Worker URL。</div>
+      <div class="row" style="gap: 8px;">
+        <button class="btn outline sm" id="open-create-room-btn" style="flex:1;">🏠 開新房間</button>
+        <button class="btn outline sm" id="open-join-room-btn" style="flex:1;">🚪 加入房間</button>
+      </div>
+    </div>
 
     <!-- 手動建單入口 -->
     <div style="margin: 14px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
@@ -1754,8 +1821,23 @@ footer.summary-bar {
       <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 8px; border-radius: 6px; font-size: 12px;">
         ⚠ Cowork 預覽版會擋外部請求, 只有部署版可以正常推送。
       </p>
-      <p class="hint" style="margin-top: 10px;">每次「出貨完成」自動推送 (補寄訂單跳過)。</p>
 
+      <!-- 多人同步 Worker (新) -->
+      <div style="margin-top: 14px; padding: 12px; background: var(--primary-light); border-radius: 10px; border-left: 4px solid var(--primary);">
+        <div style="font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 6px;">👥 多人同步 (Cloudflare Worker)</div>
+        <p class="hint" style="font-size: 11px; margin: 4px 0;">兩位同仁一起包貨用。先部署 Worker (見 picking_sync_worker_setup.md), 再填下面 URL + 暱稱。</p>
+
+        <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:8px;">Worker URL</label>
+        <input type="text" id="sync-worker-url-input" placeholder="https://koca-picking-sync.xxx.workers.dev" style="margin-bottom:6px;">
+
+        <label style="display:block; font-size:12px; color:var(--text-soft);">我的暱稱 (其他人會看到)</label>
+        <input type="text" id="my-name-input" placeholder="例: 阿明 / A / Kyle" maxlength="20" style="margin-bottom:6px;">
+
+        <button class="btn outline sm full" id="sync-test-btn">📡 測試連線</button>
+      </div>
+
+      <div style="height: 16px"></div>
+      <p class="hint">每次「出貨完成」自動推送 (補寄訂單跳過)。</p>
       <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:12px;">Discord Webhook URL</label>
       <input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="margin-bottom:6px;">
       <button class="btn outline sm full" id="discord-test-btn">📡 測試 Discord</button>
@@ -2004,6 +2086,57 @@ footer.summary-bar {
   </div>
 </div>
 
+<!-- 開新房間 modal -->
+<div class="modal-backdrop" id="create-room-modal" hidden>
+  <div class="modal" style="max-width: 480px;">
+    <h2>🏠 開新房間</h2>
+    <p class="hint">把目前備貨清單上傳到 Worker, 取得邀請碼分享給另一位同仁加入一起包貨。</p>
+
+    <div id="create-room-status" class="hint" style="margin: 14px 0; padding: 10px; background: var(--bg); border-radius: 8px; font-size: 12px;"></div>
+
+    <div style="height: 8px"></div>
+    <div class="row">
+      <button class="btn outline" id="create-room-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="create-room-confirm" style="flex:2; background: var(--success);">▶ 建立房間</button>
+    </div>
+  </div>
+</div>
+
+<!-- 加入房間 modal -->
+<div class="modal-backdrop" id="join-room-modal" hidden>
+  <div class="modal" style="max-width: 460px;">
+    <h2>🚪 加入房間</h2>
+    <p class="hint">輸入另一位同仁分享給你的 4 碼邀請碼。</p>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">邀請碼</label>
+    <input type="text" id="join-room-code" placeholder="例: K7N3" maxlength="4"
+           inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+           style="text-transform: uppercase; font-size: 24px; text-align: center; letter-spacing: 8px; font-weight: 700; padding: 14px; font-family: ui-monospace, monospace;">
+
+    <div id="join-room-status" class="hint" style="margin: 10px 0; min-height: 16px;"></div>
+
+    <div style="height: 8px"></div>
+    <div class="row">
+      <button class="btn outline" id="join-room-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="join-room-confirm" style="flex:2;">▶ 加入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 房間狀態 modal (點 header 徽章開啟) -->
+<div class="modal-backdrop" id="room-info-modal" hidden>
+  <div class="modal" style="max-width: 460px;">
+    <h2>🏠 房間狀態</h2>
+
+    <div id="room-info-content"></div>
+
+    <div style="height: 12px"></div>
+    <button class="btn full outline danger" id="room-leave-btn">🚪 離開房間</button>
+    <div style="height: 8px"></div>
+    <button class="btn full outline" id="room-info-close">關閉</button>
+  </div>
+</div>
+
 <!-- Final report modal -->
 <div class="modal-backdrop" id="report-modal" hidden>
   <div class="modal">
@@ -2095,7 +2228,12 @@ const CATEGORY_EMOJI = {
 };
 const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
 
-let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null };
+let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null,
+  // 房間模式
+  roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, roomLastSyncAt: null,
+};
+let pendingEvents = [];  // 待上傳的事件 (room 模式才用)
+let syncTimer = null;    // setInterval handle
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -2113,12 +2251,14 @@ const HISTORY_KEY = "picking_history_v1";
 const SETTINGS_KEY = "picking_settings_v1";
 const STOCK_KEY = "picking_stock_v1";
 
-// 設定 (聲音/webhook/主題 等)
+// 設定 (聲音/webhook/主題/多人同步 等)
 let settings = {
   soundEnabled: true,
   discordWebhook: "",
   sheetsWebhook: "",
   theme: "default", // "default" | "warm" | "dark"
+  syncWorkerUrl: "", // 多人同步 Worker URL (空 = 單機模式)
+  myName: "",       // 我的暱稱 (給房間其他人辨識用)
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
@@ -2341,6 +2481,202 @@ async function pushToSheets(payload) {
     return { ok: false, error: "network", detail: String(e.message || e) };
   }
 }
+// ===== 多人房間同步 (Cloudflare Worker + KV) =====
+function makeEventId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now() + "_" + Math.random().toString(36).slice(2, 12);
+}
+
+function queueRoomEvent(type, data) {
+  if (!state.roomMode) return;
+  pendingEvents.push({
+    id: makeEventId(),
+    type,
+    data,
+    by: settings.myName || "?",
+    ts: new Date().toISOString(),
+  });
+}
+
+async function createRoom() {
+  if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return null; }
+  if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return null; }
+  if (state.items.length === 0) { showToast("⚠ 請先上傳備貨清單"); return null; }
+  try {
+    const url = settings.syncWorkerUrl + "/api/room/create";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        myName: settings.myName,
+        platform: currentPlatform || "a1",
+        items: state.items.map(it => ({ ...it })),
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "建立失敗");
+    state.roomMode = true;
+    state.roomCode = data.code;
+    state.roomMembers = data.room.members || {};
+    state.roomActiveParcels = {};
+    state.roomLastSyncAt = new Date().toISOString();
+    saveState();
+    startSyncTimer();
+    renderRoomBadge();
+    return data.code;
+  } catch(e) {
+    console.error("[room] create failed", e);
+    alert("⚠ 開房失敗\n\n" + (e.message || e) + "\n\n檢查 Worker URL 是否正確 + 是否在部署版 (非 Cowork 預覽)。");
+    return null;
+  }
+}
+
+async function joinRoom(code) {
+  if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return false; }
+  if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return false; }
+  code = (code || "").toUpperCase().trim();
+  if (!/^[A-Z0-9]{4}$/.test(code)) { showToast("⚠ 邀請碼格式不對 (4 碼英數)"); return false; }
+  try {
+    const url = settings.syncWorkerUrl + "/api/room/" + code;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error === "not_found" ? "找不到此房間" : data.error);
+    const room = data.room;
+    // 載入房間狀態到 state
+    state.items = (room.items || []).map(it => ({ ...it }));
+    state.completedParcels = (room.completedParcels || []).map(p => ({ ...p }));
+    state.activeParcel = null;
+    state.scanMode = true;
+    state.manualMode = false;
+    state.replacementInfo = null;
+    state.appendLevel = 1;
+    state.continuationOf = null;
+    state.roomMode = true;
+    state.roomCode = code;
+    state.roomMembers = room.members || {};
+    state.roomActiveParcels = room.activeParcels || {};
+    state.roomLastSyncAt = new Date().toISOString();
+    state.loadedDate = new Date().toISOString().slice(0, 10);
+    if (room.platform && PLATFORMS[room.platform]) {
+      currentPlatform = room.platform;
+      try { localStorage.setItem(PLATFORM_KEY, room.platform); } catch(e){}
+      document.getElementById("platform-select").value = room.platform;
+      document.getElementById("platform-hint").textContent = PLATFORMS[room.platform].hint;
+    }
+    saveState();
+    startSyncTimer();
+    renderRoomBadge();
+    return true;
+  } catch(e) {
+    console.error("[room] join failed", e);
+    showToast("⚠ 加入失敗: " + (e.message || e));
+    return false;
+  }
+}
+
+async function syncRoom() {
+  if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
+  const badge = document.getElementById("room-badge");
+  if (badge) badge.classList.add("syncing");
+  try {
+    const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync";
+    const eventsToSend = pendingEvents.slice();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        myName: settings.myName,
+        events: eventsToSend,
+        myActiveParcel: state.activeParcel,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (data.error === "not_found") {
+        // 房間已被關閉
+        showToast("⚠ 房間已關閉, 離開房間");
+        leaveRoom(false);
+        return;
+      }
+      throw new Error(data.error);
+    }
+    // 清掉已送出的事件 (注意: 新加進來的事件不要被清掉)
+    pendingEvents = pendingEvents.slice(eventsToSend.length);
+    mergeRoomState(data.room);
+    state.roomLastSyncAt = new Date().toISOString();
+  } catch(e) {
+    console.warn("[room] sync failed", e);
+  } finally {
+    if (badge) badge.classList.remove("syncing");
+  }
+}
+
+function mergeRoomState(serverRoom) {
+  if (!serverRoom) return;
+  // items: 用 server 的 packed 值 (canonical), 但保留本地新增 item (尚未同步的)
+  if (Array.isArray(serverRoom.items)) {
+    for (const serverIt of serverRoom.items) {
+      const localIt = state.items.find(it => it.sku === serverIt.sku);
+      if (localIt) {
+        localIt.packed = serverIt.packed;
+        localIt.expected = serverIt.expected;
+      } else {
+        state.items.push({ ...serverIt });
+      }
+    }
+  }
+  // completedParcels: server 為準 (含 packedBy 標記)
+  state.completedParcels = (serverRoom.completedParcels || []).map(p => ({ ...p }));
+  state.roomMembers = serverRoom.members || {};
+  state.roomActiveParcels = serverRoom.activeParcels || {};
+  saveState();
+  renderRoomBadge();
+  renderPicking();
+  renderScanPanel();
+}
+
+function startSyncTimer() {
+  if (syncTimer) clearInterval(syncTimer);
+  if (!state.roomMode) return;
+  syncTimer = setInterval(syncRoom, 5000);
+  // 立即跑一次
+  syncRoom();
+}
+
+function stopSyncTimer() {
+  if (syncTimer) clearInterval(syncTimer);
+  syncTimer = null;
+}
+
+function leaveRoom(notifyServer) {
+  stopSyncTimer();
+  state.roomMode = false;
+  state.roomCode = null;
+  state.roomMembers = {};
+  state.roomActiveParcels = {};
+  pendingEvents = [];
+  saveState();
+  renderRoomBadge();
+  // 不清空 state.items / completedParcels (使用者可以繼續單機包剩下的)
+}
+
+function renderRoomBadge() {
+  const badge = document.getElementById("room-badge");
+  if (!badge) return;
+  if (!state.roomMode || !state.roomCode) {
+    badge.hidden = true;
+    return;
+  }
+  badge.hidden = false;
+  document.getElementById("rb-code").textContent = state.roomCode;
+  const now = Date.now();
+  const activeMembers = Object.entries(state.roomMembers || {}).filter(([n, m]) => {
+    if (!m || !m.lastSeen) return false;
+    return (now - new Date(m.lastSeen).getTime()) < 60000; // 1 分鐘內算在線
+  });
+  document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
+}
+
 function saveState() {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -2364,6 +2700,10 @@ function loadState() {
         if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
         if (typeof state.manualMode === "undefined") state.manualMode = false;
         if (typeof state.replacementInfo === "undefined") state.replacementInfo = null;
+        if (typeof state.roomMode === "undefined") state.roomMode = false;
+        if (typeof state.roomCode === "undefined") state.roomCode = null;
+        if (!state.roomMembers) state.roomMembers = {};
+        if (!state.roomActiveParcels) state.roomActiveParcels = {};
         console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels", state.replacementInfo ? "(補寄)" : (state.manualMode ? "(手建)" : ""));
       }
     }
@@ -3681,7 +4021,12 @@ function finalizeActiveParcel(skipIfEmpty) {
     return;
   }
   ap.completedAt = new Date().toISOString();
+  ap.packedBy = settings.myName || "(本機)";
   state.completedParcels.push(ap);
+  // 房間模式: 廣播此筆完成
+  if (state.roomMode) {
+    queueRoomEvent("parcel_complete", { id: ap.id, items: ap.items, packedBy: ap.packedBy });
+  }
   state.activeParcel = null;
 }
 
@@ -3937,6 +4282,10 @@ function bumpPickItem(idx, delta, options) {
     }
   }
   it.packed = Math.max(0, it.packed + delta);
+  // 房間模式: 把這次變動上傳給其他同仁
+  if (state.roomMode && delta !== 0) {
+    queueRoomEvent("scan_sku", { sku: it.sku, deltaQty: delta });
+  }
   // 若在掃描模式且有 active parcel, 紀錄到當前訂單
   if (state.scanMode && state.activeParcel && delta !== 0) {
     const ap = state.activeParcel;
@@ -5087,7 +5436,7 @@ document.addEventListener("keydown", (e) => {
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
   // 若任何 modal 開啟中, 不攔截 (避免衝突)
   // 補上 merge-modal, health-modal (追加合併確認 / 出貨健康檢查), 避免在 modal 中刷錯
-  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal"];
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "create-room-modal", "join-room-modal", "room-info-modal"];
   for (const id of modals) {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
@@ -5202,6 +5551,10 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
   document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
   document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
+  const swUrl = document.getElementById("sync-worker-url-input");
+  if (swUrl) swUrl.value = settings.syncWorkerUrl || "";
+  const myNm = document.getElementById("my-name-input");
+  if (myNm) myNm.value = settings.myName || "";
 });
 
 // ===== 資料搬家 (匯出 / 匯入 全部 localStorage) =====
@@ -5272,6 +5625,120 @@ document.getElementById("backup-import-file").addEventListener("change", (e) => 
 });
 
 // 設定 modal - 卡片點擊 / 返回鈕事件代理
+// ===== 房間 UI event handlers =====
+// 開房
+document.getElementById("open-create-room-btn").addEventListener("click", async () => {
+  if (state.items.length === 0) { showToast("⚠ 請先上傳備貨清單再開房"); return; }
+  if (!settings.syncWorkerUrl || !settings.myName) {
+    if (confirm("尚未設定 Worker URL 或暱稱。\n\n要前往設定嗎?")) {
+      document.getElementById("settings-modal").hidden = false;
+      showSettingsView("integration");
+    }
+    return;
+  }
+  const modal = document.getElementById("create-room-modal");
+  document.getElementById("create-room-status").textContent =
+    `將上傳 ${state.items.length} 個 SKU 給 Worker, 取得 4 碼邀請碼。`;
+  modal.hidden = false;
+});
+document.getElementById("create-room-cancel").addEventListener("click", () => {
+  document.getElementById("create-room-modal").hidden = true;
+});
+document.getElementById("create-room-confirm").addEventListener("click", async () => {
+  const btn = document.getElementById("create-room-confirm");
+  btn.disabled = true; btn.textContent = "建立中...";
+  const code = await createRoom();
+  btn.disabled = false; btn.textContent = "▶ 建立房間";
+  if (code) {
+    document.getElementById("create-room-modal").hidden = true;
+    // 顯示成功訊息 + 邀請碼
+    setTimeout(() => {
+      alert(`✓ 房間建立成功!\n\n邀請碼: ${code}\n\n請把 ${code} 告訴另一位同仁, 讓他在 App 內點「🚪 加入房間」輸入。\n\n每 5 秒會自動同步彼此進度。`);
+    }, 100);
+  }
+});
+
+// 加房
+document.getElementById("open-join-room-btn").addEventListener("click", () => {
+  if (!settings.syncWorkerUrl || !settings.myName) {
+    if (confirm("尚未設定 Worker URL 或暱稱。\n\n要前往設定嗎?")) {
+      document.getElementById("settings-modal").hidden = false;
+      showSettingsView("integration");
+    }
+    return;
+  }
+  if (state.items.length > 0 && !state.roomMode) {
+    if (!confirm("你目前有未完成的備貨清單, 加入房間會覆蓋它, 確定?")) return;
+  }
+  document.getElementById("join-room-code").value = "";
+  document.getElementById("join-room-status").textContent = "";
+  document.getElementById("join-room-modal").hidden = false;
+  setTimeout(() => document.getElementById("join-room-code").focus(), 100);
+});
+document.getElementById("join-room-cancel").addEventListener("click", () => {
+  document.getElementById("join-room-modal").hidden = true;
+});
+document.getElementById("join-room-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("join-room-confirm").click(); }
+});
+document.getElementById("join-room-confirm").addEventListener("click", async () => {
+  const code = document.getElementById("join-room-code").value.toUpperCase().trim();
+  if (!/^[A-Z0-9]{4}$/.test(code)) {
+    document.getElementById("join-room-status").innerHTML = '<span style="color: var(--danger);">⚠ 請輸入 4 碼英數</span>';
+    return;
+  }
+  document.getElementById("join-room-status").innerHTML = '<span style="color: var(--text-soft);">連線中...</span>';
+  const ok = await joinRoom(code);
+  if (ok) {
+    document.getElementById("join-room-modal").hidden = true;
+    showToast(`✓ 已加入房間 ${code}`);
+    render();
+  } else {
+    document.getElementById("join-room-status").innerHTML = '<span style="color: var(--danger);">⚠ 加入失敗</span>';
+  }
+});
+
+// 房間徽章 → 開狀態 modal
+document.getElementById("room-badge").addEventListener("click", () => {
+  const m = document.getElementById("room-info-modal");
+  const content = document.getElementById("room-info-content");
+  const now = Date.now();
+  const memberRows = Object.entries(state.roomMembers || {}).map(([name, info]) => {
+    const lastSeenMs = info && info.lastSeen ? new Date(info.lastSeen).getTime() : 0;
+    const sinceMs = now - lastSeenMs;
+    const online = sinceMs < 60000;
+    const myActive = (state.roomActiveParcels || {})[name];
+    const myActiveText = myActive ? ` · 處理 ${myActive.id}` : "";
+    const isMe = name === settings.myName;
+    return `<div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
+      <div>
+        <strong>${escapeHtml(name)}</strong>${isMe ? ' <span style="font-size:11px; color: var(--primary);">(你)</span>' : ''}
+        <div style="font-size:11px; color:var(--text-soft);">${online ? '🟢 在線' : `離線 (${Math.round(sinceMs/60000)} 分鐘前)`}${escapeHtml(myActiveText)}</div>
+      </div>
+    </div>`;
+  }).join("") || '<div class="hint">尚無成員資料</div>';
+  const lastSync = state.roomLastSyncAt ? new Date(state.roomLastSyncAt).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", second:"2-digit"}) : "—";
+  content.innerHTML = `
+    <div style="background: var(--primary-light); padding: 12px; border-radius: 10px; margin-bottom: 12px;">
+      <div style="font-size: 11px; color: var(--text-soft);">邀請碼</div>
+      <div style="font-size: 32px; font-weight: 700; letter-spacing: 4px; font-family: ui-monospace, monospace; color: var(--primary);">${escapeHtml(state.roomCode || "—")}</div>
+      <div style="font-size: 11px; color: var(--text-soft); margin-top: 4px;">最後同步: ${lastSync}</div>
+    </div>
+    <h3 style="font-size: 13px; margin: 0 0 8px;">成員 (${Object.keys(state.roomMembers || {}).length})</h3>
+    ${memberRows}
+  `;
+  m.hidden = false;
+});
+document.getElementById("room-info-close").addEventListener("click", () => {
+  document.getElementById("room-info-modal").hidden = true;
+});
+document.getElementById("room-leave-btn").addEventListener("click", () => {
+  if (!confirm("離開房間? 同步會停止, 目前清單會留在本機。")) return;
+  leaveRoom(true);
+  document.getElementById("room-info-modal").hidden = true;
+  showToast("已離開房間");
+});
+
 document.getElementById("settings-modal").addEventListener("click", (e) => {
   const card = e.target.closest("button[data-settings-view]");
   if (card) {
@@ -5351,6 +5818,41 @@ document.getElementById("discord-test-btn").addEventListener("click", async () =
     else if (result.error === "network") msg = "⚠ 網路錯誤\n" + (result.detail || "");
     else if (result.error.startsWith("http_")) msg = "⚠ Discord 拒絕 (" + result.error + ")\n" + (result.detail || "");
     alert(msg);
+  }
+});
+
+// 多人同步 Worker URL + 暱稱 自動儲存
+document.getElementById("sync-worker-url-input").addEventListener("input", (e) => {
+  let v = e.target.value.trim();
+  // 去掉結尾的 / 避免拼錯
+  if (v.endsWith("/")) v = v.slice(0, -1);
+  settings.syncWorkerUrl = v;
+  saveSettings();
+});
+document.getElementById("my-name-input").addEventListener("input", (e) => {
+  settings.myName = e.target.value.trim().substring(0, 20);
+  saveSettings();
+});
+
+// 測試連線按鈕
+document.getElementById("sync-test-btn").addEventListener("click", async () => {
+  const url = (document.getElementById("sync-worker-url-input").value || "").trim().replace(/\/$/, "");
+  const name = (document.getElementById("my-name-input").value || "").trim();
+  if (!url) { showToast("⚠ 請先填 Worker URL"); return; }
+  if (!name) { showToast("⚠ 請先填暱稱"); return; }
+  settings.syncWorkerUrl = url; settings.myName = name; saveSettings();
+  showToast("📡 測試中...");
+  try {
+    const res = await fetch(url + "/api/health", { method: "GET" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data && data.ok) {
+      alert(`✓ Worker 連線成功\n\n版本: ${data.version}\n伺服器時間: ${data.time}\n\n下一步: 等下我會做「🏠 開新房間 / 🚪 加入房間」UI。`);
+    } else {
+      alert("⚠ 回應格式不對:\n" + JSON.stringify(data).substring(0, 200));
+    }
+  } catch(e) {
+    alert(`⚠ 連線失敗\n\n${e.message || e}\n\n檢查:\n  1. URL 是否正確 (應含 https://)\n  2. Worker 是否已部署\n  3. 是不是在 Cowork 預覽版 (會擋外部請求)`);
   }
 });
 
@@ -5978,6 +6480,11 @@ if (!PLATFORMS[currentPlatform]) currentPlatform = "a1";
 document.getElementById("platform-select").value = currentPlatform;
 document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
 render();
+// 若上次離線前在房間模式, 自動恢復同步
+if (state.roomMode && state.roomCode && settings.syncWorkerUrl) {
+  startSyncTimer();
+}
+renderRoomBadge();
 </script>
 </body>
 </html>
