@@ -1391,7 +1391,7 @@ footer.summary-bar {
 
 <header>
   <h1>📦 出貨雙重確認</h1>
-  <button id="room-badge" class="room-badge" hidden>
+  <button id="room-badge" class="room-badge" hidden title="點此看房間狀態" aria-label="房間狀態">
     <span class="rb-icon">🏠</span>
     <span class="rb-code" id="rb-code">—</span>
     <span class="rb-members"><span id="rb-member-count">0</span>👤</span>
@@ -2232,8 +2232,9 @@ let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activ
   // 房間模式
   roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, roomLastSyncAt: null,
 };
-let pendingEvents = [];  // 待上傳的事件 (room 模式才用)
-let syncTimer = null;    // setInterval handle
+let pendingEvents = [];   // 待上傳的事件 (room 模式才用)
+let syncTimer = null;     // setInterval handle
+let syncInFlight = false; // 防止平行同步
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -2482,6 +2483,12 @@ async function pushToSheets(payload) {
   }
 }
 // ===== 多人房間同步 (Cloudflare Worker + KV) =====
+// 進入「會替換 state.items」的流程前先檢查是否要離房
+function checkRoomBeforeReset(actionLabel) {
+  if (!state.roomMode) return true; // 不在房間 OK
+  return confirm(`你目前在房間 ${state.roomCode}。\n\n${actionLabel}會脫離房間 (不再跟同事同步)。\n\n確定?`);
+}
+
 function makeEventId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return Date.now() + "_" + Math.random().toString(36).slice(2, 12);
@@ -2489,6 +2496,8 @@ function makeEventId() {
 
 function queueRoomEvent(type, data) {
   if (!state.roomMode) return;
+  // 跳過 0 變動的事件 (避免噪音)
+  if (type === "scan_sku" && (!data || data.deltaQty === 0)) return;
   pendingEvents.push({
     id: makeEventId(),
     type,
@@ -2576,6 +2585,8 @@ async function joinRoom(code) {
 
 async function syncRoom() {
   if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
+  if (syncInFlight) return; // 上一輪還沒結束, 跳過避免平行
+  syncInFlight = true;
   const badge = document.getElementById("room-badge");
   if (badge) badge.classList.add("syncing");
   try {
@@ -2608,12 +2619,26 @@ async function syncRoom() {
     console.warn("[room] sync failed", e);
   } finally {
     if (badge) badge.classList.remove("syncing");
+    syncInFlight = false;
   }
 }
 
 function mergeRoomState(serverRoom) {
   if (!serverRoom) return;
-  // items: 用 server 的 packed 值 (canonical), 但保留本地新增 item (尚未同步的)
+  // 已離房 (使用者按了離開, 或同步進行中收到 not_found): 不再更新本機 state
+  if (!state.roomMode) return;
+  // 跳過冗餘 render: server version 沒變且沒新 events 上傳 → 略過畫面更新
+  const lastVer = state._lastSeenRoomVer || 0;
+  const noChange = serverRoom.version === lastVer && pendingEvents.length === 0;
+  state._lastSeenRoomVer = serverRoom.version;
+  if (noChange) {
+    // 仍更新 members presence (時間戳變了)
+    state.roomMembers = serverRoom.members || {};
+    state.roomActiveParcels = serverRoom.activeParcels || {};
+    renderRoomBadge();
+    return;
+  }
+  // items: server packed 為準, 但保留本地新增 item (尚未同步的)
   if (Array.isArray(serverRoom.items)) {
     for (const serverIt of serverRoom.items) {
       const localIt = state.items.find(it => it.sku === serverIt.sku);
@@ -2625,8 +2650,12 @@ function mergeRoomState(serverRoom) {
       }
     }
   }
-  // completedParcels: server 為準 (含 packedBy 標記)
-  state.completedParcels = (serverRoom.completedParcels || []).map(p => ({ ...p }));
+  // completedParcels: 用 ID 集合合併 - server 為主, 本地待同步的 (還沒被 server 確認的) 保留
+  // 避免使用者剛刷完, sync 還沒回來時看到自己的訂單「閃掉」
+  const serverParcels = serverRoom.completedParcels || [];
+  const serverIds = new Set(serverParcels.map(p => p.id));
+  const localPending = (state.completedParcels || []).filter(p => !serverIds.has(p.id));
+  state.completedParcels = [...serverParcels.map(p => ({ ...p })), ...localPending];
   state.roomMembers = serverRoom.members || {};
   state.roomActiveParcels = serverRoom.activeParcels || {};
   saveState();
@@ -2638,10 +2667,56 @@ function mergeRoomState(serverRoom) {
 function startSyncTimer() {
   if (syncTimer) clearInterval(syncTimer);
   if (!state.roomMode) return;
-  syncTimer = setInterval(syncRoom, 5000);
+  syncTimer = setInterval(() => {
+    // 視窗在背景時暫停 (省電池, 重新可見時會立刻補一次)
+    if (document.hidden) return;
+    syncRoom();
+  }, 5000);
   // 立即跑一次
   syncRoom();
 }
+
+// 視窗從背景切回前景: 立刻補一次同步 (避免錯過 5 秒空窗的更新)
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && state.roomMode) {
+    syncRoom();
+  } else if (document.hidden && state.roomMode && pendingEvents.length > 0) {
+    // 切到背景前最後把待傳的事件 flush 出去 (用 sendBeacon 比較可靠)
+    flushPendingEventsBeacon();
+  }
+});
+
+// 用 sendBeacon 把 pendingEvents 送出 (不等回應, 但保證會送)
+function flushPendingEventsBeacon() {
+  if (!navigator.sendBeacon) return;
+  if (!state.roomCode || !settings.syncWorkerUrl) return;
+  if (pendingEvents.length === 0) return;
+  try {
+    const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync";
+    const body = new Blob([JSON.stringify({
+      myName: settings.myName,
+      events: pendingEvents.slice(),
+      myActiveParcel: state.activeParcel,
+    })], { type: "application/json" });
+    const ok = navigator.sendBeacon(url, body);
+    if (ok) {
+      pendingEvents = [];
+      console.log("[room] beacon flushed events");
+    }
+  } catch(e) { console.warn("[room] beacon failed", e); }
+}
+
+// 頁面要關閉時最後一次 flush
+window.addEventListener("beforeunload", () => {
+  if (state.roomMode && pendingEvents.length > 0) {
+    flushPendingEventsBeacon();
+  }
+});
+window.addEventListener("pagehide", () => {
+  if (state.roomMode && pendingEvents.length > 0) {
+    flushPendingEventsBeacon();
+  }
+});
 
 function stopSyncTimer() {
   if (syncTimer) clearInterval(syncTimer);
@@ -3955,6 +4030,21 @@ function processScan(code) {
     return;
   }
 
+  // 房間模式: 檢查是否有別人在處理同一張 (3 分鐘內 active)
+  if (state.roomMode && state.roomActiveParcels) {
+    const now = Date.now();
+    for (const [name, ap] of Object.entries(state.roomActiveParcels)) {
+      if (name === settings.myName) continue;
+      if (!ap || ap.id !== code) continue;
+      const startedAt = ap.startedAt ? new Date(ap.startedAt).getTime() : 0;
+      if (now - startedAt < 3 * 60000) {
+        SOUND.scanError();
+        if (!confirm(`⚠ ${name} 正在處理 ${code}\n\n你還是要接手嗎? (建議口頭確認分工)`)) return;
+        break;
+      }
+    }
+  }
+
   if (state.activeParcel) {
     // 已有 active parcel
     if (state.activeParcel.id === code) {
@@ -4062,8 +4152,10 @@ function renderCompletedParcelsList() {
     const t = new Date(p.completedAt);
     const timeStr = t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
     const itemsStr = Object.entries(p.items || {}).map(([sku, q]) => `${sku}×${q}`).join("、");
+    // 房間模式顯示誰包的; 本機模式不顯示
+    const byTag = (state.roomMode && p.packedBy) ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 0 6px; border-radius: 8px; font-size: 10px;">${escapeHtml(p.packedBy)}</span>` : '';
     return `<div class="completed-parcel">
-      <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span><span class="completed-parcel-time">${timeStr}</span></div>
+      <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span>${byTag}<span class="completed-parcel-time">${timeStr}</span></div>
       <div class="completed-parcel-items">${escapeHtml(itemsStr)}</div>
     </div>`;
   }).join("");
@@ -4370,6 +4462,10 @@ document.getElementById("a1-csv-file").addEventListener("change", (e) => {
   const f = e.target.files[0];
   console.log("[A1] 選擇了檔案:", f && f.name, f && f.size);
   if (!f) return;
+  if (state.roomMode) {
+    if (!checkRoomBeforeReset("匯入新 CSV")) { e.target.value = ""; return; }
+    leaveRoom(true);
+  }
   showToast("📂 讀取中...");
   const reader = new FileReader();
   reader.onerror = () => { console.error("[A1] FileReader 錯誤", reader.error); showToast("⚠ 檔案讀取失敗"); };
@@ -5682,19 +5778,23 @@ document.getElementById("join-room-code").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); document.getElementById("join-room-confirm").click(); }
 });
 document.getElementById("join-room-confirm").addEventListener("click", async () => {
+  const btn = document.getElementById("join-room-confirm");
+  if (btn.disabled) return;
   const code = document.getElementById("join-room-code").value.toUpperCase().trim();
   if (!/^[A-Z0-9]{4}$/.test(code)) {
     document.getElementById("join-room-status").innerHTML = '<span style="color: var(--danger);">⚠ 請輸入 4 碼英數</span>';
     return;
   }
+  btn.disabled = true;
   document.getElementById("join-room-status").innerHTML = '<span style="color: var(--text-soft);">連線中...</span>';
   const ok = await joinRoom(code);
+  btn.disabled = false;
   if (ok) {
     document.getElementById("join-room-modal").hidden = true;
     showToast(`✓ 已加入房間 ${code}`);
     render();
   } else {
-    document.getElementById("join-room-status").innerHTML = '<span style="color: var(--danger);">⚠ 加入失敗</span>';
+    document.getElementById("join-room-status").innerHTML = '<span style="color: var(--danger);">⚠ 加入失敗 (檢查邀請碼或 Worker URL)</span>';
   }
 });
 
@@ -5890,6 +5990,7 @@ document.getElementById("reset-btn").addEventListener("click", () => {
   msg += "清空後無法復原，連備份也會清除。\n\n如果是出貨完成請按「✓ 產生備貨報告」→「出貨完成」。";
   if (!confirm(msg)) return;
   console.log("[state] manually cancelled by user");
+  if (state.roomMode) leaveRoom(true); // 同步停掉, 不留下殘餘 timer
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
@@ -6032,6 +6133,10 @@ document.getElementById("manual-create").addEventListener("click", () => {
     document.getElementById("manual-parcel-id").focus();
     return;
   }
+  if (state.roomMode) {
+    if (!checkRoomBeforeReset("建立手建單")) return;
+    leaveRoom(true);
+  }
   const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
 
   // 若已有未完成清單, 警告會覆蓋
@@ -6107,6 +6212,10 @@ document.getElementById("repl-create").addEventListener("click", () => {
   const rawId = document.getElementById("repl-parcel-id").value.trim();
   const customerName = document.getElementById("repl-customer-name").value.trim();
   const customerPhone = document.getElementById("repl-customer-phone").value.trim();
+  if (state.roomMode) {
+    if (!checkRoomBeforeReset("建立補寄單")) return;
+    leaveRoom(true);
+  }
   const reason = document.getElementById("repl-reason").value;
   const note = document.getElementById("repl-note").value.trim();
 
@@ -6217,10 +6326,24 @@ document.getElementById("finish-btn").addEventListener("click", () => {
   reportModal.hidden = false;
 });
 document.getElementById("close-report").addEventListener("click", () => reportModal.hidden = true);
+async function closeRoomOnServer(code) {
+  if (!settings.syncWorkerUrl || !code) return;
+  try {
+    await fetch(settings.syncWorkerUrl + "/api/room/" + code + "/close", { method: "POST" });
+  } catch(e) { console.warn("[room] close failed", e); }
+}
+
 function actuallyCompleteShipping() {
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   console.log("[state] shipping completed, archived to history, clearing state");
+  // 房間模式: 通知 server 歸檔房間 + 本機停止同步
+  const roomCodeAtCompletion = state.roomCode;
+  const wasInRoom = state.roomMode;
+  if (wasInRoom) {
+    leaveRoom(true);
+    closeRoomOnServer(roomCodeAtCompletion);
+  }
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
