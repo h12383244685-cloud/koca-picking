@@ -1463,7 +1463,7 @@ footer.summary-bar {
 
     <!-- 多人協作入口 -->
     <div class="room-entry">
-      <div class="room-entry-title">👥 兩人一起包貨? (Cloudflare 同步)</div>
+      <div class="room-entry-title">👥 共同包貨 (Cloudflare 同步)</div>
       <div class="room-entry-desc">先上傳 CSV → 開房 → 拿到 4 碼邀請碼 → 分享給同事 → 兩人各刷各的。需先在「⚙ 外部整合」設定 Worker URL。</div>
       <div class="row" style="gap: 8px;">
         <button class="btn outline sm" id="open-create-room-btn" style="flex:1;">🏠 開新房間</button>
@@ -1481,6 +1481,12 @@ footer.summary-bar {
     <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--warn-bg); border-radius: 8px; border-left: 4px solid var(--warn);">
       <button class="btn full" id="open-replacement-order-btn" style="background: #92400e; color: white;">📮 補寄訂單 (售後)</button>
       <p class="hint" style="font-size: 11px; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。需填客人姓名+手機。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
+    </div>
+
+    <!-- 退貨確認入口 -->
+    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--success-bg); border-radius: 8px; border-left: 4px solid var(--success);">
+      <button class="btn full" id="open-return-order-btn" style="background: #166534; color: white;">📥 退貨確認 (收貨)</button>
+      <p class="hint" style="font-size: 11px; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。庫存先不動 (等盤點功能完成後再串)。<strong>不推送 Discord/Sheets</strong>。</p>
     </div>
 
     <details>
@@ -1514,10 +1520,27 @@ footer.summary-bar {
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
       尚無紀錄
     </div>
+    <div class="row" style="gap: 6px; margin-bottom: 10px;">
+      <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1;">📊 績效</button>
+      <button class="btn outline sm" id="open-customers-btn" style="flex:1;">👥 客戶</button>
+      <button class="btn outline sm" id="open-top-sku-btn" style="flex:1;">📈 熱銷</button>
+    </div>
+    <div class="history-search-row" style="position: relative; margin-bottom: 10px;">
+      <input type="text" id="history-search" placeholder="🔍 搜尋寄件單號 / 客人姓名 / 手機 / SKU / 商品名 / 原因 / 備註..."
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             style="width: 100%; padding: 8px 32px 8px 12px; font-size: 13px;">
+      <button id="history-search-clear" hidden
+              style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+                     background: var(--text-soft); color: white; border: 0; border-radius: 50%;
+                     width: 20px; height: 20px; cursor: pointer; font-size: 14px; line-height: 1;
+                     padding: 0; display: flex; align-items: center; justify-content: center;"
+              aria-label="清除搜尋">×</button>
+    </div>
     <div class="filter-bar" id="history-filter-bar" style="margin-bottom: 10px;">
       <button data-hist-filter="all" class="active">全部 <span id="hist-cnt-all">0</span></button>
       <button data-hist-filter="normal">📦 一般 <span id="hist-cnt-normal">0</span></button>
       <button data-hist-filter="replacement">📮 補寄 <span id="hist-cnt-replacement">0</span></button>
+      <button data-hist-filter="return">📥 退貨 <span id="hist-cnt-return">0</span></button>
     </div>
     <div id="history-list"></div>
     <div style="height: 12px"></div>
@@ -1542,6 +1565,10 @@ footer.summary-bar {
     <div class="row" style="margin-top: 8px; gap: 8px;">
       <button class="btn outline sm danger" id="inv-clear-btn" style="flex: 1;">🗑 清空庫存資料 (不動商品庫)</button>
     </div>
+    <div class="row" style="margin-top: 8px; gap: 8px;" id="inv-room-sync-row" hidden>
+      <button class="btn sm" id="inv-room-sync-btn" style="flex: 1; background: var(--success);">↻ 對齊同事庫存 (房間模式)</button>
+    </div>
+    <div id="inv-room-sync-info" class="hint" style="font-size: 11px; margin-top: 6px; min-height: 14px;"></div>
     <p class="hint" style="font-size: 11px; margin-top: 6px;">🔍 盤點功能已移到右上 ⚙ 齒輪 → 盤點 卡片。</p>
 
     <div style="height: 14px"></div>
@@ -1589,12 +1616,15 @@ footer.summary-bar {
              autocapitalize="characters"
              spellcheck="false"
              enterkeyhint="done"
-             placeholder="SCAN 或輸入寄件編號 + Enter"
+             placeholder="SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter"
              class="scan-input">
       <div class="hint" style="font-size: 11px; margin-top: 4px; color: var(--text-soft);">
-        💡 鍵盤已設為英文輸入法 (若仍跳出中文，請手動切換鍵盤)。<br>
-        支援自動辨識: 7-11 交貨便 (C+11位)、蝦皮店到家 (TW...)、黑貓、全家等格式。
+        💡 蝦皮 / 黑貓 / 國際小包 → 直接刷 QR<br>
+        💡 7-11 / 全家 → QR 是內部代碼, <strong>用下方按鈕手動輸入</strong>
       </div>
+      <button class="btn full" id="manual-parcel-id-btn" style="margin-top: 8px; padding: 12px; background: #166534; color: white; font-weight: 700; font-size: 14px;">
+        📝 手動輸入 7-11 / 全家 編號
+      </button>
       <div id="active-parcel" class="active-parcel" hidden>
         <div class="active-parcel-info">
           <div class="active-parcel-label">當前訂單</div>
@@ -1753,18 +1783,31 @@ footer.summary-bar {
     <div id="settings-view-stocktake" class="settings-subview" hidden>
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">🔍 盤點</h3>
-      <p class="hint">掃描比對實際庫存與系統庫存的差異。</p>
-      <div style="margin-top: 14px; padding: 14px; background: var(--warn-bg); border-radius: 10px; border-left: 4px solid var(--warn);">
-        <div style="font-weight: 700; font-size: 14px; color: #92400e; margin-bottom: 8px;">🚧 功能開發中, 即將上線</div>
-        <ul style="font-size: 12px; margin: 6px 0 0 18px; padding: 0; color: var(--text-soft); line-height: 1.7;">
-          <li>掃描 SKU 即時 +1 累計實盤數</li>
-          <li>實盤 vs 系統庫存差異報告</li>
-          <li>低庫存預警 (可設安全庫存量)</li>
-          <li>盤點記錄與出貨自動扣帳</li>
-        </ul>
-      </div>
-      <div style="height: 14px"></div>
-      <button class="btn full" id="stocktake-start-btn" disabled style="opacity: 0.5; background: var(--text-soft);">🔍 開始盤點 (準備中)</button>
+      <p class="hint">掃描比對實際庫存與系統庫存的差異, 套用後覆蓋倉庫清冊。</p>
+
+      <div id="stocktake-status" style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px; font-size: 13px;">—</div>
+
+      <button class="btn full" id="stocktake-start-btn" style="background: var(--success); margin-bottom: 8px;">▶ 開始新盤點</button>
+      <button class="btn full outline" id="stocktake-resume-btn" hidden style="margin-bottom: 8px;">↻ 繼續上次盤點</button>
+
+      <details style="margin-top: 12px;">
+        <summary style="font-weight: 600; font-size: 13px;">⚙ 出貨自動扣帳設定</summary>
+        <label style="display:flex; align-items:center; gap:8px; padding: 8px 0; font-size: 13px;">
+          <input type="checkbox" id="auto-deduct-input" style="transform: scale(1.2);"> 出貨完成後自動從倉庫清冊扣件數
+        </label>
+        <p class="hint" style="font-size: 11px;">勾選後, 每次「✓ 出貨完成」會把該批已裝件數從 stockMap 扣掉。退貨單 / 必要商品 (包裝材) 不扣。</p>
+
+        <div style="height: 8px;"></div>
+        <label style="display:block; font-size: 12px; color: var(--text-soft);">低庫存預警閾值 (件)</label>
+        <input type="number" id="safety-stock-input" min="0" max="999" value="10"
+               style="width: 100px; padding: 6px; font-size: 14px;">
+        <p class="hint" style="font-size: 11px;">小於此數的 SKU 會在倉庫清冊跳 ⚠ 低 標籤。</p>
+      </details>
+
+      <details style="margin-top: 12px;">
+        <summary style="font-weight: 600; font-size: 13px;">📜 盤點歷史 (<span id="stocktake-hist-count">0</span>)</summary>
+        <div id="stocktake-history-list" style="margin-top: 8px; font-size: 12px;"></div>
+      </details>
     </div>
 
     <!-- 子視圖: 聲音 -->
@@ -1825,7 +1868,7 @@ footer.summary-bar {
       <!-- 多人同步 Worker (新) -->
       <div style="margin-top: 14px; padding: 12px; background: var(--primary-light); border-radius: 10px; border-left: 4px solid var(--primary);">
         <div style="font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 6px;">👥 多人同步 (Cloudflare Worker)</div>
-        <p class="hint" style="font-size: 11px; margin: 4px 0;">兩位同仁一起包貨用。先部署 Worker (見 picking_sync_worker_setup.md), 再填下面 URL + 暱稱。</p>
+        <p class="hint" style="font-size: 11px; margin: 4px 0;">共同包貨用。先部署 Worker (見 picking_sync_worker_setup.md), 再填下面 URL + 暱稱。</p>
 
         <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:8px;">Worker URL</label>
         <input type="text" id="sync-worker-url-input" placeholder="https://koca-picking-sync.xxx.workers.dev" style="margin-bottom:6px;">
@@ -2002,6 +2045,64 @@ footer.summary-bar {
   </div>
 </div>
 
+<!-- 盤點 view (取代主視圖) -->
+<div id="stocktake-view" hidden>
+  <div class="panel standalone" style="background: #fef3c7; border: 2px solid #f59e0b;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font-size: 22px;">🔍</span>
+      <div style="flex:1;">
+        <h2 style="margin: 0; color: #92400e;">盤點進行中</h2>
+        <div class="hint" style="font-size: 11px; margin: 0;" id="stocktake-meta">—</div>
+      </div>
+    </div>
+    <div style="height: 10px"></div>
+    <input type="text" id="stocktake-input"
+           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+           autocapitalize="characters" spellcheck="false" enterkeyhint="done"
+           placeholder="刷 SKU 條碼或輸入 + Enter (每刷 +1)"
+           class="scan-input" style="background: white;">
+    <div class="hint" style="font-size: 11px; margin-top: 4px;">💡 每刷一個 SKU = +1 實盤數。可在下方手動 ±。</div>
+    <div class="row" style="gap: 6px; margin-top: 10px;">
+      <button class="btn outline sm" id="stocktake-pause-btn" style="flex:1;">⏸ 暫離 (回主畫面)</button>
+      <button class="btn sm" id="stocktake-finish-btn" style="flex:2; background: var(--success);">▶ 完成 + 出差異報告</button>
+    </div>
+    <div style="height: 4px"></div>
+    <button class="btn full outline sm danger" id="stocktake-cancel-btn">✗ 取消盤點 (此次不保存)</button>
+  </div>
+
+  <div class="panel standalone">
+    <div id="stocktake-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px;">—</div>
+
+    <div class="filter-bar" id="stocktake-filter-bar" style="margin-bottom: 8px;">
+      <button data-st-filter="all" class="active">全部 <span id="st-cnt-all">0</span></button>
+      <button data-st-filter="counted">已盤 <span id="st-cnt-counted">0</span></button>
+      <button data-st-filter="diff_plus">＋多 <span id="st-cnt-plus">0</span></button>
+      <button data-st-filter="diff_minus">−少 <span id="st-cnt-minus">0</span></button>
+      <button data-st-filter="not_counted">未盤 <span id="st-cnt-none">0</span></button>
+    </div>
+
+    <div id="stocktake-list"></div>
+  </div>
+</div>
+
+<!-- 盤點差異報告 modal -->
+<div class="modal-backdrop" id="stocktake-diff-modal" hidden>
+  <div class="modal" style="max-width: 600px;">
+    <h2>📊 盤點差異報告</h2>
+    <p class="hint" style="font-size: 12px;">確認差異 → 套用實盤數會用「實盤」覆蓋系統庫存。</p>
+
+    <div id="stocktake-diff-summary" class="hint" style="background: var(--bg); padding: 10px; border-radius: 8px; margin: 10px 0;"></div>
+
+    <div id="stocktake-diff-content" style="max-height: 50vh; overflow-y: auto;"></div>
+
+    <div style="height: 12px"></div>
+    <div class="row">
+      <button class="btn outline" id="stocktake-diff-back" style="flex:1;">回去再盤</button>
+      <button class="btn" id="stocktake-diff-apply" style="flex:2; background: var(--success);">✓ 套用實盤數</button>
+    </div>
+  </div>
+</div>
+
 <!-- 手動建單 modal -->
 <div class="modal-backdrop" id="manual-order-modal" hidden>
   <div class="modal" style="max-width: 480px;">
@@ -2028,6 +2129,103 @@ footer.summary-bar {
       <button class="btn outline" id="manual-cancel" style="flex:1;">取消</button>
       <button class="btn" id="manual-create" style="flex:2; background: var(--success);">▶ 建立 + 開始裝箱</button>
     </div>
+  </div>
+</div>
+
+<!-- 手動輸入服務代碼 / 訂單號 modal -->
+<div class="modal-backdrop" id="manual-parcel-id-modal" hidden>
+  <div class="modal" style="max-width: 520px;">
+    <h2>📝 手動輸入寄件編號</h2>
+    <p class="hint" style="font-size: 12px;">7-11 / 全家 的 QR 是內部代碼 (司機 / 店員用), 沒辦法解出面單上的編號。</p>
+
+    <!-- iOS Live Text 提示 -->
+    <div style="background: var(--success-bg); color: var(--success); padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; line-height: 1.6;">
+      <strong>💡 iPhone 14 Pro 免打字方法</strong>:<br>
+      1. 點下方輸入框<br>
+      2. 鍵盤右上會出現 <strong>📷 「掃描文字」</strong><br>
+      3. 對準面單上的編號 → 自動填入
+      <br><span style="color: var(--text-soft); font-size: 11px;">需 iOS 15.4+ (你的 14 Pro 一定支援)</span>
+    </div>
+
+    <!-- 通路快速鈕 -->
+    <div class="row" style="gap: 4px;">
+      <button class="btn outline sm" data-mpid-preset="711" style="flex:1; font-size: 12px;">🏪 7-11 (C+數字)</button>
+      <button class="btn outline sm" data-mpid-preset="fami" style="flex:1; font-size: 12px;">🏬 全家 (純數字)</button>
+      <button class="btn outline sm" data-mpid-preset="free" style="flex:1; font-size: 12px;">✏ 自由輸入</button>
+    </div>
+
+    <div id="manual-parcel-id-hint" class="hint" style="font-size: 11px; margin-top: 4px; min-height: 14px; color: var(--text-soft);">點上方按鈕切換鍵盤類型</div>
+
+    <input type="text" id="manual-parcel-id-input" placeholder="點上方按鈕後輸入"
+           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+           autocapitalize="characters" spellcheck="false"
+           style="width: 100%; padding: 16px; font-size: 22px; font-weight: 700; text-align: center; letter-spacing: 1px; font-family: ui-monospace, monospace; border: 2px solid var(--primary); border-radius: 10px; margin-top: 6px;">
+
+    <div style="height: 14px"></div>
+    <div class="row">
+      <button class="btn outline" id="manual-parcel-id-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="manual-parcel-id-confirm" style="flex:2; background: var(--success);">▶ 開始裝箱</button>
+    </div>
+  </div>
+</div>
+
+<!-- 包貨績效統計 modal -->
+<div class="modal-backdrop" id="perf-stats-modal" hidden>
+  <div class="modal" style="max-width: 560px;">
+    <h2>📊 包貨績效統計</h2>
+    <p class="hint" style="font-size: 12px;">統計每位同仁的包貨數量、件數、平均時間 (依寄件單號裝箱時間計算)。</p>
+
+    <div class="filter-bar" id="perf-range-bar" style="margin: 10px 0;">
+      <button data-perf-range="today" class="active">本日</button>
+      <button data-perf-range="week">本週</button>
+      <button data-perf-range="month">本月</button>
+      <button data-perf-range="all">全部</button>
+    </div>
+
+    <div id="perf-stats-content"></div>
+
+    <div style="height: 14px"></div>
+    <button class="btn full outline" id="perf-stats-close">關閉</button>
+  </div>
+</div>
+
+<!-- 客戶管理 modal -->
+<div class="modal-backdrop" id="customers-modal" hidden>
+  <div class="modal" style="max-width: 600px;">
+    <h2>👥 客戶管理</h2>
+    <p class="hint" style="font-size: 12px;">依「客人手機」彙整補寄/退貨次數。3 次以上 = ⛔ 高風險, 1-2 次 = ⚠ 需注意。</p>
+
+    <input type="text" id="customers-search" placeholder="🔍 搜尋姓名 / 手機"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+           style="width: 100%; padding: 8px; font-size: 13px; margin: 10px 0;">
+
+    <div id="customers-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+    <div id="customers-content" style="max-height: 55vh; overflow-y: auto;"></div>
+
+    <div style="height: 14px"></div>
+    <button class="btn full outline" id="customers-close">關閉</button>
+  </div>
+</div>
+
+<!-- 熱銷 SKU modal -->
+<div class="modal-backdrop" id="top-sku-modal" hidden>
+  <div class="modal" style="max-width: 580px;">
+    <h2>📈 熱銷 SKU 排行</h2>
+    <p class="hint" style="font-size: 12px;">依出貨件數排序 (排除補寄/退貨)。</p>
+
+    <div class="filter-bar" id="top-sku-range-bar" style="margin: 10px 0;">
+      <button data-tsku-range="month" class="active">本月</button>
+      <button data-tsku-range="lastmonth">上月</button>
+      <button data-tsku-range="quarter">本季</button>
+      <button data-tsku-range="year">今年</button>
+      <button data-tsku-range="all">全部</button>
+    </div>
+
+    <div id="top-sku-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+    <div id="top-sku-content" style="max-height: 55vh; overflow-y: auto;"></div>
+
+    <div style="height: 14px"></div>
+    <button class="btn full outline" id="top-sku-close">關閉</button>
   </div>
 </div>
 
@@ -2063,6 +2261,7 @@ footer.summary-bar {
                style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
       </div>
     </div>
+    <div id="repl-customer-risk" style="margin-top: 6px;"></div>
 
     <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">補寄原因</label>
     <select id="repl-reason" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; background:white;">
@@ -2082,6 +2281,66 @@ footer.summary-bar {
     <div class="row">
       <button class="btn outline" id="repl-cancel" style="flex:1;">取消</button>
       <button class="btn" id="repl-create" style="flex:2; background: #92400e; color: white;">▶ 建立 + 開始裝箱</button>
+    </div>
+  </div>
+</div>
+
+<!-- 退貨確認 modal -->
+<div class="modal-backdrop" id="return-order-modal" hidden>
+  <div class="modal" style="max-width: 540px;">
+    <h2>📥 退貨確認</h2>
+    <p class="hint">客人退貨包裹寄回來, 拆包刷商品條碼確認收到內容。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">原訂單通路</label>
+    <select id="ret-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="a1">🛒 蝦皮</option>
+      <option value="momo">🛍 MOMO</option>
+      <option value="coupang">🅒 酷澎</option>
+      <option value="koca">🌐 KOCA官網</option>
+    </select>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">退貨回件寄件單號 <span style="color: var(--danger);">*</span></label>
+    <input type="text" id="ret-parcel-id" placeholder="客人寄回來的寄件單號 (例: TW...)"
+           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+           autocapitalize="characters" spellcheck="false"
+           style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+
+    <div class="row" style="margin-top: 12px;">
+      <div style="flex: 1.2;">
+        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
+        <input type="text" id="ret-customer-name" placeholder="例: 王小明"
+               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+      </div>
+      <div style="flex: 1;">
+        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
+        <input type="tel" id="ret-customer-phone" placeholder="0912345678" inputmode="tel"
+               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+      </div>
+    </div>
+    <div id="ret-customer-risk" style="margin-top: 6px;"></div>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">退貨原因</label>
+    <select id="ret-reason" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="不喜歡/不適合">不喜歡 / 不適合</option>
+      <option value="商品瑕疵">商品瑕疵</option>
+      <option value="商品錯誤">商品錯誤</option>
+      <option value="運送破損">運送破損</option>
+      <option value="7天鑑賞期">7 天鑑賞期</option>
+      <option value="其他">其他</option>
+    </select>
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">原訂單號 (選填)</label>
+    <input type="text" id="ret-original-order" placeholder="客人原本下單的訂單編號"
+           style="width: 100%; padding: 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px;">
+
+    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
+    <textarea id="ret-note" placeholder="例如: 商品狀況、退款金額、客服對話紀錄"
+              style="width: 100%; padding: 10px; font-size: 13px; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
+
+    <div style="height: 16px"></div>
+    <div class="row">
+      <button class="btn outline" id="ret-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="ret-create" style="flex:2; background: #166534; color: white;">▶ 開始拆包確認</button>
     </div>
   </div>
 </div>
@@ -2228,7 +2487,7 @@ const CATEGORY_EMOJI = {
 };
 const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
 
-let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null,
+let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null,
   // 房間模式
   roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, roomLastSyncAt: null,
 };
@@ -2242,15 +2501,20 @@ let specMap = {}; // {spec: [{sku, qty}]} - A1 規格對應
 let pendingA1 = []; // [{spec, orderQty}] - 待對應的 A1 揀貨資料
 let currentTab = "menu";
 let history = []; // [{id, completedAt, platform, items: [...], summary: {totalSku, totalExpected, totalPacked, completionRate}}]
-let historyFilter = "all"; // "all" | "normal" | "replacement" - 出貨紀錄篩選 (session only)
+let historyFilter = "all"; // "all" | "normal" | "replacement" | "return" - 出貨紀錄篩選 (session only)
+let historySearchQuery = "";   // 出貨紀錄關鍵字搜尋 (session only)
 let stockMap = {}; // {sku: {qty: 數量, name: 名稱, updatedAt: ISO}} - 倉庫庫存 (獨立於 library, 不動 library 的 SKU/名稱)
 let inventoryFilter = "all"; // "all" | "in_stock" | "out_of_stock" | "low_stock" - 倉庫清冊篩選
+let stockTake = null;  // 盤點中: {startedAt, counts: {sku: qty}} 或 null
+let stockTakeHistory = [];
 
 // ---- Storage ----
 const STATE_BACKUP_KEY = "picking_state_backup_v1";
 const HISTORY_KEY = "picking_history_v1";
 const SETTINGS_KEY = "picking_settings_v1";
 const STOCK_KEY = "picking_stock_v1";
+const STOCKTAKE_KEY = "picking_stocktake_v1";
+const STOCKTAKE_HISTORY_KEY = "picking_stocktake_history_v1";
 
 // 設定 (聲音/webhook/主題/多人同步 等)
 let settings = {
@@ -2260,6 +2524,8 @@ let settings = {
   theme: "default", // "default" | "warm" | "dark"
   syncWorkerUrl: "", // 多人同步 Worker URL (空 = 單機模式)
   myName: "",       // 我的暱稱 (給房間其他人辨識用)
+  autoDeductOnShip: true,  // 出貨完成後自動扣庫存
+  safetyStockThreshold: 10, // 低於此值跳低庫存提醒
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
@@ -2583,7 +2849,8 @@ async function joinRoom(code) {
   }
 }
 
-async function syncRoom() {
+async function syncRoom(opts) {
+  opts = opts || {};
   if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
   if (syncInFlight) return; // 上一輪還沒結束, 跳過避免平行
   syncInFlight = true;
@@ -2592,14 +2859,18 @@ async function syncRoom() {
   try {
     const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync";
     const eventsToSend = pendingEvents.slice();
+    const reqBody = {
+      myName: settings.myName,
+      events: eventsToSend,
+      myActiveParcel: state.activeParcel,
+    };
+    if (opts.pushStock) {
+      reqBody.stockMapPush = stockMap;
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        myName: settings.myName,
-        events: eventsToSend,
-        myActiveParcel: state.activeParcel,
-      }),
+      body: JSON.stringify(reqBody),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -2658,6 +2929,17 @@ function mergeRoomState(serverRoom) {
   state.completedParcels = [...serverParcels.map(p => ({ ...p })), ...localPending];
   state.roomMembers = serverRoom.members || {};
   state.roomActiveParcels = serverRoom.activeParcels || {};
+  // 庫存同步: 若 server 有 stockMap 而且比本機新 → 套用
+  if (serverRoom.stockMap && typeof serverRoom.stockMap === "object") {
+    const serverUpdatedAt = serverRoom.stockMapUpdatedAt || "";
+    const localUpdatedAt = state._lastStockSyncAt || "";
+    if (serverUpdatedAt && serverUpdatedAt !== localUpdatedAt) {
+      stockMap = serverRoom.stockMap;
+      saveStock();
+      state._lastStockSyncAt = serverUpdatedAt;
+      // 不在這裡 toast, 因為可能很頻繁
+    }
+  }
   saveState();
   renderRoomBadge();
   renderPicking();
@@ -2775,6 +3057,7 @@ function loadState() {
         if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
         if (typeof state.manualMode === "undefined") state.manualMode = false;
         if (typeof state.replacementInfo === "undefined") state.replacementInfo = null;
+        if (typeof state.returnInfo === "undefined") state.returnInfo = null;
         if (typeof state.roomMode === "undefined") state.roomMode = false;
         if (typeof state.roomCode === "undefined") state.roomCode = null;
         if (!state.roomMembers) state.roomMembers = {};
@@ -2949,8 +3232,9 @@ function appendHistory() {
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
     appendLevel: state.appendLevel || 1,
     continuationOf: state.continuationOf || null,
-    orderType: state.replacementInfo ? "replacement" : (state.manualMode ? "manual" : "normal"),
+    orderType: state.returnInfo ? "return" : (state.replacementInfo ? "replacement" : (state.manualMode ? "manual" : "normal")),
     replacementInfo: state.replacementInfo ? { ...state.replacementInfo } : null,
+    returnInfo: state.returnInfo ? { ...state.returnInfo } : null,
     summary: {
       totalSku: items.length,
       completedSku: completedSkus,
@@ -3629,12 +3913,30 @@ function applyA1MappingToPickingList() {
 }
 
 // ---- 倉庫清冊 render ----
-const LOW_STOCK_THRESHOLD = 10; // 低於這個算「低庫存」
+const LOW_STOCK_THRESHOLD = 10; // 預設閾值, 設定可覆寫
+
+function getLowStockThreshold() {
+  return (settings && typeof settings.safetyStockThreshold === "number") ? settings.safetyStockThreshold : LOW_STOCK_THRESHOLD;
+}
 
 function renderInventory() {
   const sumEl = document.getElementById("inventory-summary");
   const listEl = document.getElementById("inventory-list");
   if (!listEl) return;
+  // 顯示/隱藏房間同步按鈕
+  const syncRow = document.getElementById("inv-room-sync-row");
+  if (syncRow) syncRow.hidden = !state.roomMode;
+  const syncInfo = document.getElementById("inv-room-sync-info");
+  if (syncInfo) {
+    if (state.roomMode && state._lastStockSyncAt) {
+      const d = new Date(state._lastStockSyncAt);
+      syncInfo.innerHTML = `<span style="color: var(--success);">✓ 最後同步: ${d.toLocaleString("zh-TW", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})}</span>`;
+    } else if (state.roomMode) {
+      syncInfo.innerHTML = `<span style="color: var(--text-soft);">⚠ 房間庫存尚未同步, 點上方按鈕對齊</span>`;
+    } else {
+      syncInfo.innerHTML = "";
+    }
+  }
 
   // 合併資料源: 從 stockMap 取所有 SKU + library 補商品名/分類
   const skuSet = new Set(Object.keys(stockMap));
@@ -3648,7 +3950,7 @@ function renderInventory() {
     cntAll++;
     if (qty === null) continue; // 未匯入庫存的不計入有/低/缺
     if (qty === 0) cntOut++;
-    else if (qty < LOW_STOCK_THRESHOLD) cntLow++;
+    else if (qty < getLowStockThreshold()) cntLow++;
     else cntIn++;
   }
   // 更新 filter bar 計數
@@ -3680,8 +3982,8 @@ function renderInventory() {
   // 依篩選過濾
   const filtered = allSkus.filter(sku => {
     const qty = (stockMap[sku] && typeof stockMap[sku].qty === "number") ? stockMap[sku].qty : null;
-    if (inventoryFilter === "in_stock") return qty !== null && qty >= LOW_STOCK_THRESHOLD;
-    if (inventoryFilter === "low_stock") return qty !== null && qty > 0 && qty < LOW_STOCK_THRESHOLD;
+    if (inventoryFilter === "in_stock") return qty !== null && qty >= getLowStockThreshold();
+    if (inventoryFilter === "low_stock") return qty !== null && qty > 0 && qty < getLowStockThreshold();
     if (inventoryFilter === "out_of_stock") return qty === 0;
     return true; // all
   });
@@ -3720,7 +4022,7 @@ function renderInventory() {
         qtyHtml = '<span style="color: var(--text-soft); font-size: 11px;">未匯入</span>';
       } else if (qty === 0) {
         qtyHtml = `<span style="color: var(--danger); font-weight: 700; font-size: 16px;">${qty}</span> <span style="color: var(--danger); font-size: 11px;">缺貨</span>`;
-      } else if (qty < LOW_STOCK_THRESHOLD) {
+      } else if (qty < getLowStockThreshold()) {
         qtyHtml = `<span style="color: #92400e; font-weight: 700; font-size: 16px;">${qty}</span> <span style="color: #92400e; font-size: 11px;">⚠ 低</span>`;
       } else {
         qtyHtml = `<span style="font-weight: 700; font-size: 16px;">${qty.toLocaleString()}</span>`;
@@ -3785,6 +4087,738 @@ function parseStockCsv(text) {
   return items;
 }
 
+// ===== 🔍 盤點功能 =====
+function saveStockTake() {
+  try {
+    if (stockTake) localStorage.setItem(STOCKTAKE_KEY, JSON.stringify(stockTake));
+    else localStorage.removeItem(STOCKTAKE_KEY);
+  } catch(e) { console.warn("[stocktake] save failed", e); }
+}
+function loadStockTake() {
+  try {
+    const s = localStorage.getItem(STOCKTAKE_KEY);
+    if (s) {
+      const p = JSON.parse(s);
+      if (p && typeof p === "object") stockTake = p;
+    }
+  } catch(e) { console.warn("[stocktake] load failed", e); }
+}
+function saveStockTakeHistory() {
+  try { localStorage.setItem(STOCKTAKE_HISTORY_KEY, JSON.stringify(stockTakeHistory)); } catch(e) {}
+}
+function loadStockTakeHistory() {
+  try {
+    const s = localStorage.getItem(STOCKTAKE_HISTORY_KEY);
+    if (s) { const p = JSON.parse(s); if (Array.isArray(p)) stockTakeHistory = p; }
+  } catch(e) {}
+}
+
+function startStockTake() {
+  stockTake = {
+    startedAt: new Date().toISOString(),
+    counts: {},
+  };
+  saveStockTake();
+  showStockTakeView();
+  showToast("🔍 盤點開始, 刷 SKU 條碼或手動輸入");
+}
+
+function showStockTakeView() {
+  // 關掉其他 modals
+  document.getElementById("settings-modal").hidden = true;
+  // 切到盤點視圖
+  document.getElementById("import-view").hidden = true;
+  document.getElementById("picking-view").hidden = true;
+  document.getElementById("a1-mapping-view").hidden = true;
+  document.getElementById("stocktake-view").hidden = false;
+  renderStockTake();
+  setTimeout(() => {
+    const inp = document.getElementById("stocktake-input");
+    if (inp) inp.focus();
+  }, 100);
+}
+
+function hideStockTakeView() {
+  document.getElementById("stocktake-view").hidden = true;
+  render(); // 重新計算正常視圖
+}
+
+function cancelStockTake() {
+  if (!confirm("取消此次盤點? 已掃描的紀錄會丟掉。")) return;
+  stockTake = null;
+  saveStockTake();
+  hideStockTakeView();
+  showToast("✗ 已取消盤點");
+}
+
+function bumpStockTakeCount(sku, delta) {
+  if (!stockTake) return;
+  if (!stockTake.counts) stockTake.counts = {};
+  const newQty = Math.max(0, (stockTake.counts[sku] || 0) + delta);
+  if (newQty === 0) delete stockTake.counts[sku];
+  else stockTake.counts[sku] = newQty;
+  saveStockTake();
+  renderStockTake();
+}
+
+function processStockTakeScan(code) {
+  if (!stockTake) return;
+  // 商品條碼: 比對 barcode 再比對 sku
+  let matched = library.find(p => p.barcode === code);
+  if (!matched) matched = library.find(p => p.sku === code);
+  if (matched) {
+    bumpStockTakeCount(matched.sku, 1);
+    SOUND.scanSku();
+    showToast(`📦 +1 ${matched.sku} (實盤 ${stockTake.counts[matched.sku]})`);
+    return;
+  }
+  // 不認識 → 直接用掃到的 code 當 SKU (跟手建模式類似)
+  // 看 stockMap 有沒有
+  if (stockMap[code]) {
+    bumpStockTakeCount(code, 1);
+    SOUND.scanSku();
+    showToast(`📦 +1 ${code} (實盤 ${stockTake.counts[code]})`);
+    return;
+  }
+  SOUND.scanError();
+  if (confirm(`⚠ 「${code}」不在商品庫也不在倉庫清冊\n\n要當作新 SKU 加入盤點嗎?`)) {
+    bumpStockTakeCount(code, 1);
+    showToast(`📦 加入新 SKU ${code}`);
+  }
+}
+
+function computeStockTakeDiff() {
+  const counts = (stockTake && stockTake.counts) || {};
+  const allSkus = new Set([...Object.keys(counts), ...Object.keys(stockMap || {})]);
+  const results = [];
+  for (const sku of allSkus) {
+    const actual = counts[sku] || 0;
+    const system = (stockMap[sku] && stockMap[sku].qty) || 0;
+    const inStockTake = sku in counts;
+    const diff = inStockTake ? (actual - system) : 0;
+    const libItem = library.find(p => p.sku === sku);
+    let status;
+    if (!inStockTake) status = "not_counted";
+    else if (diff === 0) status = "equal";
+    else if (diff > 0) status = "diff_plus";
+    else status = "diff_minus";
+    results.push({
+      sku, actual, system, diff, status, inStockTake,
+      name: (libItem && libItem.name) || (stockMap[sku] && stockMap[sku].name) || "(無名稱)",
+      category: libItem ? (libItem.category || "其他") : "未分類",
+    });
+  }
+  return results;
+}
+
+function applyStockTake() {
+  if (!stockTake) return;
+  const counts = stockTake.counts || {};
+  const now = new Date().toISOString();
+  let updated = 0;
+  for (const sku in counts) {
+    if (!stockMap[sku]) {
+      const libItem = library.find(p => p.sku === sku);
+      stockMap[sku] = { qty: 0, name: libItem ? libItem.name : "", updatedAt: now };
+    }
+    if (stockMap[sku].qty !== counts[sku]) updated++;
+    stockMap[sku].qty = counts[sku];
+    stockMap[sku].updatedAt = now;
+  }
+  saveStock();
+  // 寫入盤點歷史
+  const diffResults = computeStockTakeDiff();
+  stockTakeHistory.unshift({
+    id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+    startedAt: stockTake.startedAt,
+    completedAt: now,
+    countedSkus: Object.keys(counts).length,
+    totalActual: Object.values(counts).reduce((s, q) => s + q, 0),
+    plusCount: diffResults.filter(r => r.status === "diff_plus").length,
+    minusCount: diffResults.filter(r => r.status === "diff_minus").length,
+    notCountedCount: diffResults.filter(r => r.status === "not_counted").length,
+  });
+  if (stockTakeHistory.length > 50) stockTakeHistory = stockTakeHistory.slice(0, 50);
+  saveStockTakeHistory();
+  stockTake = null;
+  saveStockTake();
+  document.getElementById("stocktake-diff-modal").hidden = true;
+  hideStockTakeView();
+  showToast(`✓ 盤點完成, 更新 ${updated} SKU 庫存`);
+}
+
+let _stockTakeFilter = "all";
+
+function renderStockTake() {
+  if (!stockTake) return;
+  const counts = stockTake.counts || {};
+  const diffResults = computeStockTakeDiff();
+  // header meta
+  const startedAt = new Date(stockTake.startedAt);
+  const metaEl = document.getElementById("stocktake-meta");
+  if (metaEl) metaEl.textContent = `開始於 ${startedAt.toLocaleString("zh-TW", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})} · 已掃 ${Object.keys(counts).length} SKU · 共 ${Object.values(counts).reduce((s,q)=>s+q,0)} 件`;
+  // 計數
+  const total = diffResults.length;
+  const counted = diffResults.filter(r => r.inStockTake).length;
+  const plus = diffResults.filter(r => r.status === "diff_plus").length;
+  const minus = diffResults.filter(r => r.status === "diff_minus").length;
+  const notCounted = diffResults.filter(r => r.status === "not_counted").length;
+  const $ = id => document.getElementById(id);
+  if ($("st-cnt-all")) $("st-cnt-all").textContent = total;
+  if ($("st-cnt-counted")) $("st-cnt-counted").textContent = counted;
+  if ($("st-cnt-plus")) $("st-cnt-plus").textContent = plus;
+  if ($("st-cnt-minus")) $("st-cnt-minus").textContent = minus;
+  if ($("st-cnt-none")) $("st-cnt-none").textContent = notCounted;
+  document.querySelectorAll("#stocktake-filter-bar button").forEach(b => {
+    b.classList.toggle("active", b.dataset.stFilter === _stockTakeFilter);
+  });
+  // stats
+  const statsEl = document.getElementById("stocktake-stats");
+  if (statsEl) statsEl.innerHTML = `<strong>已盤</strong> ${counted}/${total} SKU · ＋多 ${plus} · −少 ${minus} · 未盤 ${notCounted}`;
+  // filter
+  let displayed = diffResults;
+  if (_stockTakeFilter === "counted") displayed = diffResults.filter(r => r.inStockTake);
+  else if (_stockTakeFilter === "diff_plus") displayed = diffResults.filter(r => r.status === "diff_plus");
+  else if (_stockTakeFilter === "diff_minus") displayed = diffResults.filter(r => r.status === "diff_minus");
+  else if (_stockTakeFilter === "not_counted") displayed = diffResults.filter(r => !r.inStockTake);
+  // 排序: 差異絕對值大 → 已盤 → 未盤
+  displayed.sort((a, b) => {
+    if (a.inStockTake !== b.inStockTake) return a.inStockTake ? -1 : 1;
+    return Math.abs(b.diff) - Math.abs(a.diff);
+  });
+  const list = document.getElementById("stocktake-list");
+  if (!list) return;
+  if (displayed.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有符合條件的 SKU</div></div>';
+    return;
+  }
+  list.innerHTML = displayed.slice(0, 200).map(r => {
+    const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
+    const diffText = r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤";
+    return `
+      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light);">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 600; font-size: 12px;">${escapeHtml(r.sku)}</div>
+          <div style="font-size: 11px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-soft);">系統 ${r.system}</div>
+          <div style="font-size: 13px; font-weight: 700;">實盤 ${r.actual}</div>
+          <div style="font-size: 11px; color: ${diffColor}; font-weight: 600;">${diffText}</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 28px; height: 24px; cursor: pointer; font-weight: 700;">+</button>
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 24px; cursor: pointer; font-weight: 700;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderStockTakeStatusInSettings() {
+  const status = document.getElementById("stocktake-status");
+  if (!status) return;
+  if (stockTake) {
+    const counts = stockTake.counts || {};
+    const startedAt = new Date(stockTake.startedAt);
+    status.innerHTML = `<span style="color: #92400e;">⏸ <strong>盤點進行中</strong></span> · 已掃 ${Object.keys(counts).length} SKU / ${Object.values(counts).reduce((s,q)=>s+q,0)} 件<br><span style="font-size: 11px; color: var(--text-soft);">開始於 ${startedAt.toLocaleString("zh-TW", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>`;
+    document.getElementById("stocktake-start-btn").hidden = true;
+    document.getElementById("stocktake-resume-btn").hidden = false;
+  } else {
+    status.innerHTML = `<span style="color: var(--text-soft);">目前未盤點。點下方按鈕開始。</span>`;
+    document.getElementById("stocktake-start-btn").hidden = false;
+    document.getElementById("stocktake-resume-btn").hidden = true;
+  }
+  // 歷史
+  const histList = document.getElementById("stocktake-history-list");
+  const histCount = document.getElementById("stocktake-hist-count");
+  if (histCount) histCount.textContent = stockTakeHistory.length;
+  if (histList) {
+    if (stockTakeHistory.length === 0) {
+      histList.innerHTML = '<div class="hint" style="text-align:center; padding:8px;">尚無盤點紀錄</div>';
+    } else {
+      histList.innerHTML = stockTakeHistory.slice(0, 10).map(h => {
+        const d = new Date(h.completedAt);
+        return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-light);">
+          <div style="font-weight: 600;">${d.toLocaleString("zh-TW", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})}</div>
+          <div style="font-size: 11px; color: var(--text-soft);">${h.countedSkus} SKU / ${h.totalActual} 件 · ＋${h.plusCount} −${h.minusCount} · 未盤 ${h.notCountedCount}</div>
+        </div>`;
+      }).join("");
+    }
+  }
+}
+
+// ===== 盤點 event handlers =====
+document.getElementById("stocktake-start-btn").addEventListener("click", () => {
+  if (stockTake && Object.keys(stockTake.counts || {}).length > 0) {
+    if (!confirm("已經有進行中的盤點。要丟棄重新開始?")) return;
+  }
+  startStockTake();
+});
+document.getElementById("stocktake-resume-btn").addEventListener("click", () => {
+  if (stockTake) showStockTakeView();
+});
+document.getElementById("stocktake-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const v = e.target.value.trim();
+    e.target.value = "";
+    if (v) processStockTakeScan(v);
+    setTimeout(() => e.target.focus({preventScroll: true}), 50);
+  }
+});
+document.getElementById("stocktake-pause-btn").addEventListener("click", () => {
+  hideStockTakeView();
+  showToast("⏸ 盤點已暫離 (從齒輪 → 盤點 繼續)");
+});
+document.getElementById("stocktake-cancel-btn").addEventListener("click", cancelStockTake);
+document.getElementById("stocktake-finish-btn").addEventListener("click", () => {
+  if (!stockTake || Object.keys(stockTake.counts || {}).length === 0) {
+    showToast("⚠ 尚未盤任何 SKU");
+    return;
+  }
+  showStockTakeDiffReport();
+});
+
+// 篩選列
+document.getElementById("stocktake-filter-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-st-filter]");
+  if (!btn) return;
+  _stockTakeFilter = btn.dataset.stFilter;
+  renderStockTake();
+});
+
+// 列表上的 +/- 按鈕
+document.getElementById("stocktake-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-st-bump]");
+  if (!btn) return;
+  const sku = btn.dataset.stBump;
+  const delta = parseInt(btn.dataset.stDelta, 10);
+  if (sku && !isNaN(delta)) bumpStockTakeCount(sku, delta);
+});
+
+// 差異報告
+function showStockTakeDiffReport() {
+  const results = computeStockTakeDiff();
+  const counted = results.filter(r => r.inStockTake);
+  const plus = results.filter(r => r.status === "diff_plus");
+  const minus = results.filter(r => r.status === "diff_minus");
+  const equal = results.filter(r => r.status === "equal");
+  const notCounted = results.filter(r => !r.inStockTake);
+  const totalActual = (stockTake.counts ? Object.values(stockTake.counts).reduce((s,q)=>s+q,0) : 0);
+  const summary = document.getElementById("stocktake-diff-summary");
+  summary.innerHTML = `<div style="font-size: 13px;">
+    <div><strong>已盤 ${counted.length} SKU · 共 ${totalActual} 件</strong></div>
+    <div style="margin-top: 4px;">
+      ✓ 一致 ${equal.length} · <span style="color: var(--success);">＋多 ${plus.length}</span> · <span style="color: var(--danger);">−少 ${minus.length}</span> · 未盤 ${notCounted.length}
+    </div>
+  </div>`;
+  // 內容: 有差異的優先列
+  const interesting = [...plus, ...minus].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const noteWorth = interesting.length > 0 ? interesting : counted.slice(0, 20);
+  const content = document.getElementById("stocktake-diff-content");
+  if (noteWorth.length === 0) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有差異</div></div>';
+  } else {
+    content.innerHTML = noteWorth.map(r => {
+      const color = r.diff > 0 ? "var(--success)" : (r.diff < 0 ? "var(--danger)" : "var(--text-soft)");
+      const bg = r.diff > 0 ? "var(--success-bg)" : (r.diff < 0 ? "var(--danger-bg)" : "var(--bg)");
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: ${bg}; border-radius: 6px; margin-bottom: 4px;">
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-weight: 600; font-size: 12px;">${escapeHtml(r.sku)}</div>
+            <div style="font-size: 10px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+          </div>
+          <div style="text-align: right; font-size: 12px;">
+            ${r.system} → <strong>${r.actual}</strong>
+            <span style="color: ${color}; font-weight: 700; margin-left: 6px;">${r.diff > 0 ? '+' : ''}${r.diff}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+    if (notCounted.length > 0) {
+      content.innerHTML += `<div style="text-align: center; color: var(--text-soft); font-size: 11px; margin-top: 8px;">⚠ 還有 ${notCounted.length} 個 SKU 未盤 (套用後不影響它們的庫存)</div>`;
+    }
+  }
+  document.getElementById("stocktake-diff-modal").hidden = false;
+}
+
+document.getElementById("stocktake-diff-back").addEventListener("click", () => {
+  document.getElementById("stocktake-diff-modal").hidden = true;
+});
+document.getElementById("stocktake-diff-apply").addEventListener("click", () => {
+  if (!confirm("確定用實盤數覆蓋系統庫存? 此操作會更新倉庫清冊。")) return;
+  applyStockTake();
+});
+document.getElementById("stocktake-diff-modal").addEventListener("click", (e) => {
+  if (e.target.id === "stocktake-diff-modal") document.getElementById("stocktake-diff-modal").hidden = true;
+});
+
+// 出貨自動扣帳設定
+document.getElementById("auto-deduct-input").addEventListener("change", (e) => {
+  settings.autoDeductOnShip = e.target.checked;
+  saveSettings();
+});
+document.getElementById("safety-stock-input").addEventListener("change", (e) => {
+  const v = parseInt(e.target.value, 10);
+  if (isNaN(v) || v < 0) return;
+  settings.safetyStockThreshold = v;
+  saveSettings();
+  // 倉庫清冊重畫
+  if (typeof renderInventory === "function") renderInventory();
+});
+
+// 進入盤點 sub-view 時更新狀態
+const _origShowSettingsView = showSettingsView;
+showSettingsView = function(view) {
+  _origShowSettingsView(view);
+  if (view === "stocktake") {
+    renderStockTakeStatusInSettings();
+    document.getElementById("auto-deduct-input").checked = !!settings.autoDeductOnShip;
+    document.getElementById("safety-stock-input").value = settings.safetyStockThreshold || 10;
+  }
+};
+
+// ===== 📊 包貨績效統計 =====
+function getRangeCutoff(range) {
+  const now = new Date();
+  let cutoff;
+  if (range === "today") {
+    cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (range === "week") {
+    const day = now.getDay() || 7; // 1-7 (週一=1)
+    cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (day - 1));
+  } else if (range === "month") {
+    cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (range === "lastmonth") {
+    cutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  } else if (range === "quarter") {
+    const q = Math.floor(now.getMonth() / 3) * 3;
+    cutoff = new Date(now.getFullYear(), q, 1);
+  } else if (range === "year") {
+    cutoff = new Date(now.getFullYear(), 0, 1);
+  } else {
+    cutoff = new Date(0);
+  }
+  return cutoff;
+}
+
+function computePerformanceStats(range) {
+  const cutoff = getRangeCutoff(range);
+  let until = new Date();
+  if (range === "lastmonth") {
+    const now = new Date();
+    until = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const byPacker = {};
+  for (const entry of history) {
+    const ts = new Date(entry.completedAt);
+    if (ts < cutoff) continue;
+    if (range === "lastmonth" && ts >= until) continue;
+    for (const p of (entry.parcels || [])) {
+      const name = p.packedBy || "(未標記)";
+      if (!byPacker[name]) byPacker[name] = { parcels: 0, items: 0, totalSec: 0, fastestSec: Infinity, slowestSec: 0, durationsCount: 0 };
+      byPacker[name].parcels++;
+      const qty = Object.values(p.items || {}).reduce((s, q) => s + q, 0);
+      byPacker[name].items += qty;
+      if (p.startedAt && p.completedAt) {
+        const dur = (new Date(p.completedAt).getTime() - new Date(p.startedAt).getTime()) / 1000;
+        if (dur > 0 && dur < 7200) { // 排除 >2 小時 (放著沒理它)
+          byPacker[name].totalSec += dur;
+          byPacker[name].fastestSec = Math.min(byPacker[name].fastestSec, dur);
+          byPacker[name].slowestSec = Math.max(byPacker[name].slowestSec, dur);
+          byPacker[name].durationsCount++;
+        }
+      }
+    }
+  }
+  for (const n in byPacker) {
+    const d = byPacker[n];
+    d.avgSec = d.durationsCount > 0 ? d.totalSec / d.durationsCount : 0;
+    d.parcelsPerHour = d.totalSec > 0 ? (d.durationsCount / (d.totalSec / 3600)) : 0;
+  }
+  return byPacker;
+}
+
+function formatDuration(sec) {
+  if (!sec || sec === Infinity) return "—";
+  if (sec < 60) return `${Math.round(sec)} 秒`;
+  const m = Math.floor(sec / 60); const s = Math.round(sec % 60);
+  return `${m} 分 ${s} 秒`;
+}
+
+function renderPerfStats(range) {
+  const stats = computePerformanceStats(range);
+  const packers = Object.entries(stats).sort((a, b) => b[1].parcels - a[1].parcels);
+  const content = document.getElementById("perf-stats-content");
+  if (packers.length === 0) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>此區間沒有包貨資料</div></div>';
+    return;
+  }
+  content.innerHTML = packers.map(([name, d], idx) => {
+    const isMe = name === settings.myName;
+    return `
+      <div style="background: ${idx === 0 ? 'var(--warn-bg)' : 'var(--bg)'}; border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 8px;">
+          <div style="font-weight: 700; font-size: 16px;">${idx === 0 ? '🏆 ' : ''}${escapeHtml(name)}${isMe ? ' <span style="font-size: 11px; color: var(--primary);">(你)</span>' : ''}</div>
+          <div style="font-size: 13px; color: var(--text-soft);">${d.parcels} 單 · ${d.items} 件</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px;">
+          <div>⏱ 平均: <strong>${formatDuration(d.avgSec)}</strong></div>
+          <div>🚀 時速: <strong>${d.parcelsPerHour.toFixed(1)} 單/時</strong></div>
+          <div>⚡ 最快: <strong>${formatDuration(d.fastestSec)}</strong></div>
+          <div>🐢 最慢: <strong>${formatDuration(d.slowestSec)}</strong></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ===== 👥 客戶管理 =====
+function normalizePhone(p) {
+  return (p || "").replace(/[^0-9]/g, "");
+}
+
+function aggregateCustomers() {
+  const map = {};
+  for (const entry of history) {
+    let info = null, type = null;
+    if (entry.replacementInfo) { info = entry.replacementInfo; type = "replacement"; }
+    else if (entry.returnInfo) { info = entry.returnInfo; type = "return"; }
+    if (!info) continue;
+    const key = normalizePhone(info.customerPhone);
+    if (!key) continue;
+    if (!map[key]) map[key] = { phone: info.customerPhone, name: info.customerName, replacement: 0, return: 0, lastSeen: null, orders: [] };
+    map[key][type]++;
+    map[key].orders.push({ id: entry.id, type, date: entry.completedAt, reason: info.reason, note: info.note });
+    if (!map[key].lastSeen || entry.completedAt > map[key].lastSeen) {
+      map[key].lastSeen = entry.completedAt;
+      // 用最新一次的姓名 (有可能改過)
+      if (info.customerName) map[key].name = info.customerName;
+    }
+  }
+  return map;
+}
+
+function getCustomerRisk(c) {
+  const total = (c.replacement || 0) + (c.return || 0);
+  if (total >= 3) return { level: "high", icon: "⛔", label: "高風險", color: "var(--danger)", bg: "var(--danger-bg)" };
+  if (total >= 1) return { level: "warn", icon: "⚠", label: "需注意", color: "#92400e", bg: "var(--warn-bg)" };
+  return { level: "normal", icon: "", label: "", color: "var(--text-soft)", bg: "var(--bg)" };
+}
+
+function renderCustomers(query) {
+  const map = aggregateCustomers();
+  const list = Object.values(map);
+  const q = (query || "").trim().toLowerCase();
+  let filtered = list;
+  if (q) {
+    filtered = list.filter(c =>
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.phone && normalizePhone(c.phone).includes(normalizePhone(q)))
+    );
+  }
+  // 依風險 + 次數排序
+  filtered.sort((a, b) => {
+    const ra = (a.replacement + a.return), rb = (b.replacement + b.return);
+    return rb - ra;
+  });
+  const stats = document.getElementById("customers-stats");
+  const highRisk = list.filter(c => getCustomerRisk(c).level === "high").length;
+  const warnRisk = list.filter(c => getCustomerRisk(c).level === "warn").length;
+  stats.innerHTML = `共 ${list.length} 位客戶 · ⛔ 高風險 ${highRisk} · ⚠ 需注意 ${warnRisk}${q ? ' · 🔍 搜尋: ' + escapeHtml(query) + ' (' + filtered.length + ' 筆)' : ''}`;
+  const content = document.getElementById("customers-content");
+  if (filtered.length === 0) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有客戶資料</div></div>';
+    return;
+  }
+  content.innerHTML = filtered.map(c => {
+    const risk = getCustomerRisk(c);
+    const lastSeen = c.lastSeen ? new Date(c.lastSeen).toLocaleDateString("zh-TW") : "—";
+    return `
+      <div style="background: ${risk.bg}; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div>
+            <strong>${risk.icon} ${escapeHtml(c.name || "(未填名)")}</strong>
+            <span style="font-family: ui-monospace, monospace; font-size: 12px; margin-left: 6px; color: var(--text-soft);">${escapeHtml(c.phone || "")}</span>
+            ${risk.label ? `<span style="color: ${risk.color}; font-size: 11px; font-weight: 700; margin-left: 4px;">${risk.label}</span>` : ''}
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-soft); margin-top: 4px;">
+          📮 補寄 ${c.replacement} 次 · 📥 退貨 ${c.return} 次 · 最近: ${lastSeen}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ===== 📈 熱銷 SKU =====
+function computeTopSKUs(range) {
+  const cutoff = getRangeCutoff(range);
+  let until = new Date();
+  if (range === "lastmonth") {
+    const now = new Date();
+    until = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const totals = {};
+  let orderCount = 0;
+  for (const entry of history) {
+    if (entry.orderType === "return") continue; // 退貨不算銷售
+    const ts = new Date(entry.completedAt);
+    if (ts < cutoff) continue;
+    if (range === "lastmonth" && ts >= until) continue;
+    orderCount++;
+    for (const it of (entry.items || [])) {
+      if (it.essential) continue; // 必要商品 (包裝) 不算
+      if ((it.packed || 0) <= 0) continue;
+      if (!totals[it.sku]) totals[it.sku] = { sku: it.sku, name: it.name, category: it.category, qty: 0, orders: 0 };
+      totals[it.sku].qty += it.packed;
+      totals[it.sku].orders++;
+    }
+  }
+  const sorted = Object.values(totals).sort((a, b) => b.qty - a.qty);
+  return { items: sorted, orderCount };
+}
+
+function renderTopSKUs(range) {
+  const { items, orderCount } = computeTopSKUs(range);
+  const top = items.slice(0, 20);
+  const summary = document.getElementById("top-sku-summary");
+  summary.innerHTML = `共 ${orderCount} 筆訂單 · ${items.length} 個 SKU · 顯示前 ${top.length} 名`;
+  const content = document.getElementById("top-sku-content");
+  if (top.length === 0) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>此區間沒有出貨資料</div></div>';
+    return;
+  }
+  const maxQty = top[0].qty;
+  content.innerHTML = top.map((it, idx) => {
+    const pct = maxQty > 0 ? Math.max(2, Math.round(it.qty / maxQty * 100)) : 0;
+    const rankBg = idx === 0 ? '#fbbf24' : (idx === 1 ? '#94a3b8' : (idx === 2 ? '#a16207' : 'var(--bg)'));
+    const rankColor = idx < 3 ? 'white' : 'var(--text-soft)';
+    return `
+      <div style="display:flex; align-items:center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-light);">
+        <div style="background: ${rankBg}; color: ${rankColor}; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${idx + 1}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; justify-content: space-between; gap: 6px; align-items: baseline;">
+            <span style="font-weight: 700; font-size: 12px; font-family: ui-monospace, monospace;">${escapeHtml(it.sku)}</span>
+            <span style="font-weight: 700; font-size: 14px; color: var(--primary);">${it.qty} 件</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.name || "")}${it.category ? ' · ' + escapeHtml(it.category) : ''} · ${it.orders} 訂單</div>
+          <div style="background: var(--border-light); height: 4px; border-radius: 2px; margin-top: 4px; overflow: hidden;">
+            <div style="background: var(--primary); height: 100%; width: ${pct}%;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ===== 三個 modal event handlers =====
+let _perfRange = "today";
+let _tskuRange = "month";
+
+document.getElementById("open-perf-stats-btn").addEventListener("click", () => {
+  document.getElementById("perf-stats-modal").hidden = false;
+  renderPerfStats(_perfRange);
+  document.querySelectorAll("#perf-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.perfRange === _perfRange));
+});
+document.getElementById("perf-stats-close").addEventListener("click", () => {
+  document.getElementById("perf-stats-modal").hidden = true;
+});
+document.getElementById("perf-stats-modal").addEventListener("click", (e) => {
+  if (e.target.id === "perf-stats-modal") document.getElementById("perf-stats-modal").hidden = true;
+});
+document.getElementById("perf-range-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-perf-range]");
+  if (!btn) return;
+  _perfRange = btn.dataset.perfRange;
+  document.querySelectorAll("#perf-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
+  renderPerfStats(_perfRange);
+});
+
+document.getElementById("open-customers-btn").addEventListener("click", () => {
+  document.getElementById("customers-modal").hidden = false;
+  document.getElementById("customers-search").value = "";
+  renderCustomers("");
+});
+document.getElementById("customers-close").addEventListener("click", () => {
+  document.getElementById("customers-modal").hidden = true;
+});
+document.getElementById("customers-modal").addEventListener("click", (e) => {
+  if (e.target.id === "customers-modal") document.getElementById("customers-modal").hidden = true;
+});
+let _custSearchDebounce = null;
+document.getElementById("customers-search").addEventListener("input", (e) => {
+  clearTimeout(_custSearchDebounce);
+  _custSearchDebounce = setTimeout(() => renderCustomers(e.target.value), 150);
+});
+
+document.getElementById("open-top-sku-btn").addEventListener("click", () => {
+  document.getElementById("top-sku-modal").hidden = false;
+  renderTopSKUs(_tskuRange);
+  document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.tskuRange === _tskuRange));
+});
+document.getElementById("top-sku-close").addEventListener("click", () => {
+  document.getElementById("top-sku-modal").hidden = true;
+});
+document.getElementById("top-sku-modal").addEventListener("click", (e) => {
+  if (e.target.id === "top-sku-modal") document.getElementById("top-sku-modal").hidden = true;
+});
+document.getElementById("top-sku-range-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-tsku-range]");
+  if (!btn) return;
+  _tskuRange = btn.dataset.tskuRange;
+  document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
+  renderTopSKUs(_tskuRange);
+});
+
+// ===== 補寄/退貨 modal 中即時客戶警告 =====
+function showCustomerRiskWarning(phone, hintElId) {
+  const el = document.getElementById(hintElId);
+  if (!el) return;
+  const key = normalizePhone(phone);
+  if (!key) { el.innerHTML = ""; return; }
+  const customers = aggregateCustomers();
+  const c = customers[key];
+  if (!c) { el.innerHTML = ""; return; }
+  const risk = getCustomerRisk(c);
+  if (risk.level === "normal") {
+    el.innerHTML = `<span style="color: var(--text-soft); font-size: 11px;">ℹ ${escapeHtml(c.name || "")} 過去無售後紀錄</span>`;
+    return;
+  }
+  el.innerHTML = `<div style="background: ${risk.bg}; color: ${risk.color}; padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 4px;">
+    <strong>${risk.icon} ${escapeHtml(c.name || "此手機")} ${risk.label}</strong>: 過去 📮 補寄 ${c.replacement} 次 · 📥 退貨 ${c.return} 次
+  </div>`;
+}
+
+// 出貨紀錄關鍵字搜尋 - 跨所有欄位
+function matchesHistorySearch(entry, q) {
+  if (!q) return true;
+  const haystack = [];
+  haystack.push(entry.id, entry.platform);
+  for (const it of (entry.items || [])) {
+    haystack.push(it.sku, it.name, it.category);
+  }
+  for (const p of (entry.parcels || [])) {
+    haystack.push(p.id, p.packedBy);
+  }
+  if (entry.replacementInfo) {
+    const r = entry.replacementInfo;
+    haystack.push(r.customerName, r.customerPhone, r.reason, r.note);
+  }
+  if (entry.returnInfo) {
+    const r = entry.returnInfo;
+    haystack.push(r.customerName, r.customerPhone, r.reason, r.note, r.originalOrderNo);
+  }
+  // 日期也納入 (例如 "06/04" 找 6 月 4 日)
+  if (entry.completedAt) {
+    const d = new Date(entry.completedAt);
+    haystack.push(d.toLocaleDateString("zh-TW"));
+    haystack.push(d.toLocaleString("zh-TW"));
+  }
+  return haystack.some(f => f != null && String(f).toLowerCase().includes(q));
+}
+
 // ---- 出貨紀錄 render ----
 function renderHistory() {
   const list = document.getElementById("history-list");
@@ -3794,13 +4828,16 @@ function renderHistory() {
   // 計數 (依 orderType 拆) - 用於 filter bar
   const cntAll = history.length;
   const cntReplacement = history.filter(e => e.orderType === "replacement").length;
-  const cntNormal = cntAll - cntReplacement; // 一般 + 手建 都算「一般」
+  const cntReturn = history.filter(e => e.orderType === "return").length;
+  const cntNormal = cntAll - cntReplacement - cntReturn; // 一般 + 手建 都算「一般」
   const cAllEl = document.getElementById("hist-cnt-all");
   const cNormalEl = document.getElementById("hist-cnt-normal");
   const cReplEl = document.getElementById("hist-cnt-replacement");
+  const cRetEl = document.getElementById("hist-cnt-return");
   if (cAllEl) cAllEl.textContent = cntAll;
   if (cNormalEl) cNormalEl.textContent = cntNormal;
   if (cReplEl) cReplEl.textContent = cntReplacement;
+  if (cRetEl) cRetEl.textContent = cntReturn;
   // filter bar active state
   document.querySelectorAll("#history-filter-bar button").forEach(b => {
     b.classList.toggle("active", b.dataset.histFilter === historyFilter);
@@ -3818,27 +4855,44 @@ function renderHistory() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
   const thisMonthRepl = thisMonth.filter(e => e.orderType === "replacement");
-  const thisMonthNormal = thisMonth.filter(e => e.orderType !== "replacement");
+  const thisMonthReturn = thisMonth.filter(e => e.orderType === "return");
+  const thisMonthNormal = thisMonth.filter(e => e.orderType !== "replacement" && e.orderType !== "return");
   const totalQtyNormal = thisMonthNormal.reduce((s, e) => s + e.summary.totalPacked, 0);
   const totalQtyRepl = thisMonthRepl.reduce((s, e) => s + e.summary.totalPacked, 0);
+  const totalQtyReturn = thisMonthReturn.reduce((s, e) => s + e.summary.totalPacked, 0);
   stats.innerHTML = `
     <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:13px;">
       <div><strong>本月一般</strong> ${thisMonthNormal.length} 次 · ${totalQtyNormal} 件</div>
       <div style="color:#92400e;"><strong>本月補寄</strong> ${thisMonthRepl.length} 次 · ${totalQtyRepl} 件</div>
+      <div style="color:#166534;"><strong>本月退貨</strong> ${thisMonthReturn.length} 次 · ${totalQtyReturn} 件</div>
       <div><strong>累計</strong> ${history.length} 次</div>
     </div>
   `;
 
-  // 依 filter 篩選
+  // 依 orderType filter 篩選
   let displayed = history;
   if (historyFilter === "normal") {
-    displayed = history.filter(e => e.orderType !== "replacement");
+    displayed = history.filter(e => e.orderType !== "replacement" && e.orderType !== "return");
   } else if (historyFilter === "replacement") {
     displayed = history.filter(e => e.orderType === "replacement");
+  } else if (historyFilter === "return") {
+    displayed = history.filter(e => e.orderType === "return");
+  }
+  // 套用關鍵字搜尋
+  const q = (historySearchQuery || "").trim().toLowerCase();
+  if (q) {
+    displayed = displayed.filter(e => matchesHistorySearch(e, q));
+    // 在 stats 顯示「找到 N 筆」
+    if (stats && q) {
+      const origInner = stats.innerHTML;
+      stats.innerHTML = origInner +
+        `<div style="margin-top: 6px; padding: 6px 10px; background: var(--warn-bg); color: #92400e; border-radius: 6px; font-size: 12px; font-weight: 600;">🔍 搜尋「${escapeHtml(historySearchQuery)}」找到 ${displayed.length} 筆</div>`;
+    }
   }
   if (displayed.length === 0) {
-    const label = historyFilter === "replacement" ? "補寄訂單" : (historyFilter === "normal" ? "一般出貨" : "");
-    list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>還沒有${label}紀錄</div></div>`;
+    const label = historyFilter === "replacement" ? "補寄訂單" : (historyFilter === "return" ? "退貨" : (historyFilter === "normal" ? "一般出貨" : ""));
+    const searchHint = q ? ` (搜尋: ${escapeHtml(historySearchQuery)})` : '';
+    list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>沒有${label}紀錄${searchHint}</div></div>`;
     return;
   }
 
@@ -3852,6 +4906,21 @@ function renderHistory() {
     let detail = "";
     if (expanded) {
       detail = `<div class="history-detail">`;
+      // 先列寄件單號 (含 🔗 追蹤按鈕)
+      const parcels = e.parcels || [];
+      if (parcels.length > 0) {
+        detail += `<div style="font-size: 11px; color: var(--text-soft); margin-bottom: 6px;">📦 寄件單號 (${parcels.length} 筆)</div>`;
+        for (const p of parcels) {
+          const byTag = p.packedBy ? ` <span style="color: var(--text-soft); font-size: 10px;">(${escapeHtml(p.packedBy)})</span>` : '';
+          detail += `<div class="row-line" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 4px 0;">
+            <span style="font-family: ui-monospace, monospace; font-size: 12px;">${escapeHtml(p.id)}${byTag}</span>
+            <span style="display:flex; gap: 2px;">${makeTrackingButtonsHtml(p.id, { size: "normal" })}</span>
+          </div>`;
+        }
+        detail += `<div style="height: 8px"></div>`;
+      }
+      // 接著列商品
+      detail += `<div style="font-size: 11px; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
       for (const it of e.items) {
         const cls = it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "");
         detail += `<div class="row-line ${cls}"><span>${escapeHtml(it.sku)} · ${escapeHtml(it.name)}</span><span>${it.packed}/${it.expected}</span></div>`;
@@ -3861,7 +4930,7 @@ function renderHistory() {
     return `
       <div class="history-item ${isPartial ? 'partial' : ''}">
         <div class="history-item-header">
-          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📝 手建</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 11px; margin-top: 2px; color: #92400e;">👤 ${escapeHtml(e.replacementInfo.customerName || "")} · 📱 ${escapeHtml(e.replacementInfo.customerPhone || "")} · 原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}
+          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📝 手建</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 11px; margin-top: 2px; color: #92400e;">👤 ${escapeHtml(e.replacementInfo.customerName || "")} · 📱 ${escapeHtml(e.replacementInfo.customerPhone || "")} · 原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 11px; margin-top: 2px; color: #166534;">👤 ${escapeHtml(e.returnInfo.customerName || "")} · 📱 ${escapeHtml(e.returnInfo.customerPhone || "")} · 原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
         </div>
         <div class="history-item-summary">
@@ -3919,7 +4988,7 @@ function extractParcelId(raw) {
   // 6. 黑貓宅急便: 12 位純數字 (例: 481234567890) - 最後 fallback, 因為純數字格式最容易誤判
   const blackcat = s.match(/(?<![A-Za-z\d])\d{12}(?![A-Za-z\d])/);
   if (blackcat && s.length > 30) return blackcat[0];
-  // 5. JSON 格式: 嘗試解析找已知欄位
+  // 5. JSON 格式: 嘗試解析找已知欄位 (7-11 內部 QR)
   if (s.startsWith("{") || s.startsWith("[")) {
     try {
       const obj = JSON.parse(s);
@@ -3942,6 +5011,16 @@ function extractParcelId(raw) {
       }
       const found = findCode(obj);
       if (found) return found;
+      // 7-11 內部 QR (有 code1/code2/code3 但都不是面單服務代碼)
+      // 用 code1 當識別, 但設標記讓 processScan 提示使用者改手動輸入
+      if (obj && (obj.code1 || obj["code1"])) {
+        const c1 = obj.code1 || obj["code1"];
+        window._lastScanWasInternalQr = "7-11";
+        return String(c1).substring(0, 32);
+      }
+      // 其他內部 JSON: 截斷當識別 + 標記
+      window._lastScanWasInternalQr = "其他超商";
+      return JSON.stringify(obj).substring(0, 64);
     } catch(e) {
       // 不是合法 JSON, 略過
     }
@@ -3950,12 +5029,133 @@ function extractParcelId(raw) {
   return s.substring(0, 64); // 限制最長 64 字元避免 JSON 整段塞進去
 }
 
+// ===== 物流追蹤 =====
+// 從寄件單號格式偵測可能的物流商 (回傳陣列, 因為 12 位數可能是黑貓或新竹)
+function detectCarriers(parcelId) {
+  if (!parcelId) return [];
+  const s = String(parcelId).trim();
+  if (/^TW\d{12}[A-Z]$/.test(s)) return ["shopee"];     // 蝦皮店到家
+  if (/^C\d{10,15}$/.test(s)) return ["seven11"];       // 7-11 交貨便
+  if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];  // 國際 / 中華郵政
+  if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];      // 全家 FamiPort
+  if (/^\d{12}$/.test(s)) return ["blackcat", "hct"];   // 12 位數: 黑貓或新竹 (使用者點對的)
+  if (/^\d{6}[A-Z0-9]{8}$/.test(s)) return ["shopee_order"]; // 蝦皮訂單編號
+  return [];
+}
+
+// 保留舊 detectCarrier 給單一回傳值用 (相容)
+function detectCarrier(parcelId) {
+  const arr = detectCarriers(parcelId);
+  return arr.length > 0 ? arr[0] : null;
+}
+
+// 物流商 → 追蹤 URL 模板 (若 URL 過時請更新此處)
+const TRACKING_URLS = {
+  shopee:       id => `https://spe.shopee.tw/cn_logistics/tracking/${id}`,
+  shopee_order: id => `https://seller.shopee.tw/portal/order/all?search=${id}`,
+  seven11:      id => `https://eservice.7-11.com.tw/e-tracking/search.aspx?keyword=${id}`,
+  fami:         id => `https://family.7-11.com.tw/cstd/famidelivery/log/checkPersonalLogList.aspx?logNumber=${id}`,
+  blackcat:     id => `https://www.t-cat.com.tw/Inquire/Trace.aspx?BillID=${id}`,
+  hct:          id => `https://www.hct.com.tw/Search/SearchGoods_n.aspx?qtype=ServerCheck&qutNo=${id}`,
+  post:         id => `https://trackings.post.gov.tw/?id=${id}`,
+};
+
+const CARRIER_LABELS = {
+  shopee:       "蝦皮店到家",
+  shopee_order: "蝦皮訂單",
+  seven11:      "7-11 交貨便",
+  fami:         "全家 FamiPort",
+  blackcat:     "黑貓宅急便",
+  hct:          "新竹物流",
+  post:         "中華郵政 / 國際",
+};
+
+// 物流商縮圖 icon (12 位數雙選用)
+const CARRIER_ICONS = {
+  shopee:       "🛒",
+  shopee_order: "🛒",
+  seven11:      "🏪",
+  fami:         "🏬",
+  blackcat:     "🐈",
+  hct:          "🚚",
+  post:         "✉️",
+};
+
+async function openTracking(parcelId, forceCarrier) {
+  // 若指定 forceCarrier 就用指定的; 否則用第一個偵測到的
+  let carrier = forceCarrier;
+  if (!carrier) {
+    const arr = detectCarriers(parcelId);
+    carrier = arr.length > 0 ? arr[0] : null;
+  }
+  if (!carrier || !TRACKING_URLS[carrier]) {
+    // 無法辨識 → 複製到剪貼簿 (手動建單或自訂編號)
+    try {
+      await navigator.clipboard.writeText(parcelId);
+      showToast(`📋 已複製單號 ${parcelId}`);
+    } catch(e) {
+      const ta = document.createElement("textarea");
+      ta.value = parcelId; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); showToast(`📋 已複製單號`); } catch(e2) { showToast(`單號: ${parcelId}`); }
+      document.body.removeChild(ta);
+    }
+    return;
+  }
+  const url = TRACKING_URLS[carrier](parcelId);
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (!w) {
+    showToast(`🔗 跳轉到 ${CARRIER_LABELS[carrier] || carrier}`);
+    setTimeout(() => { location.href = url; }, 500);
+  } else {
+    showToast(`🔗 開 ${CARRIER_LABELS[carrier] || carrier} 查詢頁`);
+  }
+}
+
+// 產生追蹤按鈕 HTML (含 12 位數雙選邏輯)
+function makeTrackingButtonsHtml(parcelId, opts) {
+  opts = opts || {};
+  const size = opts.size || "normal"; // "normal" | "small"
+  const carriers = detectCarriers(parcelId);
+  const escId = escapeHtml(parcelId);
+  const baseStyle = `background: transparent; border: 0; padding: ${size === "small" ? "2px 6px" : "4px 8px"}; cursor: pointer; font-size: ${size === "small" ? "13px" : "16px"}; color: var(--primary);`;
+  if (carriers.length === 0) {
+    // 認不出 → 複製
+    return `<button class="track-btn" data-track-id="${escId}" title="複製單號" style="${baseStyle}">📋</button>`;
+  }
+  if (carriers.length === 1) {
+    const c = carriers[0];
+    return `<button class="track-btn" data-track-id="${escId}" data-track-carrier="${c}" title="查詢 ${CARRIER_LABELS[c]}" style="${baseStyle}">${CARRIER_ICONS[c] || "🔗"}</button>`;
+  }
+  // 多家 (12 位數 = 黑貓 + 新竹) → 並排兩顆
+  return carriers.map(c =>
+    `<button class="track-btn" data-track-id="${escId}" data-track-carrier="${c}" title="查詢 ${CARRIER_LABELS[c]}" style="${baseStyle}">${CARRIER_ICONS[c]}</button>`
+  ).join("");
+}
+
 function processScan(code) {
   const original = code;
+  window._lastScanWasInternalQr = null;
   code = extractParcelId(code);
   if (!code) return;
   if (original !== code) console.log("[scan] extracted", code, "from", original.substring(0, 60) + (original.length > 60 ? "..." : ""));
   console.log("[scan]", code);
+  // 內部 QR 提示: 邀請使用者改用面單上的服務代碼
+  if (window._lastScanWasInternalQr) {
+    const carrier = window._lastScanWasInternalQr;
+    window._lastScanWasInternalQr = null;
+    setTimeout(() => {
+      if (confirm(`⚠ 偵測到 ${carrier} 內部 QR\n\n超商 QR 不含人類可讀的服務代碼。\n目前用內部代碼當識別:\n${code}\n\n要改用面單上的服務代碼/訂單號嗎? (建議, 之後查單比較方便)`)) {
+        // 撤回此次掃描的 parcel (若已開), 開手動輸入 modal
+        if (state.activeParcel && state.activeParcel.id === code) {
+          state.activeParcel = null;
+          saveState(); renderScanPanel();
+        }
+        document.getElementById("manual-parcel-id-input").value = "";
+        document.getElementById("manual-parcel-id-modal").hidden = false;
+        setTimeout(() => document.getElementById("manual-parcel-id-input").focus(), 100);
+      }
+    }, 100);
+  }
 
   // 新增: 檢查是否為商品條碼 (先比 barcode, 再比 sku)
   // 雙重比對: 支援自訂 barcode + fallback SKU
@@ -4152,10 +5352,10 @@ function renderCompletedParcelsList() {
     const t = new Date(p.completedAt);
     const timeStr = t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
     const itemsStr = Object.entries(p.items || {}).map(([sku, q]) => `${sku}×${q}`).join("、");
-    // 房間模式顯示誰包的; 本機模式不顯示
     const byTag = (state.roomMode && p.packedBy) ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 0 6px; border-radius: 8px; font-size: 10px;">${escapeHtml(p.packedBy)}</span>` : '';
+    const trackBtn = makeTrackingButtonsHtml(p.id, { size: "small" });
     return `<div class="completed-parcel">
-      <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span>${byTag}<span class="completed-parcel-time">${timeStr}</span></div>
+      <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span>${trackBtn}${byTag}<span class="completed-parcel-time">${timeStr}</span></div>
       <div class="completed-parcel-items">${escapeHtml(itemsStr)}</div>
     </div>`;
   }).join("");
@@ -4272,6 +5472,10 @@ function doMergeCancel() {
 
 // ---- Master render ----
 function render() {
+  // 盤點模式: 隱藏其他主視圖, 顯示 stocktake-view
+  if (stockTake && document.getElementById("stocktake-view") && !document.getElementById("stocktake-view").hidden) {
+    return; // 盤點中: 不重畫主視圖, renderStockTake 已負責
+  }
   const hasList = state.items.length > 0 || !!state.manualMode;
   const inMapping = pendingA1.length > 0;
   // 保險：有未完成清單時優先顯示備貨頁
@@ -4602,6 +5806,31 @@ document.getElementById("inv-export-btn").addEventListener("click", () => {
   showToast(`✓ 已匯出 ${allSkus.length} SKU`);
 });
 
+// 倉庫清冊 - 對齊同事庫存 (房間模式)
+document.getElementById("inv-room-sync-btn").addEventListener("click", async () => {
+  if (!state.roomMode || !state.roomCode) { showToast("⚠ 不在房間中, 沒有同事可同步"); return; }
+  if (!settings.syncWorkerUrl) { showToast("⚠ 沒設 Worker URL"); return; }
+
+  const myCount = Object.keys(stockMap).length;
+  const myTotal = Object.values(stockMap).reduce((s, v) => s + (v.qty || 0), 0);
+  if (!confirm(`即將執行庫存對齊:\n\n1. 上傳你的本機庫存 (${myCount} SKU / ${myTotal} 件) 到房間\n2. 從房間下載最新庫存覆寫本機\n\n說明: 兩人都點過此按鈕後, 後點的人的版本會覆蓋。建議由「庫存負責人」最後點一次。\n\n確定?`)) return;
+
+  const btn = document.getElementById("inv-room-sync-btn");
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = "同步中...";
+  try {
+    await syncRoom({ pushStock: true });
+    showToast("✓ 已對齊庫存");
+    renderInventory();
+  } catch(e) {
+    showToast("⚠ 同步失敗: " + (e.message || e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
 // 倉庫清冊 - 清空庫存 (不影響商品庫)
 document.getElementById("inv-clear-btn").addEventListener("click", () => {
   const n = Object.keys(stockMap).length;
@@ -4622,6 +5851,39 @@ document.getElementById("inventory-filter-bar").addEventListener("click", (e) =>
 });
 
 // (inv-stocktake-btn 已移到設定齒輪 → 盤點卡片)
+
+// 物流追蹤按鈕 - 全域代理 (出貨紀錄 / 完成包裹列表 / 任何地方 .track-btn)
+document.body.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-track-id]");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const id = btn.dataset.trackId;
+  const carrier = btn.dataset.trackCarrier; // 可選 (12 位數時指定哪家)
+  if (id) openTracking(id, carrier);
+});
+
+// 出貨紀錄搜尋
+const _historySearchInput = document.getElementById("history-search");
+const _historySearchClear = document.getElementById("history-search-clear");
+let _historySearchDebounce = null;
+_historySearchInput.addEventListener("input", (e) => {
+  const v = e.target.value;
+  _historySearchClear.hidden = !v;
+  // debounce 150ms - 避免每按一鍵就 re-render 全表
+  clearTimeout(_historySearchDebounce);
+  _historySearchDebounce = setTimeout(() => {
+    historySearchQuery = v;
+    renderHistory();
+  }, 150);
+});
+_historySearchClear.addEventListener("click", () => {
+  _historySearchInput.value = "";
+  historySearchQuery = "";
+  _historySearchClear.hidden = true;
+  renderHistory();
+  _historySearchInput.focus();
+});
 
 document.getElementById("history-filter-bar").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-hist-filter]");
@@ -5532,7 +6794,7 @@ document.addEventListener("keydown", (e) => {
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
   // 若任何 modal 開啟中, 不攔截 (避免衝突)
   // 補上 merge-modal, health-modal (追加合併確認 / 出貨健康檢查), 避免在 modal 中刷錯
-  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "create-room-modal", "join-room-modal", "room-info-modal"];
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "return-order-modal", "create-room-modal", "join-room-modal", "room-info-modal", "manual-parcel-id-modal", "perf-stats-modal", "customers-modal", "top-sku-modal"];
   for (const id of modals) {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
@@ -5566,6 +6828,59 @@ document.addEventListener("keydown", (e) => {
       if (i && i.value) i.value = "";
     }, 1500);
   }
+});
+
+// 手動輸入服務代碼 / 訂單號
+function setManualParcelIdPreset(preset) {
+  const inp = document.getElementById("manual-parcel-id-input");
+  const hint = document.getElementById("manual-parcel-id-hint");
+  if (preset === "711") {
+    inp.value = "C";
+    inp.setAttribute("inputmode", "email");
+    inp.setAttribute("placeholder", "C 後面接 10-12 位數字");
+    if (hint) hint.innerHTML = '🏪 7-11 格式: <strong>C</strong> + 10-12 位數字 (例 C49414373882)';
+    setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 50);
+  } else if (preset === "fami") {
+    inp.value = "";
+    inp.setAttribute("inputmode", "numeric");
+    inp.setAttribute("placeholder", "純數字 (例 16341501748)");
+    if (hint) hint.innerHTML = '🏬 全家格式: 純數字 (從面單「訂單編號」抓)';
+    setTimeout(() => { inp.focus(); }, 50);
+  } else {
+    inp.value = "";
+    inp.setAttribute("inputmode", "email");
+    inp.setAttribute("placeholder", "任何編號");
+    if (hint) hint.innerHTML = '✏ 自由輸入: 任何字串都可';
+    setTimeout(() => { inp.focus(); }, 50);
+  }
+  document.querySelectorAll("button[data-mpid-preset]").forEach(b => {
+    const active = b.dataset.mpidPreset === preset;
+    b.classList.toggle("secondary", active);
+    b.classList.toggle("outline", !active);
+  });
+}
+
+document.getElementById("manual-parcel-id-btn").addEventListener("click", () => {
+  document.getElementById("manual-parcel-id-modal").hidden = false;
+  setManualParcelIdPreset("711"); // 預設選 7-11
+});
+document.getElementById("manual-parcel-id-cancel").addEventListener("click", () => {
+  document.getElementById("manual-parcel-id-modal").hidden = true;
+});
+document.getElementById("manual-parcel-id-modal").addEventListener("click", (e) => {
+  if (e.target.id === "manual-parcel-id-modal") document.getElementById("manual-parcel-id-modal").hidden = true;
+});
+document.getElementById("manual-parcel-id-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("manual-parcel-id-confirm").click(); }
+});
+document.querySelectorAll("button[data-mpid-preset]").forEach(btn => {
+  btn.addEventListener("click", () => setManualParcelIdPreset(btn.dataset.mpidPreset));
+});
+document.getElementById("manual-parcel-id-confirm").addEventListener("click", () => {
+  const raw = document.getElementById("manual-parcel-id-input").value.trim();
+  if (!raw || raw === "C") { showToast("⚠ 請輸入寄件編號"); document.getElementById("manual-parcel-id-input").focus(); return; }
+  document.getElementById("manual-parcel-id-modal").hidden = true;
+  processScan(raw);
 });
 
 document.getElementById("scan-input").addEventListener("keydown", (e) => {
@@ -6280,6 +7595,107 @@ document.getElementById("repl-create").addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
+// 補寄/退貨 - 客人手機輸入時即時查詢風險
+let _replPhoneDebounce = null;
+document.getElementById("repl-customer-phone").addEventListener("input", (e) => {
+  clearTimeout(_replPhoneDebounce);
+  _replPhoneDebounce = setTimeout(() => showCustomerRiskWarning(e.target.value, "repl-customer-risk"), 300);
+});
+
+// 退貨確認 modal 事件
+document.getElementById("open-return-order-btn").addEventListener("click", () => {
+  document.getElementById("ret-platform-select").value = currentPlatform || "a1";
+  document.getElementById("ret-parcel-id").value = "";
+  document.getElementById("ret-customer-name").value = "";
+  document.getElementById("ret-customer-phone").value = "";
+  document.getElementById("ret-reason").value = "不喜歡/不適合";
+  document.getElementById("ret-original-order").value = "";
+  document.getElementById("ret-note").value = "";
+  document.getElementById("return-order-modal").hidden = false;
+  setTimeout(() => {
+    const inp = document.getElementById("ret-parcel-id");
+    if (inp) inp.focus();
+  }, 100);
+});
+document.getElementById("ret-cancel").addEventListener("click", () => {
+  document.getElementById("return-order-modal").hidden = true;
+});
+document.getElementById("return-order-modal").addEventListener("click", (e) => {
+  if (e.target.id === "return-order-modal") document.getElementById("return-order-modal").hidden = true;
+});
+document.getElementById("ret-create").addEventListener("click", () => {
+  const platform = document.getElementById("ret-platform-select").value;
+  const rawId = document.getElementById("ret-parcel-id").value.trim();
+  const customerName = document.getElementById("ret-customer-name").value.trim();
+  const customerPhone = document.getElementById("ret-customer-phone").value.trim();
+  const reason = document.getElementById("ret-reason").value;
+  const originalOrderNo = document.getElementById("ret-original-order").value.trim();
+  const note = document.getElementById("ret-note").value.trim();
+
+  if (!rawId) { showToast("⚠ 退貨寄件單號必填"); document.getElementById("ret-parcel-id").focus(); return; }
+  if (!customerName) { showToast("⚠ 客人姓名必填"); document.getElementById("ret-customer-name").focus(); return; }
+  if (!customerPhone) { showToast("⚠ 客人手機必填"); document.getElementById("ret-customer-phone").focus(); return; }
+  if (!/^[\d\s\-+()]{8,20}$/.test(customerPhone)) {
+    if (!confirm(`「${customerPhone}」看起來不太像手機, 仍要建立?`)) {
+      document.getElementById("ret-customer-phone").focus();
+      return;
+    }
+  }
+
+  if (state.roomMode) {
+    if (!checkRoomBeforeReset("建立退貨確認單")) return;
+    leaveRoom(true);
+  }
+
+  const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
+
+  if (state.items.length > 0) {
+    if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU)。\n\n繼續建立退貨單會放棄目前清單, 確定?`)) return;
+  }
+  if ((state.completedParcels || []).find(p => p.id === parcelId)) {
+    if (!confirm(`寄件單號 ${parcelId} 在當前批次已完成過, 仍要建立退貨單?`)) return;
+  }
+
+  currentPlatform = platform;
+  try { localStorage.setItem(PLATFORM_KEY, platform); } catch(err) {}
+  document.getElementById("platform-select").value = platform;
+  document.getElementById("platform-hint").textContent = PLATFORMS[platform].hint;
+
+  state = {
+    items: [],
+    filter: "all",
+    loadedDate: new Date().toISOString().slice(0, 10),
+    scanMode: true,
+    activeParcel: { id: parcelId, items: {}, startedAt: new Date().toISOString() },
+    completedParcels: [],
+    appendLevel: 1,
+    continuationOf: null,
+    manualMode: true,
+    replacementInfo: null,
+    returnInfo: {
+      customerName, customerPhone, reason, originalOrderNo, note,
+      createdAt: new Date().toISOString(),
+    },
+  };
+
+  // 必要商品不自動帶 (退貨用不到包裝材料)
+
+  saveState();
+  document.getElementById("return-order-modal").hidden = true;
+  SOUND.parcelStart();
+  showToast(`📥 退貨確認 ${parcelId} (${customerName}) 已開始`);
+  if (window.__homeOverride) window.__homeOverride = false;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// 退貨 - 客人手機即時風險查詢
+let _retPhoneDebounce = null;
+document.getElementById("ret-customer-phone").addEventListener("input", (e) => {
+  clearTimeout(_retPhoneDebounce);
+  _retPhoneDebounce = setTimeout(() => showCustomerRiskWarning(e.target.value, "ret-customer-risk"), 300);
+});
+
 // merge modal 事件
 document.getElementById("merge-append").addEventListener("click", doMergeAppend);
 document.getElementById("merge-replace").addEventListener("click", doMergeReplace);
@@ -6344,23 +7760,43 @@ function actuallyCompleteShipping() {
     leaveRoom(true);
     closeRoomOnServer(roomCodeAtCompletion);
   }
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null, returnInfo: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
   render();
   SOUND.shipDone();
   showToast("✓ 本次出貨完成，已存入紀錄");
+  // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 必要商品=包裝材也不扣)
+  if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement") {
+    let deducted = 0;
+    const now = new Date().toISOString();
+    for (const it of (entry.items || [])) {
+      if (it.essential) continue;
+      if ((it.packed || 0) <= 0) continue;
+      if (!stockMap[it.sku]) continue;
+      stockMap[it.sku].qty = Math.max(0, (stockMap[it.sku].qty || 0) - it.packed);
+      stockMap[it.sku].updatedAt = now;
+      deducted++;
+    }
+    if (deducted > 0) {
+      saveStock();
+      console.log(`[stock] auto-deducted ${deducted} SKU`);
+      setTimeout(() => showToast(`📉 庫存自動扣帳 ${deducted} SKU`), 600);
+    }
+  }
+
   // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
-  // 補寄訂單不推送 (使用者要求只記本機)
-  if (entry && entry.orderType !== "replacement" && (settings.discordWebhook || settings.sheetsWebhook)) {
+  // 補寄訂單 / 退貨確認不推送 (使用者要求只記本機)
+  const skipWebhook = entry && (entry.orderType === "replacement" || entry.orderType === "return");
+  if (entry && !skipWebhook && (settings.discordWebhook || settings.sheetsWebhook)) {
     const outbound = buildPickingOutboundPayload(entry);
     pushToDiscordRaw({
       content: "```json\n" + JSON.stringify(outbound, null, 2) + "\n```",
     });
     pushToSheets(outbound);
-  } else if (entry && entry.orderType === "replacement") {
-    console.log("[discord/sheets] 補寄訂單跳過推送");
+  } else if (skipWebhook) {
+    console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
   }
 }
 
@@ -6593,6 +8029,15 @@ loadCollapsed();
 loadSpecMap();
 loadHistory();
 loadStock();
+loadStockTake();
+loadStockTakeHistory();
+// 若上次離線時還在盤點中, 自動進盤點視圖
+if (stockTake) {
+  setTimeout(() => {
+    showStockTakeView();
+    setTimeout(() => showToast("↻ 上次的盤點還沒完成, 已自動繼續"), 800);
+  }, 300);
+}
 // 載入上次選的通路
 try {
   const p = localStorage.getItem(PLATFORM_KEY);
