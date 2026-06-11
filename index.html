@@ -2989,15 +2989,25 @@ function flushPendingEventsBeacon() {
 }
 
 // 頁面要關閉時最後一次 flush
-window.addEventListener("beforeunload", () => {
-  if (state.roomMode && pendingEvents.length > 0) {
-    flushPendingEventsBeacon();
+function notifyLeaveOnUnload() {
+  // 1. 推送剩下的事件
+  if (pendingEvents.length > 0) flushPendingEventsBeacon();
+  // 2. 通知 Worker 我要離開了 (用 sendBeacon, 關頁也保證會送)
+  if (state.roomMode && state.roomCode && settings.syncWorkerUrl && settings.myName) {
+    try {
+      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave";
+      const body = JSON.stringify({ myName: settings.myName });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      }
+    } catch(e) {}
   }
+}
+window.addEventListener("beforeunload", () => {
+  if (state.roomMode) notifyLeaveOnUnload();
 });
 window.addEventListener("pagehide", () => {
-  if (state.roomMode && pendingEvents.length > 0) {
-    flushPendingEventsBeacon();
-  }
+  if (state.roomMode) notifyLeaveOnUnload();
 });
 
 function stopSyncTimer() {
@@ -3007,6 +3017,20 @@ function stopSyncTimer() {
 
 function leaveRoom(notifyServer) {
   stopSyncTimer();
+  // 先通知 Worker 移除此成員 (用 sendBeacon 保證會送, 不等回應)
+  if (notifyServer && state.roomMode && state.roomCode && settings.syncWorkerUrl && settings.myName) {
+    try {
+      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave";
+      const body = JSON.stringify({ myName: settings.myName });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      } else {
+        // fallback fetch (非同步, 不等)
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+      }
+      console.log("[room] 已通知 Worker 離開房間");
+    } catch(e) { console.warn("[room] leave notify failed", e); }
+  }
   state.roomMode = false;
   state.roomCode = null;
   state.roomMembers = {};
@@ -3029,7 +3053,7 @@ function renderRoomBadge() {
   const now = Date.now();
   const activeMembers = Object.entries(state.roomMembers || {}).filter(([n, m]) => {
     if (!m || !m.lastSeen) return false;
-    return (now - new Date(m.lastSeen).getTime()) < 60000; // 1 分鐘內算在線
+    return (now - new Date(m.lastSeen).getTime()) < 20000; // 20 秒內算在線 (約 4 個輪詢週期)
   });
   document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
 }
@@ -7121,14 +7145,19 @@ document.getElementById("room-badge").addEventListener("click", () => {
   const memberRows = Object.entries(state.roomMembers || {}).map(([name, info]) => {
     const lastSeenMs = info && info.lastSeen ? new Date(info.lastSeen).getTime() : 0;
     const sinceMs = now - lastSeenMs;
-    const online = sinceMs < 60000;
+    const online = sinceMs < 20000; // 20 秒內算在線
     const myActive = (state.roomActiveParcels || {})[name];
     const myActiveText = myActive ? ` · 處理 ${myActive.id}` : "";
     const isMe = name === settings.myName;
+    let statusText;
+    if (online) statusText = "🟢 在線";
+    else if (sinceMs < 60000) statusText = `🟡 ${Math.round(sinceMs/1000)} 秒前活動`;
+    else if (sinceMs < 3600000) statusText = `⚪ ${Math.round(sinceMs/60000)} 分鐘前活動 (可能已離開)`;
+    else statusText = `⚪ ${Math.round(sinceMs/3600000)} 小時前活動`;
     return `<div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
       <div>
         <strong>${escapeHtml(name)}</strong>${isMe ? ' <span style="font-size:11px; color: var(--primary);">(你)</span>' : ''}
-        <div style="font-size:11px; color:var(--text-soft);">${online ? '🟢 在線' : `離線 (${Math.round(sinceMs/60000)} 分鐘前)`}${escapeHtml(myActiveText)}</div>
+        <div style="font-size:11px; color:var(--text-soft);">${statusText}${escapeHtml(myActiveText)}</div>
       </div>
     </div>`;
   }).join("") || '<div class="hint">尚無成員資料</div>';
