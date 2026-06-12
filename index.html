@@ -13,6 +13,17 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%231F4E78'/><text x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='110'>📦</text></svg>">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4E78'/><text x='50%25' y='56%25' text-anchor='middle' dominant-baseline='middle' font-size='40'>📦</text></svg>">
 <style>
+/* 字體大小 + 戴手套模式 */
+:root { --font-base: 16px; }
+[data-font-size="small"] { --font-base: 14px; }
+[data-font-size="large"] { --font-base: 18px; }
+[data-font-size="xlarge"] { --font-base: 20px; }
+[data-glove-mode="1"] button:not(.tab-bar button):not(.filter-bar button):not(.theme-option):not([data-mpid-preset]) {
+  min-height: 44px !important;
+}
+[data-glove-mode="1"] .qty-btn { min-width: 48px !important; min-height: 48px !important; font-size: 22px !important; }
+[data-glove-mode="1"] .ap-btn { min-width: 44px !important; min-height: 44px !important; font-size: 18px !important; }
+
 :root, [data-theme="default"] {
   color-scheme: light;
   --bg: #f5f7fa;
@@ -109,7 +120,7 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-size: 16px;
+  font-size: var(--font-base, 16px);
   line-height: 1.5;
   font-weight: 500;
   -webkit-font-smoothing: antialiased;
@@ -1520,10 +1531,11 @@ footer.summary-bar {
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
       尚無紀錄
     </div>
-    <div class="row" style="gap: 6px; margin-bottom: 10px;">
-      <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1;">📊 績效</button>
-      <button class="btn outline sm" id="open-customers-btn" style="flex:1;">👥 客戶</button>
-      <button class="btn outline sm" id="open-top-sku-btn" style="flex:1;">📈 熱銷</button>
+    <div class="row" style="gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+      <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
+      <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
+      <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
+      <button class="btn outline sm" id="open-return-analysis-btn" style="flex:1; min-width: 70px;">🔁 退貨</button>
     </div>
     <div class="history-search-row" style="position: relative; margin-bottom: 10px;">
       <input type="text" id="history-search" placeholder="🔍 搜尋寄件單號 / 客人姓名 / 手機 / SKU / 商品名 / 原因 / 備註..."
@@ -1600,6 +1612,22 @@ footer.summary-bar {
 
 <!-- PICKING VIEW: shown once a list is loaded -->
 <div id="picking-view" hidden>
+  <!-- 預估完成時間 banner -->
+  <div id="time-estimate-banner" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--primary-light), rgba(37,99,235,0.05)); border-radius: 10px; border-left: 4px solid var(--primary); font-size: 13px; display: flex; align-items: center; gap: 10px;">
+    <span style="font-size: 18px;">⏱</span>
+    <div style="flex: 1;">
+      <strong>預計 <span id="est-time">—</span></strong>
+      <div style="font-size: 11px; color: var(--text-soft); margin-top: 2px;">依過去 7 天平均包貨速度</div>
+    </div>
+  </div>
+  <!-- 房間動態 ticker -->
+  <div id="room-ticker" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--success-bg), rgba(22,163,74,0.08)); border-radius: 10px; border-left: 4px solid var(--success); font-size: 12px;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+      <span style="font-size: 14px;">🔔</span>
+      <strong style="font-size: 12px;">即時動態</strong>
+    </div>
+    <div id="room-ticker-list" style="font-size: 11px; line-height: 1.7;"></div>
+  </div>
   <!-- 裝箱掃描面板 (預設收合) -->
   <div id="scan-panel" class="scan-panel">
     <button class="scan-toggle" id="scan-toggle-btn">
@@ -1625,6 +1653,10 @@ footer.summary-bar {
       <button class="btn full" id="manual-parcel-id-btn" style="margin-top: 8px; padding: 12px; background: #166534; color: white; font-weight: 700; font-size: 14px;">
         📝 手動輸入 7-11 / 全家 編號
       </button>
+      <div style="margin-top: 6px; font-size: 11px; color: var(--text-soft); display: flex; align-items: center; gap: 6px;">
+        <span>💡 倍數: 輸入 <code style="background: var(--bg); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace;">*5</code> 後刷碼會 +5</span>
+        <span id="scan-multiplier-badge" hidden style="background: var(--warn); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 12px;">× 5</span>
+      </div>
       <div id="active-parcel" class="active-parcel" hidden>
         <div class="active-parcel-info">
           <div class="active-parcel-label">當前訂單</div>
@@ -1802,6 +1834,12 @@ footer.summary-bar {
         <input type="number" id="safety-stock-input" min="0" max="999" value="10"
                style="width: 100px; padding: 6px; font-size: 14px;">
         <p class="hint" style="font-size: 11px;">小於此數的 SKU 會在倉庫清冊跳 ⚠ 低 標籤。</p>
+
+        <div style="height: 12px;"></div>
+        <label style="display:flex; align-items:center; gap:8px; padding: 6px 0; font-size: 13px;">
+          <input type="checkbox" id="auto-low-stock-alert-input" style="transform: scale(1.2);"> 出貨後自動推 Discord 低庫存告警
+        </label>
+        <p class="hint" style="font-size: 11px;">出貨完成時若有 SKU 剛跨過低庫存閾值 (或變 0), 自動推訊息到 Discord webhook。</p>
       </details>
 
       <details style="margin-top: 12px;">
@@ -1818,6 +1856,16 @@ footer.summary-bar {
       <label style="display:flex; align-items:center; gap:8px; padding: 12px 0; font-size: 14px;">
         <input type="checkbox" id="sound-enabled-input" style="transform: scale(1.3);"> 開啟刷槍 / 完成聲音
       </label>
+
+      <div style="margin: 12px 0;">
+        <label style="display:block; font-size: 13px; margin-bottom: 6px;">音量 <span id="sound-volume-label" style="color: var(--primary); font-weight: 700;">50%</span></label>
+        <input type="range" id="sound-volume-input" min="0" max="100" step="5" value="50"
+               style="width: 100%; accent-color: var(--primary);">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-soft); margin-top: 2px;">
+          <span>靜音</span><span>50%</span><span>100%</span>
+        </div>
+      </div>
+
       <button class="btn full outline" id="sound-test-btn">🔉 測試出貨完成音 (3 連音)</button>
     </div>
 
@@ -1826,6 +1874,22 @@ footer.summary-bar {
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">🎨 外觀主題</h3>
       <p class="hint">挑一個眼睛舒服的配色。可隨時切換, 即刻套用。</p>
+
+      <div style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px;">
+        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">🔤 字體大小</label>
+        <div class="row" style="gap: 4px;">
+          <button class="btn outline sm" data-font-choice="small" style="flex: 1; font-size: 12px;">小</button>
+          <button class="btn outline sm" data-font-choice="medium" style="flex: 1; font-size: 14px;">中</button>
+          <button class="btn outline sm" data-font-choice="large" style="flex: 1; font-size: 16px;">大</button>
+          <button class="btn outline sm" data-font-choice="xlarge" style="flex: 1; font-size: 18px;">特大</button>
+        </div>
+      </div>
+      <div style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <input type="checkbox" id="glove-mode-input" style="transform: scale(1.3);"> 🧤 戴手套模式 (放大按鈕點擊區)
+        </label>
+        <p class="hint" style="font-size: 11px; margin: 6px 0 0;">戴手套包貨時開啟。</p>
+      </div>
 
       <div class="theme-picker" id="theme-picker">
         <button class="theme-option" data-theme-choice="default">
@@ -1889,6 +1953,14 @@ footer.summary-bar {
       <label style="display:block; font-size:12px; color:var(--text-soft);">Google Apps Script Web App URL</label>
       <input type="text" id="sheets-webhook-input" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:6px;">
       <button class="btn outline sm full" id="sheets-test-btn">📊 測試 Sheets</button>
+
+      <div style="margin-top: 14px; padding: 10px; background: var(--bg); border-radius: 8px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size: 13px; font-weight: 600;">
+          <input type="checkbox" id="auto-daily-backup-input" style="transform: scale(1.2);"> 💾 每日自動備份到 Discord
+        </label>
+        <p class="hint" style="font-size: 11px; margin: 6px 0;">每天打開 App 自動推完整 JSON 到 Discord (一天一次)。<span id="last-backup-info"></span></p>
+        <button class="btn outline sm full" id="manual-backup-btn" style="margin-top: 4px;">📤 立刻備份一次</button>
+      </div>
 
       <details style="margin-top:14px;">
         <summary>📖 Google Sheets 設定教學</summary>
@@ -2229,6 +2301,29 @@ footer.summary-bar {
   </div>
 </div>
 
+<!-- 退貨分析 modal -->
+<div class="modal-backdrop" id="return-analysis-modal" hidden>
+  <div class="modal" style="max-width: 640px;">
+    <h2>🔁 退貨分析</h2>
+    <p class="hint" style="font-size: 12px;">從退貨紀錄分析原因熱點 + 退貨最多的 SKU。</p>
+
+    <div class="filter-bar" id="return-range-bar" style="margin: 10px 0;">
+      <button data-return-range="month" class="active">本月</button>
+      <button data-return-range="lastmonth">上月</button>
+      <button data-return-range="quarter">本季</button>
+      <button data-return-range="year">今年</button>
+      <button data-return-range="all">全部</button>
+    </div>
+
+    <div id="return-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+
+    <div id="return-analysis-content" style="max-height: 60vh; overflow-y: auto;"></div>
+
+    <div style="height: 14px"></div>
+    <button class="btn full outline" id="return-analysis-close">關閉</button>
+  </div>
+</div>
+
 <!-- 補寄訂單 modal -->
 <div class="modal-backdrop" id="replacement-order-modal" hidden>
   <div class="modal" style="max-width: 540px;">
@@ -2414,6 +2509,16 @@ footer.summary-bar {
 
 <div class="toast" id="toast"></div>
 
+<!-- Undo FAB -->
+<button id="undo-fab" hidden style="position: fixed; bottom: 110px; right: 14px; z-index: 90;
+  background: #1f2937; color: white; border: 0; border-radius: 999px;
+  padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 6px; font-family: inherit;">
+  <span>↩ 撤回</span>
+  <span id="undo-fab-info" style="font-size: 11px; opacity: 0.85;">—</span>
+  <span id="undo-fab-countdown" style="background: rgba(255,255,255,0.2); border-radius: 10px; padding: 1px 8px; font-size: 11px;">5</span>
+</button>
+
 <script>
 const STATE_KEY = "picking_state_v2";
 const LIB_KEY = "picking_library_v1";
@@ -2490,10 +2595,51 @@ const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購
 let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null,
   // 房間模式
   roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, roomLastSyncAt: null,
+  myPacked: {}, // 房間模式: 本機追蹤「我」貢獻了多少 (不同步, 純顯示用)
 };
 let pendingEvents = [];   // 待上傳的事件 (room 模式才用)
-let syncTimer = null;     // setInterval handle
+let syncTimer = null;     // setTimeout handle
 let syncInFlight = false; // 防止平行同步
+let _consecutiveNoChange = 0; // 連續 server 回 didChange=false 的次數
+let _lastUserActivity = Date.now(); // 上次使用者活動時間
+
+let _quickSyncTimeout = null;
+let _activityBurstUntil = 0;
+function markUserActivity() {
+  _lastUserActivity = Date.now();
+  _consecutiveNoChange = 0;
+  // 我剛做了動作 → 500ms 後同步 (debounce, 連續動作合成一次), 對方馬上看到
+  if (_quickSyncTimeout) clearTimeout(_quickSyncTimeout);
+  _quickSyncTimeout = setTimeout(() => {
+    if (state.roomMode && !document.hidden) syncRoom();
+    _quickSyncTimeout = null;
+  }, 500);
+}
+
+function getActiveMemberCount() {
+  if (!state.roomMembers) return 0;
+  const now = Date.now();
+  return Object.values(state.roomMembers).filter(m =>
+    m && m.lastSeen && (now - new Date(m.lastSeen).getTime()) < 30000
+  ).length;
+}
+
+function getAdaptiveSyncInterval() {
+  const BURST_INTERVAL = 3000;    // 3 秒 (對方剛有動作, 30 秒內快速 catch)
+  const BASE_INTERVAL = 7000;     // 7 秒基礎
+  const IDLE_INTERVAL = 15000;    // 15 秒 (連續無變化 + 閒置)
+  const SOLO_INTERVAL = 30000;    // 30 秒 (獨自一人時)
+  const idleMs = Date.now() - _lastUserActivity;
+  const memberCount = getActiveMemberCount();
+  // Burst 模式: 對方剛有動作, 維持 30 秒快速輪詢
+  if (_activityBurstUntil && Date.now() < _activityBurstUntil && memberCount > 1) {
+    return BURST_INTERVAL;
+  }
+  // 獨自一人 → 30 秒輪詢就夠
+  if (memberCount <= 1) return SOLO_INTERVAL;
+  if (_consecutiveNoChange >= 5 && idleMs > 30000) return IDLE_INTERVAL;
+  return BASE_INTERVAL;
+}
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -2519,6 +2665,7 @@ const STOCKTAKE_HISTORY_KEY = "picking_stocktake_history_v1";
 // 設定 (聲音/webhook/主題/多人同步 等)
 let settings = {
   soundEnabled: true,
+  soundVolume: 50,  // 0-100, 預設 50%
   discordWebhook: "",
   sheetsWebhook: "",
   theme: "default", // "default" | "warm" | "dark"
@@ -2526,12 +2673,123 @@ let settings = {
   myName: "",       // 我的暱稱 (給房間其他人辨識用)
   autoDeductOnShip: true,  // 出貨完成後自動扣庫存
   safetyStockThreshold: 10, // 低於此值跳低庫存提醒
+  autoLowStockAlert: false, // 出貨後自動推 Discord 低庫存告警
+  autoDailyBackup: false,    // 每日自動備份到 Discord
+  lastBackupDate: null,      // 上次備份日期 (YYYY-MM-DD)
+  fontSize: "medium",        // "small" | "medium" | "large" | "xlarge"
+  gloveMode: false,          // 戴手套模式
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
 }
 function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) { console.warn("[settings] save failed", e); }
+}
+
+// ===== 💾 每日自動備份 =====
+async function doDailyBackupIfNeeded(force) {
+  if (!force) {
+    if (!settings.autoDailyBackup) return;
+    if (!settings.discordWebhook) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (settings.lastBackupDate === today) return;
+  }
+  if (!settings.discordWebhook) { showToast("⚠ 沒設 Discord webhook"); return; }
+  try {
+    const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString(), type: "auto-daily" } };
+    let count = 0;
+    for (const k of BACKUP_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v !== null) { dump[k] = v; count++; }
+    }
+    const json = JSON.stringify(dump, null, 2);
+    const today = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([json], { type: "application/json" });
+    const formData = new FormData();
+    formData.append("payload_json", JSON.stringify({
+      content: `📦 **${today} 每日備份**\n${count} 項資料 · ${(json.length / 1024).toFixed(1)} KB`,
+    }));
+    formData.append("file", blob, `picking_backup_${today}.json`);
+    const res = await fetch(settings.discordWebhook, { method: "POST", body: formData });
+    if (res.ok) {
+      settings.lastBackupDate = today;
+      saveSettings();
+      if (force) showToast(`✓ 已備份到 Discord (${count} 項)`);
+    } else {
+      if (force) showToast("⚠ Discord 拒絕: HTTP " + res.status);
+    }
+  } catch(e) {
+    if (force) showToast("⚠ 備份失敗: " + e.message);
+  }
+}
+
+// ===== ↩ 操作 Undo =====
+let _lastAction = null;
+let _undoTimer = null;
+let _undoCountdownTimer = null;
+function recordAction(action) {
+  _lastAction = { ...action, timestamp: Date.now() };
+  showUndoButton(action);
+}
+function showUndoButton(action) {
+  const btn = document.getElementById("undo-fab");
+  if (!btn) return;
+  btn.hidden = false;
+  document.getElementById("undo-fab-info").textContent = action.label || "";
+  let remain = 5;
+  const cd = document.getElementById("undo-fab-countdown");
+  if (cd) cd.textContent = remain;
+  if (_undoTimer) clearTimeout(_undoTimer);
+  if (_undoCountdownTimer) clearInterval(_undoCountdownTimer);
+  _undoCountdownTimer = setInterval(() => {
+    remain--;
+    if (remain <= 0) { clearInterval(_undoCountdownTimer); _undoCountdownTimer = null; return; }
+    const cd2 = document.getElementById("undo-fab-countdown");
+    if (cd2) cd2.textContent = remain;
+  }, 1000);
+  _undoTimer = setTimeout(() => {
+    hideUndoButton();
+    _lastAction = null;
+  }, 5000);
+}
+function hideUndoButton() {
+  const btn = document.getElementById("undo-fab");
+  if (btn) btn.hidden = true;
+  if (_undoCountdownTimer) { clearInterval(_undoCountdownTimer); _undoCountdownTimer = null; }
+  if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+}
+function undoLastAction() {
+  if (!_lastAction) return;
+  const a = _lastAction;
+  _lastAction = null;
+  hideUndoButton();
+  if (a.type === "scan_sku") {
+    const idx = state.items.findIndex(it => it.sku === a.sku);
+    if (idx >= 0) {
+      bumpPickItem(idx, -a.delta, { isUndo: true });
+      showToast(`↩ 已撤回 ${a.sku} ×${a.delta}`);
+      SOUND.scanError();
+    }
+  }
+}
+
+// ===== 🔔 房間動態 ticker =====
+let _tickerEntries = [];
+function addTickerEntry(entry) {
+  _tickerEntries.unshift(entry);
+  if (_tickerEntries.length > 5) _tickerEntries = _tickerEntries.slice(0, 5);
+  renderRoomTicker();
+}
+function renderRoomTicker() {
+  const banner = document.getElementById("room-ticker");
+  const list = document.getElementById("room-ticker-list");
+  if (!banner || !list) return;
+  if (!state.roomMode || _tickerEntries.length === 0) { banner.hidden = true; return; }
+  banner.hidden = false;
+  list.innerHTML = _tickerEntries.map(e => {
+    const t = e.time.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `<div>${t} <strong>${escapeHtml(e.who)}</strong> ${escapeHtml(e.action)} ${escapeHtml(e.target)}</div>`;
+  }).join("");
 }
 
 // ===== Web Audio 聲音提示 =====
@@ -2567,7 +2825,9 @@ document.addEventListener("click", unlockAudio);
 
 function playBeep(freq, duration, vol) {
   if (!settings.soundEnabled) return;
-  vol = vol || 0.25;
+  const userVolPct = (typeof settings.soundVolume === "number") ? settings.soundVolume : 50;
+  vol = (vol || 0.25) * (userVolPct / 100);
+  if (vol <= 0) return; // 0% 直接跳過
   try {
     if (!_audioCtx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -2696,38 +2956,20 @@ async function pushToDiscordRaw(body) {
   }
 }
 
-async function pushToDiscord(payload) {
-  if (!settings.discordWebhook) return { ok: false, error: "no_url" };
-  const url = settings.discordWebhook.trim();
-  if (!/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(url)) {
-    return { ok: false, error: "invalid_url", detail: "URL 不像 Discord webhook (應為 https://discord.com/api/webhooks/...)" };
-  }
-  try {
-    const embed = {
-      title: payload.title || "📦 出貨完成通知",
-      description: payload.description || "",
-      color: payload.color || 0x16a34a,
-      fields: payload.fields || [],
-      timestamp: new Date().toISOString(),
-      footer: { text: "Koca 出貨雙重確認" },
-    };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ embeds: [embed] }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn("[discord]", res.status, text);
-      return { ok: false, error: "http_" + res.status, detail: text.substring(0, 200) };
-    }
-    console.log("[discord] sent OK");
-    return { ok: true };
-  } catch(e) {
-    console.warn("[discord] failed", e);
-    return { ok: false, error: "network", detail: String(e.message || e) };
-  }
+async function pushLowStockAlert(skus, threshold) {
+  if (!settings.discordWebhook) return;
+  if (!skus || skus.length === 0) return;
+  const lines = skus.map(s => {
+    const icon = s.qty === 0 ? "🔴" : "🟡";
+    const nameStr = s.name ? ` ${s.name}` : "";
+    return `${icon} \`${s.sku}\`${nameStr} 剩 **${s.qty}** 件`;
+  });
+  const content = `⚠ **庫存告警** (出貨後自動扣帳偵測)\n安全庫存閾值: ${threshold} 件\n\n${lines.join("\n")}`;
+  await pushToDiscordRaw({ content });
 }
+
+// (pushToDiscord 已移除 - 改用 pushToDiscordRaw 配合 picking_outbound 格式)
+
 async function pushToSheets(payload) {
   if (!settings.sheetsWebhook) return { ok: false, error: "no_url" };
   const url = settings.sheetsWebhook.trim();
@@ -2795,6 +3037,7 @@ async function createRoom() {
     state.roomMembers = data.room.members || {};
     state.roomActiveParcels = {};
     state.roomLastSyncAt = new Date().toISOString();
+    state.myPacked = {}; // 新開房 → 我的貢獻歸零
     saveState();
     startSyncTimer();
     renderRoomBadge();
@@ -2831,6 +3074,7 @@ async function joinRoom(code) {
     state.roomMembers = room.members || {};
     state.roomActiveParcels = room.activeParcels || {};
     state.roomLastSyncAt = new Date().toISOString();
+    state.myPacked = {}; // 新加入房間 → 我的貢獻歸零
     state.loadedDate = new Date().toISOString().slice(0, 10);
     if (room.platform && PLATFORMS[room.platform]) {
       currentPlatform = room.platform;
@@ -2884,6 +3128,16 @@ async function syncRoom(opts) {
     }
     // 清掉已送出的事件 (注意: 新加進來的事件不要被清掉)
     pendingEvents = pendingEvents.slice(eventsToSend.length);
+    // 追蹤 server 回的 didChange (用於自適應頻率)
+    if (data.didChange === false) {
+      _consecutiveNoChange++;
+    } else {
+      _consecutiveNoChange = 0;
+      // 對方剛剛做了事 (有變化但我沒上傳事件) → 進入 30 秒快速輪詢 (catch 後續動作)
+      if ((data.applied || 0) === 0) {
+        _activityBurstUntil = Date.now() + 30000;
+      }
+    }
     mergeRoomState(data.room);
     state.roomLastSyncAt = new Date().toISOString();
   } catch(e) {
@@ -2926,6 +3180,18 @@ function mergeRoomState(serverRoom) {
   const serverParcels = serverRoom.completedParcels || [];
   const serverIds = new Set(serverParcels.map(p => p.id));
   const localPending = (state.completedParcels || []).filter(p => !serverIds.has(p.id));
+  // 偵測新增的別人完成的訂單 → 加到 ticker
+  const beforeIds = new Set((state.completedParcels || []).map(p => p.id));
+  for (const p of serverParcels) {
+    if (beforeIds.has(p.id)) continue;
+    if (p.packedBy === settings.myName) continue;
+    addTickerEntry({
+      time: new Date(p.completedAt || Date.now()),
+      who: p.packedBy || "(?)",
+      action: "✓ 完成",
+      target: p.id.length > 16 ? p.id.substring(0, 14) + ".." : p.id,
+    });
+  }
   state.completedParcels = [...serverParcels.map(p => ({ ...p })), ...localPending];
   state.roomMembers = serverRoom.members || {};
   state.roomActiveParcels = serverRoom.activeParcels || {};
@@ -2947,15 +3213,19 @@ function mergeRoomState(serverRoom) {
 }
 
 function startSyncTimer() {
-  if (syncTimer) clearInterval(syncTimer);
+  stopSyncTimer();
   if (!state.roomMode) return;
-  syncTimer = setInterval(() => {
-    // 視窗在背景時暫停 (省電池, 重新可見時會立刻補一次)
-    if (document.hidden) return;
-    syncRoom();
-  }, 5000);
   // 立即跑一次
   syncRoom();
+  // 自適應輪詢: 用 setTimeout 鏈, 每次都重算間隔
+  function scheduleNext() {
+    if (!state.roomMode) return; // 離房後停止
+    syncTimer = setTimeout(() => {
+      if (!document.hidden) syncRoom();
+      scheduleNext();
+    }, getAdaptiveSyncInterval());
+  }
+  scheduleNext();
 }
 
 // 視窗從背景切回前景: 立刻補一次同步 (避免錯過 5 秒空窗的更新)
@@ -3011,7 +3281,7 @@ window.addEventListener("pagehide", () => {
 });
 
 function stopSyncTimer() {
-  if (syncTimer) clearInterval(syncTimer);
+  if (syncTimer) clearTimeout(syncTimer);
   syncTimer = null;
 }
 
@@ -3035,7 +3305,13 @@ function leaveRoom(notifyServer) {
   state.roomCode = null;
   state.roomMembers = {};
   state.roomActiveParcels = {};
+  state.myPacked = {};
   pendingEvents = [];
+  // 清掉自適應同步殘留狀態 (避免下次加房時殘留)
+  _activityBurstUntil = 0;
+  _consecutiveNoChange = 0;
+  if (_quickSyncTimeout) { clearTimeout(_quickSyncTimeout); _quickSyncTimeout = null; }
+  _tickerEntries = [];
   saveState();
   renderRoomBadge();
   // 不清空 state.items / completedParcels (使用者可以繼續單機包剩下的)
@@ -3086,6 +3362,7 @@ function loadState() {
         if (typeof state.roomCode === "undefined") state.roomCode = null;
         if (!state.roomMembers) state.roomMembers = {};
         if (!state.roomActiveParcels) state.roomActiveParcels = {};
+        if (!state.myPacked) state.myPacked = {};
         console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels", state.replacementInfo ? "(補寄)" : (state.manualMode ? "(手建)" : ""));
       }
     }
@@ -3244,10 +3521,15 @@ function appendHistory() {
   const items = state.items.map(it => ({
     sku: it.sku, name: it.name || "", category: it.category || "其他",
     expected: it.expected, packed: it.packed,
+    essential: !!it.essential,
   }));
   const totalExpected = items.reduce((s, it) => s + it.expected, 0);
   const totalPacked = items.reduce((s, it) => s + it.packed, 0);
-  const completedSkus = items.filter(it => it.packed === it.expected).length;
+  // 完成率: 只算「正常商品」(非必要商品 + expected > 0), 已裝數 cap 到 expected 防超 100%
+  const _normalForRate = items.filter(it => !it.essential && it.expected > 0);
+  const _normalExpected = _normalForRate.reduce((s, it) => s + it.expected, 0);
+  const _normalPackedCapped = _normalForRate.reduce((s, it) => s + Math.min(it.packed, it.expected), 0);
+  const completedSkus = _normalForRate.filter(it => it.packed >= it.expected).length;
   const entry = {
     id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     completedAt: new Date().toISOString(),
@@ -3263,7 +3545,7 @@ function appendHistory() {
       totalSku: items.length,
       completedSku: completedSkus,
       totalExpected, totalPacked,
-      completionRate: totalExpected > 0 ? Math.round(totalPacked / totalExpected * 100) : 0,
+      completionRate: _normalExpected > 0 ? Math.round(_normalPackedCapped / _normalExpected * 100) : (totalPacked > 0 ? 100 : 0),
       parcelCount: (state.completedParcels || []).length,
     },
   };
@@ -3749,13 +4031,31 @@ function renderPicking() {
         const currentActive = it.packed - skuShipped;
         const remaining = it.expected - skuShipped;
         const allDone = skuShipped >= it.expected;
+        // 房間模式: 計算「我」貢獻的量 (本機追蹤, 不含同事的)
+        const myPackedQty = state.roomMode ? ((state.myPacked && state.myPacked[it.sku]) || 0) : null;
         // 手建模式 item (expected=0): 顯示為「✓ X」沒有目標分母
         let qtyHtml;
         let manualBadge = "";
         if (it.expected === 0) {
-          qtyHtml = `<span class="current ${currentActive > 0 ? 'done' : ''}">${currentActive}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
+          // 手建/必要商品: 房間模式顯示我裝, 單機顯示 currentActive
+          const showQty = state.roomMode ? myPackedQty : currentActive;
+          qtyHtml = `<span class="current ${showQty > 0 ? 'done' : ''}">${showQty}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
           manualBadge = ' <span class="essential-badge" style="background: var(--primary-light); color: var(--primary);">📝 手建</span>';
+        } else if (state.roomMode) {
+          // 房間模式: 大數字 = 我裝的, 子行 = 團隊進度 + 我跟對方分項
+          const teamNeed = remaining;          // 團隊還要包幾件
+          const teamGot = currentActive;        // 團隊目前已包幾件
+          const teamDone = teamGot >= teamNeed; // 團隊有沒有包齊
+          const othersQty = Math.max(0, teamGot - myPackedQty); // 對方包的件數
+          let subline;
+          if (teamDone) {
+            subline = `<div class="shipped-note" style="color: var(--success); font-weight: 700;">✓ 團隊已包齊 (我 ${myPackedQty} + 同事 ${othersQty})</div>`;
+          } else {
+            subline = `<div class="shipped-note" style="color: var(--text-soft);">👤 我 <strong>${myPackedQty}</strong> · 👥 同事 <strong>${othersQty}</strong> · <span style="color: var(--danger);">還缺 ${Math.max(0, teamNeed - teamGot)}</span></div>`;
+          }
+          qtyHtml = `<span class="current ${teamDone ? 'done' : ''}">${myPackedQty}</span><span class="sep">/</span><span class="expected shipped-remaining">${it.expected}</span>${subline}`;
         } else {
+          // 單機模式: 原邏輯
           qtyHtml = allDone
             ? `<span class="current done">${skuShipped}</span><span class="sep">/</span><span class="expected done">${it.expected}</span>`
             : `<span class="current">${currentActive}</span><span class="sep">/</span><span class="expected shipped-remaining">${remaining}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
@@ -3799,11 +4099,17 @@ function renderPicking() {
   const totalSku = normalItems.length;
   const doneSku = normalItems.filter(it => statusOf(it, shipped) === "done").length;
   const expectedQty = normalItems.reduce((s, it) => s + it.expected, 0);
-  const packedQty = normalItems.reduce((s, it) => s + it.packed, 0);
+  const packedQty = normalItems.reduce((s, it) => s + it.packed, 0); // 團隊總包
   const pct = expectedQty > 0 ? Math.round((packedQty / expectedQty) * 100) : 0;
   document.getElementById("done-count").textContent = doneSku;
   document.getElementById("total-count").textContent = totalSku;
-  document.getElementById("packed-qty").textContent = packedQty;
+  // 房間模式: 件數顯示「我裝 / 團隊總」
+  if (state.roomMode) {
+    const myTotal = normalItems.reduce((s, it) => s + ((state.myPacked && state.myPacked[it.sku]) || 0), 0);
+    document.getElementById("packed-qty").textContent = `${myTotal} (團隊 ${packedQty})`;
+  } else {
+    document.getElementById("packed-qty").textContent = packedQty;
+  }
   document.getElementById("expected-qty").textContent = expectedQty;
   document.getElementById("pct").textContent = pct + "%";
   document.getElementById("progress-fill").style.width = Math.min(100, pct) + "%";
@@ -3919,6 +4225,17 @@ function applyA1MappingToPickingList() {
         sku: p.sku, name: p.name, category: p.category,
         expected: 0, packed: 0, essential: true
       });
+    }
+  }
+
+  // 異常偵測 (庫存不足 / 不認識 SKU / 數量異常)
+  const anomalies = detectCsvAnomalies(items);
+  if (anomalies.length > 0) {
+    if (!confirm(buildAnomalyConfirmMessage(anomalies))) {
+      showToast("已取消匯入");
+      pendingA1 = [];
+      render();
+      return false;
     }
   }
 
@@ -4109,6 +4426,51 @@ function parseStockCsv(text) {
     items.push({ sku, name, qty: Math.round(qty) });
   }
   return items;
+}
+
+// ===== ⏱ 訂單預估包貨時間 =====
+function estimatePackingTime() {
+  if (!history || history.length === 0) return null;
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  let totalSec = 0;
+  let totalItems = 0;
+  for (const entry of history) {
+    if (new Date(entry.completedAt).getTime() < cutoff) continue;
+    for (const p of (entry.parcels || [])) {
+      if (!p.startedAt || !p.completedAt) continue;
+      const dur = (new Date(p.completedAt) - new Date(p.startedAt)) / 1000;
+      if (dur <= 0 || dur > 1800) continue;
+      const items = Object.values(p.items || {}).reduce((s, q) => s + q, 0);
+      if (items > 0) { totalSec += dur; totalItems += items; }
+    }
+  }
+  if (totalItems === 0) return null;
+  const avgSecPerItem = totalSec / totalItems;
+  const remainingItems = state.items
+    .filter(it => !it.essential)
+    .reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
+  return { avgSecPerItem, remainingItems, estimatedSec: remainingItems * avgSecPerItem, sampleItems: totalItems };
+}
+
+function renderTimeEstimate() {
+  const banner = document.getElementById("time-estimate-banner");
+  if (!banner) return;
+  const est = estimatePackingTime();
+  if (!est || est.remainingItems === 0 || est.sampleItems < 10) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  const mins = est.estimatedSec / 60;
+  let timeText;
+  if (mins < 1) timeText = "不到 1 分鐘";
+  else if (mins < 60) timeText = `${Math.round(mins)} 分鐘`;
+  else {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    timeText = m > 0 ? `${h} 小時 ${m} 分` : `${h} 小時`;
+  }
+  document.getElementById("est-time").textContent = `${timeText} 完成 (剩 ${est.remainingItems} 件 · ${est.avgSecPerItem.toFixed(0)} 秒/件)`;
 }
 
 // ===== 🔍 盤點功能 =====
@@ -4483,6 +4845,10 @@ document.getElementById("auto-deduct-input").addEventListener("change", (e) => {
   settings.autoDeductOnShip = e.target.checked;
   saveSettings();
 });
+document.getElementById("auto-low-stock-alert-input").addEventListener("change", (e) => {
+  settings.autoLowStockAlert = e.target.checked;
+  saveSettings();
+});
 document.getElementById("safety-stock-input").addEventListener("change", (e) => {
   const v = parseInt(e.target.value, 10);
   if (isNaN(v) || v < 0) return;
@@ -4500,6 +4866,7 @@ showSettingsView = function(view) {
     renderStockTakeStatusInSettings();
     document.getElementById("auto-deduct-input").checked = !!settings.autoDeductOnShip;
     document.getElementById("safety-stock-input").value = settings.safetyStockThreshold || 10;
+    document.getElementById("auto-low-stock-alert-input").checked = !!settings.autoLowStockAlert;
   }
 };
 
@@ -4674,6 +5041,242 @@ function renderCustomers(query) {
       </div>
     `;
   }).join("");
+}
+
+// ===== 🔁 退貨原因熱力圖分析 =====
+const RETURN_REASONS = ["不喜歡/不適合", "商品瑕疵", "商品錯誤", "運送破損", "7天鑑賞期", "其他"];
+
+function computeReturnAnalysis(range) {
+  const cutoff = getRangeCutoff(range);
+  let until = new Date();
+  if (range === "lastmonth") {
+    const now = new Date();
+    until = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  // 抓 retorns + normal (同期出貨, 算退貨率)
+  let returnEntries = 0;
+  let returnItems = 0;
+  let shippedItems = 0;
+  const reasonCount = {};      // {reason: count}
+  const skuReturnCount = {};   // {sku: count}
+  const skuReasonGrid = {};    // {sku: {reason: count}}
+  for (const e of (history || [])) {
+    const ts = new Date(e.completedAt);
+    if (ts < cutoff) continue;
+    if (range === "lastmonth" && ts >= until) continue;
+    if (e.orderType === "return") {
+      returnEntries++;
+      const reason = e.returnInfo && e.returnInfo.reason || "(未填)";
+      reasonCount[reason] = (reasonCount[reason] || 0) + 1;
+      for (const it of (e.items || [])) {
+        if (it.essential) continue;
+        if ((it.packed || 0) <= 0) continue;
+        returnItems += it.packed;
+        skuReturnCount[it.sku] = (skuReturnCount[it.sku] || 0) + it.packed;
+        if (!skuReasonGrid[it.sku]) skuReasonGrid[it.sku] = {};
+        skuReasonGrid[it.sku][reason] = (skuReasonGrid[it.sku][reason] || 0) + it.packed;
+      }
+    } else if (e.orderType !== "replacement") {
+      for (const it of (e.items || [])) {
+        if (it.essential) continue;
+        shippedItems += it.packed || 0;
+      }
+    }
+  }
+  return { returnEntries, returnItems, shippedItems, reasonCount, skuReturnCount, skuReasonGrid };
+}
+
+let _returnRange = "month";
+
+function renderReturnAnalysis(range) {
+  const data = computeReturnAnalysis(range);
+  const summary = document.getElementById("return-summary");
+  const content = document.getElementById("return-analysis-content");
+  const rate = data.shippedItems > 0 ? (data.returnItems / data.shippedItems * 100).toFixed(1) : "—";
+  if (data.returnEntries === 0) {
+    summary.innerHTML = `此區間沒有退貨紀錄`;
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有退貨紀錄</div></div>';
+    return;
+  }
+  summary.innerHTML = `退貨 <strong>${data.returnEntries}</strong> 次 · <strong>${data.returnItems}</strong> 件 · 退貨率 <strong>${rate}%</strong> (vs 同期出貨 ${data.shippedItems} 件)`;
+
+  // 退貨原因排行
+  const reasonsRanked = Object.entries(data.reasonCount).sort((a, b) => b[1] - a[1]);
+  const maxReason = reasonsRanked.length > 0 ? reasonsRanked[0][1] : 1;
+  let reasonHtml = '<h3 style="font-size: 14px; margin: 0 0 8px;">📊 退貨原因排行</h3>';
+  for (const [reason, count] of reasonsRanked) {
+    const pct = Math.max(2, Math.round(count / maxReason * 100));
+    reasonHtml += `
+      <div style="margin-bottom: 6px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+          <span>${escapeHtml(reason)}</span>
+          <strong>${count} 次</strong>
+        </div>
+        <div style="background: var(--bg); height: 6px; border-radius: 3px; overflow: hidden;">
+          <div style="background: var(--warn); height: 100%; width: ${pct}%;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 退貨最多 SKU
+  const skuRanked = Object.entries(data.skuReturnCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  let skuHtml = '<h3 style="font-size: 14px; margin: 16px 0 8px;">🔴 退貨次數最多 SKU (Top 10)</h3>';
+  if (skuRanked.length === 0) {
+    skuHtml += '<div class="hint" style="text-align: center;">無</div>';
+  } else {
+    const maxSku = skuRanked[0][1];
+    for (const [sku, count] of skuRanked) {
+      const pct = Math.max(2, Math.round(count / maxSku * 100));
+      const libItem = library.find(p => p.sku === sku);
+      const name = (libItem && libItem.name) || "";
+      const reasonsForSku = data.skuReasonGrid[sku] || {};
+      const topReasonsText = Object.entries(reasonsForSku).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r, c]) => `${r} ${c}`).join(" · ");
+      skuHtml += `
+        <div style="margin-bottom: 8px; padding: 8px 10px; background: var(--bg); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <strong style="font-size: 13px; font-family: ui-monospace, monospace;">${escapeHtml(sku)}</strong>
+            <span style="color: var(--danger); font-weight: 700; font-size: 14px;">${count} 件</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-soft); margin: 2px 0;">${escapeHtml(name)}</div>
+          <div style="background: var(--border-light); height: 4px; border-radius: 2px; overflow: hidden; margin: 4px 0;">
+            <div style="background: var(--danger); height: 100%; width: ${pct}%;"></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-soft);">主因: ${escapeHtml(topReasonsText)}</div>
+        </div>
+      `;
+    }
+  }
+
+  // 熱力圖: 原因 × Top SKU
+  let heatmapHtml = '<h3 style="font-size: 14px; margin: 16px 0 8px;">🌡 熱力圖 (原因 × Top SKU)</h3>';
+  if (skuRanked.length > 0) {
+    const topSkus = skuRanked.slice(0, 8).map(([sku]) => sku);
+    // 找最大值給顏色強度
+    let maxCell = 1;
+    for (const sku of topSkus) {
+      for (const r of RETURN_REASONS) {
+        const c = (data.skuReasonGrid[sku] && data.skuReasonGrid[sku][r]) || 0;
+        if (c > maxCell) maxCell = c;
+      }
+    }
+    heatmapHtml += '<div style="overflow-x: auto;"><table style="border-collapse: collapse; font-size: 11px; min-width: 100%;">';
+    // header
+    heatmapHtml += '<thead><tr><th style="text-align: left; padding: 4px 6px; font-weight: 600; background: var(--bg); position: sticky; left: 0;">SKU</th>';
+    for (const r of RETURN_REASONS) {
+      heatmapHtml += `<th style="text-align: center; padding: 4px 4px; font-weight: 600; background: var(--bg); font-size: 10px; min-width: 60px;">${escapeHtml(r)}</th>`;
+    }
+    heatmapHtml += '</tr></thead><tbody>';
+    for (const sku of topSkus) {
+      heatmapHtml += `<tr><td style="padding: 4px 6px; font-family: ui-monospace, monospace; background: white; position: sticky; left: 0;">${escapeHtml(sku)}</td>`;
+      for (const r of RETURN_REASONS) {
+        const c = (data.skuReasonGrid[sku] && data.skuReasonGrid[sku][r]) || 0;
+        const intensity = c > 0 ? Math.min(1, c / maxCell) : 0;
+        const bg = c > 0 ? `rgba(220, 38, 38, ${intensity * 0.75 + 0.1})` : "transparent";
+        const fg = intensity > 0.5 ? "white" : "var(--text)";
+        heatmapHtml += `<td style="text-align: center; padding: 4px 4px; background: ${bg}; color: ${fg}; font-weight: ${c > 0 ? 700 : 400};">${c > 0 ? c : "·"}</td>`;
+      }
+      heatmapHtml += '</tr>';
+    }
+    heatmapHtml += '</tbody></table></div>';
+    heatmapHtml += '<p class="hint" style="font-size: 11px; margin-top: 6px;">紅色越深 = 該 SKU 因該原因退貨件數越多</p>';
+  }
+
+  content.innerHTML = reasonHtml + skuHtml + heatmapHtml;
+}
+
+// 退貨分析事件
+document.getElementById("open-return-analysis-btn").addEventListener("click", () => {
+  document.getElementById("return-analysis-modal").hidden = false;
+  renderReturnAnalysis(_returnRange);
+  document.querySelectorAll("#return-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.returnRange === _returnRange));
+});
+document.getElementById("return-analysis-close").addEventListener("click", () => {
+  document.getElementById("return-analysis-modal").hidden = true;
+});
+document.getElementById("return-analysis-modal").addEventListener("click", (e) => {
+  if (e.target.id === "return-analysis-modal") document.getElementById("return-analysis-modal").hidden = true;
+});
+document.getElementById("return-range-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-return-range]");
+  if (!btn) return;
+  _returnRange = btn.dataset.returnRange;
+  document.querySelectorAll("#return-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
+  renderReturnAnalysis(_returnRange);
+});
+
+// ===== ⚠ 異常 CSV 偵測 =====
+function detectCsvAnomalies(items) {
+  const issues = [];
+  // 1. 庫存不足
+  if (Object.keys(stockMap).length > 0) {
+    const needed = {};
+    for (const it of items) {
+      if (it.essential) continue;
+      if (!it.expected) continue;
+      needed[it.sku] = (needed[it.sku] || 0) + it.expected;
+    }
+    for (const sku in needed) {
+      const need = needed[sku];
+      const have = (stockMap[sku] && stockMap[sku].qty) || 0;
+      if (have < need) {
+        const libItem = library.find(p => p.sku === sku);
+        issues.push({
+          level: have === 0 ? "critical" : "warning",
+          type: "stock_short",
+          sku, need, have,
+          name: (libItem && libItem.name) || (stockMap[sku] && stockMap[sku].name) || "",
+          message: `庫存 ${have} 件 < 需要 ${need} 件 (差 ${need - have} 件)`,
+        });
+      }
+    }
+  }
+  // 2. 不在商品庫的 SKU
+  const seenUnknowns = new Set();
+  for (const it of items) {
+    if (it.essential) continue;
+    if (!library.find(p => p.sku === it.sku)) {
+      if (seenUnknowns.has(it.sku)) continue;
+      seenUnknowns.add(it.sku);
+      issues.push({
+        level: "warning",
+        type: "unknown_sku",
+        sku: it.sku,
+        name: it.name || "",
+        message: `不在商品庫 (建議先到商品庫加入)`,
+      });
+    }
+  }
+  // 3. 異常高數量
+  for (const it of items) {
+    if (it.essential) continue;
+    if (it.expected > 50) {
+      issues.push({
+        level: "info",
+        type: "high_qty",
+        sku: it.sku,
+        name: it.name || "",
+        message: `單一 SKU 數量 ${it.expected} 件, 較少見, 請確認`,
+      });
+    }
+  }
+  return issues;
+}
+
+function buildAnomalyConfirmMessage(issues) {
+  const byLevel = { critical: [], warning: [], info: [] };
+  for (const i of issues) byLevel[i.level].push(i);
+  let msg = `⚠ CSV 偵測到 ${issues.length} 個異常:\n\n`;
+  const fmt = (i) => {
+    const icon = i.level === "critical" ? "🔴" : (i.level === "warning" ? "🟡" : "ℹ");
+    const nameSuf = i.name ? " " + i.name.substring(0, 20) : "";
+    return `${icon} ${i.sku}${nameSuf}: ${i.message}`;
+  };
+  if (byLevel.critical.length > 0) msg += "【嚴重】\n" + byLevel.critical.map(fmt).join("\n") + "\n\n";
+  if (byLevel.warning.length > 0) msg += "【警告】\n" + byLevel.warning.map(fmt).join("\n") + "\n\n";
+  if (byLevel.info.length > 0) msg += "【提示】\n" + byLevel.info.map(fmt).join("\n") + "\n\n";
+  msg += "仍要繼續匯入嗎?";
+  return msg;
 }
 
 // ===== 📈 熱銷 SKU =====
@@ -4986,6 +5589,18 @@ function toggleScanMode() {
   // (開啟掃描模式時不強制 focus, 全域監聽會接管)
 }
 
+// ===== ×N 倍數模式 =====
+let _scanMultiplier = 1;
+function renderMultiplierBadge() {
+  const el = document.getElementById("scan-multiplier-badge");
+  if (!el) return;
+  if (_scanMultiplier > 1) {
+    el.hidden = false;
+    el.textContent = `× ${_scanMultiplier}`;
+  } else {
+    el.hidden = true;
+  }
+}
 // 從刷槍輸入抽出真實寄件編號 (處理 7-11 JSON QR 等情況)
 function extractParcelId(raw) {
   if (!raw) return "";
@@ -5157,10 +5772,32 @@ function makeTrackingButtonsHtml(parcelId, opts) {
 }
 
 function processScan(code) {
+  // ×N 倍數模式偵測
+  const _rawTrim = (code || "").trim();
+  const _mStandalone = _rawTrim.match(/^\*(\d+)$/);
+  if (_mStandalone) {
+    _scanMultiplier = Math.max(1, Math.min(99, parseInt(_mStandalone[1], 10)));
+    renderMultiplierBadge();
+    SOUND.scanSku();
+    showToast(`✕${_scanMultiplier} 倍數模式啟用, 下次刷 SKU 自動 ×${_scanMultiplier}`);
+    return;
+  }
+  const _mInline = _rawTrim.match(/^\*(\d+)\s*(.+)$/);
+  if (_mInline) {
+    _scanMultiplier = Math.max(1, Math.min(99, parseInt(_mInline[1], 10)));
+    code = _mInline[2].trim();
+    renderMultiplierBadge();
+  }
+  const _mul = _scanMultiplier;
+
   const original = code;
   window._lastScanWasInternalQr = null;
   code = extractParcelId(code);
-  if (!code) return;
+  if (!code) {
+    _scanMultiplier = 1; renderMultiplierBadge();
+    return;
+  }
+  markUserActivity(); // 任何掃描都算活動
   if (original !== code) console.log("[scan] extracted", code, "from", original.substring(0, 60) + (original.length > 60 ? "..." : ""));
   console.log("[scan]", code);
   // 內部 QR 提示: 邀請使用者改用面單上的服務代碼
@@ -5193,10 +5830,11 @@ function processScan(code) {
     const idx = state.items.findIndex(it => it.sku === matchedProd.sku);
     if (idx >= 0) {
       SOUND.scanSku();
-      bumpPickItem(idx, 1);
+      bumpPickItem(idx, _mul);
+      _scanMultiplier = 1; renderMultiplierBadge();
       const it = state.items[idx];
       if (it.essential || (it.packed < it.expected) || it.expected === 0) {
-        showToast(`+1 ${matchedProd.sku}`);
+        showToast(`+${_mul} ${matchedProd.sku}`);
       }
       return;
     } else {
@@ -5211,8 +5849,9 @@ function processScan(code) {
         });
         const newIdx = state.items.length - 1;
         SOUND.scanSku();
-        bumpPickItem(newIdx, 1);
-        showToast(`📝 加入 ${matchedProd.sku} ×1`);
+        bumpPickItem(newIdx, _mul);
+        _scanMultiplier = 1; renderMultiplierBadge();
+        showToast(`📝 加入 ${matchedProd.sku} ×${_mul}`);
         return;
       }
       SOUND.scanError();
@@ -5315,6 +5954,8 @@ function processScan(code) {
   saveState();
   renderScanPanel();
   renderPicking(); // 重要: SKU 列表也要重繪, 顯示「已出 X」「0/餘」
+  // 倉鼠保險: 不管走哪條最後都重置倍數
+  _scanMultiplier = 1; renderMultiplierBadge();
 }
 
 function startParcel(id) {
@@ -5512,7 +6153,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); }
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
 }
@@ -5601,10 +6242,19 @@ function bumpPickItem(idx, delta, options) {
       return;
     }
   }
+  const _wasPacked = it.packed;
   it.packed = Math.max(0, it.packed + delta);
-  // 房間模式: 把這次變動上傳給其他同仁
+  const _actualDelta = it.packed - _wasPacked;
+  // 房間模式: 把這次變動上傳給其他同仁 + 追蹤「我」貢獻
   if (state.roomMode && delta !== 0) {
+    if (!state.myPacked) state.myPacked = {};
+    state.myPacked[it.sku] = Math.max(0, (state.myPacked[it.sku] || 0) + delta);
     queueRoomEvent("scan_sku", { sku: it.sku, deltaQty: delta });
+    markUserActivity();
+  }
+  // 紀錄到 undo (排除 isUndo 自己 / 連動規則 child / 負 delta / 零 delta)
+  if (!options.isUndo && !options.suppressBundle && _actualDelta > 0 && delta > 0) {
+    recordAction({ type: "scan_sku", sku: it.sku, delta: _actualDelta, label: `${it.sku} +${_actualDelta}` });
   }
   // 若在掃描模式且有 active parcel, 紀錄到當前訂單
   if (state.scanMode && state.activeParcel && delta !== 0) {
@@ -6090,6 +6740,14 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         for (const p of library) {
           if (p.essential && !newItems.find(it => it.sku === p.sku)) {
             newItems.push({ sku: p.sku, name: p.name, category: p.category, expected: 0, packed: 0, essential: true });
+          }
+        }
+        // 異常偵測
+        const anomalies = detectCsvAnomalies(newItems);
+        if (anomalies.length > 0) {
+          if (!confirm(buildAnomalyConfirmMessage(anomalies))) {
+            showToast("已取消匯入");
+            return;
           }
         }
         state.items = newItems;
@@ -6818,7 +7476,7 @@ document.addEventListener("keydown", (e) => {
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
   // 若任何 modal 開啟中, 不攔截 (避免衝突)
   // 補上 merge-modal, health-modal (追加合併確認 / 出貨健康檢查), 避免在 modal 中刷錯
-  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "return-order-modal", "create-room-modal", "join-room-modal", "room-info-modal", "manual-parcel-id-modal", "perf-stats-modal", "customers-modal", "top-sku-modal"];
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "return-order-modal", "create-room-modal", "join-room-modal", "room-info-modal", "manual-parcel-id-modal", "perf-stats-modal", "customers-modal", "top-sku-modal", "return-analysis-modal"];
   for (const id of modals) {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
@@ -6984,6 +7642,10 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   showSettingsView("menu"); // 每次開啟回主選單
   // 載入當前設定到 UI
   document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
+  const _svInp = document.getElementById("sound-volume-input");
+  const _svLbl = document.getElementById("sound-volume-label");
+  if (_svInp) _svInp.value = settings.soundVolume || 50;
+  if (_svLbl) _svLbl.textContent = (settings.soundVolume || 50) + "%";
   document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
   document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
   const swUrl = document.getElementById("sync-worker-url-input");
@@ -7142,6 +7804,38 @@ document.getElementById("room-badge").addEventListener("click", () => {
   const m = document.getElementById("room-info-modal");
   const content = document.getElementById("room-info-content");
   const now = Date.now();
+  // 即時績效 (從 completedParcels 算, 純本機算)
+  const liveStats = {};
+  for (const p of (state.completedParcels || [])) {
+    const packer = p.packedBy || "(未標)";
+    if (!liveStats[packer]) liveStats[packer] = { parcels: 0, items: 0 };
+    liveStats[packer].parcels++;
+    liveStats[packer].items += Object.values(p.items || {}).reduce((s, q) => s + q, 0);
+  }
+  const liveRanked = Object.entries(liveStats).sort((a, b) => b[1].parcels - a[1].parcels);
+  let liveStatsHtml = "";
+  if (liveRanked.length > 0) {
+    const maxParcels = liveRanked[0][1].parcels;
+    liveStatsHtml = '<h3 style="font-size: 13px; margin: 0 0 8px;">📊 本次包貨即時對比</h3>';
+    for (const [name, st] of liveRanked) {
+      const pct = maxParcels > 0 ? Math.max(4, Math.round(st.parcels / maxParcels * 100)) : 0;
+      const isMe = name === settings.myName;
+      const myMarker = isMe ? ' <span style="font-size: 10px; color: var(--primary); font-weight: 700;">(你)</span>' : '';
+      liveStatsHtml += `
+        <div style="margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+            <span><strong>${escapeHtml(name)}</strong>${myMarker}</span>
+            <span><strong style="color: var(--primary);">${st.parcels}</strong> 單 · ${st.items} 件</span>
+          </div>
+          <div style="background: var(--border-light); height: 6px; border-radius: 3px; overflow: hidden;">
+            <div style="background: ${isMe ? 'var(--primary)' : 'var(--text-soft)'}; height: 100%; width: ${pct}%;"></div>
+          </div>
+        </div>
+      `;
+    }
+    liveStatsHtml += '<div style="height: 4px;"></div>';
+  }
+
   const memberRows = Object.entries(state.roomMembers || {}).map(([name, info]) => {
     const lastSeenMs = info && info.lastSeen ? new Date(info.lastSeen).getTime() : 0;
     const sinceMs = now - lastSeenMs;
@@ -7168,6 +7862,7 @@ document.getElementById("room-badge").addEventListener("click", () => {
       <div style="font-size: 32px; font-weight: 700; letter-spacing: 4px; font-family: ui-monospace, monospace; color: var(--primary);">${escapeHtml(state.roomCode || "—")}</div>
       <div style="font-size: 11px; color: var(--text-soft); margin-top: 4px;">最後同步: ${lastSync}</div>
     </div>
+    ${liveStatsHtml}
     <h3 style="font-size: 13px; margin: 0 0 8px;">成員 (${Object.keys(state.roomMembers || {}).length})</h3>
     ${memberRows}
   `;
@@ -7187,7 +7882,17 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
   const card = e.target.closest("button[data-settings-view]");
   if (card) {
     showSettingsView(card.dataset.settingsView);
-    if (card.dataset.settingsView === "theme") refreshThemePicker();
+    if (card.dataset.settingsView === "theme") {
+      refreshThemePicker();
+      refreshFontPicker();
+      const _gm = document.getElementById("glove-mode-input");
+      if (_gm) _gm.checked = !!settings.gloveMode;
+    }
+    if (card.dataset.settingsView === "integration") {
+      const _adb = document.getElementById("auto-daily-backup-input");
+      if (_adb) _adb.checked = !!settings.autoDailyBackup;
+      if (typeof updateBackupInfoLabel === "function") updateBackupInfoLabel();
+    }
     return;
   }
   const back = e.target.closest("button[data-settings-back]");
@@ -7205,6 +7910,15 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
     showToast(`✓ 已切換到「${themeChoice.querySelector(".theme-name").textContent.trim()}」`);
     return;
   }
+  const fontChoice = e.target.closest("button[data-font-choice]");
+  if (fontChoice) {
+    settings.fontSize = fontChoice.dataset.fontChoice;
+    saveSettings();
+    applyFontSize(settings.fontSize);
+    refreshFontPicker();
+    showToast(`✓ 字體已調整`);
+    return;
+  }
 });
 
 function applyTheme(theme) {
@@ -7213,6 +7927,14 @@ function applyTheme(theme) {
   } else {
     document.documentElement.setAttribute("data-theme", theme);
   }
+}
+function applyFontSize(size) {
+  if (!size || size === "medium") document.documentElement.removeAttribute("data-font-size");
+  else document.documentElement.setAttribute("data-font-size", size);
+}
+function applyGloveMode(enabled) {
+  if (enabled) document.documentElement.setAttribute("data-glove-mode", "1");
+  else document.documentElement.removeAttribute("data-glove-mode");
 }
 function refreshThemePicker() {
   const current = settings.theme || "default";
@@ -7225,6 +7947,16 @@ document.getElementById("sound-enabled-input").addEventListener("change", (e) =>
   settings.soundEnabled = e.target.checked;
   saveSettings();
   if (e.target.checked) SOUND.scanSku();
+});
+document.getElementById("sound-volume-input").addEventListener("input", (e) => {
+  const v = parseInt(e.target.value, 10);
+  settings.soundVolume = isNaN(v) ? 50 : Math.max(0, Math.min(100, v));
+  document.getElementById("sound-volume-label").textContent = settings.soundVolume + "%";
+  saveSettings();
+});
+document.getElementById("sound-volume-input").addEventListener("change", () => {
+  // 拉完手指放開時測一下音 (讓使用者馬上聽到效果)
+  if (settings.soundVolume > 0) playBeep(880, 80);
 });
 document.getElementById("sound-test-btn").addEventListener("click", () => {
   SOUND.shipDone();
@@ -7325,6 +8057,51 @@ document.getElementById("sheets-webhook-input").addEventListener("input", (e) =>
   settings.sheetsWebhook = e.target.value.trim();
   saveSettings();
 });
+
+// 每日自動備份
+function updateBackupInfoLabel() {
+  const el = document.getElementById("last-backup-info");
+  if (!el) return;
+  if (settings.lastBackupDate) el.innerHTML = ` <span style="color: var(--success);">最後備份: ${settings.lastBackupDate}</span>`;
+  else el.innerHTML = ' <span style="color: var(--text-soft);">尚未備份</span>';
+}
+const _adbInp = document.getElementById("auto-daily-backup-input");
+if (_adbInp) {
+  _adbInp.addEventListener("change", (e) => {
+    settings.autoDailyBackup = e.target.checked;
+    saveSettings();
+    updateBackupInfoLabel();
+  });
+}
+const _mbBtn = document.getElementById("manual-backup-btn");
+if (_mbBtn) {
+  _mbBtn.addEventListener("click", () => {
+    doDailyBackupIfNeeded(true).then(updateBackupInfoLabel);
+  });
+}
+
+// Undo button
+const _undoFab = document.getElementById("undo-fab");
+if (_undoFab) _undoFab.addEventListener("click", undoLastAction);
+
+// 字體大小 picker (代理在 settings-modal click 處理)
+function refreshFontPicker() {
+  const current = settings.fontSize || "medium";
+  document.querySelectorAll("button[data-font-choice]").forEach(b => {
+    b.classList.toggle("secondary", b.dataset.fontChoice === current);
+    b.classList.toggle("outline", b.dataset.fontChoice !== current);
+  });
+}
+
+// 戴手套 toggle
+const _gmInp = document.getElementById("glove-mode-input");
+if (_gmInp) {
+  _gmInp.addEventListener("change", (e) => {
+    settings.gloveMode = e.target.checked;
+    saveSettings();
+    applyGloveMode(settings.gloveMode);
+  });
+}
 document.getElementById("close-settings").addEventListener("click", () => settingsModal.hidden = true);
 document.getElementById("reset-btn").addEventListener("click", () => {
   if (state.items.length === 0) { showToast("目前沒有備貨清單"); return; }
@@ -7799,19 +8576,31 @@ function actuallyCompleteShipping() {
   // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 必要商品=包裝材也不扣)
   if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement") {
     let deducted = 0;
+    const lowStockSkus = [];
+    const threshold = getLowStockThreshold();
     const now = new Date().toISOString();
     for (const it of (entry.items || [])) {
       if (it.essential) continue;
       if ((it.packed || 0) <= 0) continue;
       if (!stockMap[it.sku]) continue;
-      stockMap[it.sku].qty = Math.max(0, (stockMap[it.sku].qty || 0) - it.packed);
+      const beforeQty = stockMap[it.sku].qty || 0;
+      stockMap[it.sku].qty = Math.max(0, beforeQty - it.packed);
       stockMap[it.sku].updatedAt = now;
       deducted++;
+      const afterQty = stockMap[it.sku].qty;
+      const justCrossed = (beforeQty >= threshold && afterQty < threshold) || (beforeQty > 0 && afterQty === 0);
+      if (justCrossed && afterQty < threshold) {
+        const libItem = library.find(p => p.sku === it.sku);
+        lowStockSkus.push({ sku: it.sku, qty: afterQty, name: (libItem && libItem.name) || "" });
+      }
     }
     if (deducted > 0) {
       saveStock();
       console.log(`[stock] auto-deducted ${deducted} SKU`);
       setTimeout(() => showToast(`📉 庫存自動扣帳 ${deducted} SKU`), 600);
+    }
+    if (lowStockSkus.length > 0 && settings.autoLowStockAlert && settings.discordWebhook) {
+      pushLowStockAlert(lowStockSkus, threshold);
     }
   }
 
@@ -8036,6 +8825,8 @@ document.getElementById("barcode-close-btn").addEventListener("click", () => {
 // ---- Init ----
 loadSettings();
 applyTheme(settings.theme || "default");
+applyFontSize(settings.fontSize || "medium");
+applyGloveMode(!!settings.gloveMode);
 loadState();
 // 自動還原: 若主資料空但備份有, 還原 + 提示
 if (state.items.length === 0) {
@@ -8077,11 +8868,14 @@ if (!PLATFORMS[currentPlatform]) currentPlatform = "a1";
 document.getElementById("platform-select").value = currentPlatform;
 document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
 render();
+// 若上次離線前在房間模
 // 若上次離線前在房間模式, 自動恢復同步
 if (state.roomMode && state.roomCode && settings.syncWorkerUrl) {
   startSyncTimer();
 }
 renderRoomBadge();
+// 每日自動備份 (3 秒後跑, 避免阻塞 init)
+setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
 </script>
 </body>
 </html>
