@@ -2724,8 +2724,10 @@ function markUserActivity() {
 function getActiveMemberCount() {
   if (!state.roomMembers) return 0;
   const now = Date.now();
+  // 門檻 120 秒: 必須大於 Worker 端 presence 更新間隔 (60 秒) + 輪詢間隔,
+  // 否則同事在 30~60 秒空窗會被誤判成離線 → 誤入「獨自模式」、爆發同步不啟動 → 看不到對方進度
   return Object.values(state.roomMembers).filter(m =>
-    m && m.lastSeen && (now - new Date(m.lastSeen).getTime()) < 30000
+    m && m.lastSeen && (now - new Date(m.lastSeen).getTime()) < 120000
   ).length;
 }
 
@@ -3435,7 +3437,7 @@ function renderRoomBadge() {
   const now = Date.now();
   const activeMembers = Object.entries(state.roomMembers || {}).filter(([n, m]) => {
     if (!m || !m.lastSeen) return false;
-    return (now - new Date(m.lastSeen).getTime()) < 20000; // 20 秒內算在線 (約 4 個輪詢週期)
+    return (now - new Date(m.lastSeen).getTime()) < 120000; // 120 秒內算在線 (須 > Worker 60 秒 presence 更新間隔, 否則同事被誤判離線)
   });
   document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
 }
@@ -5958,20 +5960,25 @@ function processScan(code) {
       }
       return;
     } else {
-      // 手建模式: 自動新增此 SKU 到清單 (expected=0 自由計數)
-      if (state.manualMode) {
-        state.items.push({
+      // 不在清單: 手建模式 OR 房間模式 → 自動新增此 SKU (expected=0 自由計數)
+      // 房間模式必須先送 item_add 同步商品本身, 否則伺服器找不到此商品, 後續 scan_sku 件數會被丟棄
+      if (state.manualMode || state.roomMode) {
+        const newItem = {
           sku: matchedProd.sku,
           name: matchedProd.name || "",
           category: matchedProd.category || "其他",
           expected: 0,
           packed: 0,
-        });
+        };
+        state.items.push(newItem);
         const newIdx = state.items.length - 1;
+        if (state.roomMode) {
+          queueRoomEvent("item_add", { sku: newItem.sku, name: newItem.name, category: newItem.category, expected: 0, essential: false });
+        }
         SOUND.scanSku();
         bumpPickItem(newIdx, _mul);
         _scanMultiplier = 1; renderMultiplierBadge();
-        showToast(`📝 加入 ${matchedProd.sku} ×${_mul}`);
+        showToast(`📝 自動加入 ${matchedProd.sku} ×${_mul}`);
         return;
       }
       SOUND.scanError();
@@ -6002,6 +6009,9 @@ function processScan(code) {
           saveLibrary();
           state.items.push({ sku: code, name: "(請補名稱)", category: "其他", expected: 0, packed: 0 });
           const newIdx = state.items.length - 1;
+          if (state.roomMode) {
+            queueRoomEvent("item_add", { sku: code, name: "(請補名稱)", category: "其他", expected: 0, essential: false });
+          }
           bumpPickItem(newIdx, 1);
           SOUND.scanSku();
           showToast(`📝 已加入商品庫 + ${code} ×1`);
@@ -6061,6 +6071,18 @@ function processScan(code) {
       }
       // 從 completedParcels 移除
       state.completedParcels = state.completedParcels.filter(p => p.id !== code);
+      // 房間模式: 通知伺服器撤銷此單 + 扣回件數 (否則下次同步又把它和件數拉回來)
+      if (state.roomMode) {
+        const _byMe = oldParcel.packedBy === settings.myName;
+        for (const sku in (oldParcel.items || {})) {
+          const q = oldParcel.items[sku] || 0;
+          if (q === 0) continue;
+          queueRoomEvent("scan_sku", { sku, deltaQty: -q });
+          if (_byMe && state.myPacked) state.myPacked[sku] = Math.max(0, (state.myPacked[sku] || 0) - q);
+        }
+        queueRoomEvent("parcel_cancel", { id: code });
+        markUserActivity();
+      }
       console.log("[parcel] 重新打開, 已撤銷 packed:", oldParcel.items);
       if (orphanSkus.length > 0) {
         // 提醒: 該 parcel 含當前清單沒有的 SKU
@@ -7728,9 +7750,15 @@ document.getElementById("cancel-parcel-btn").addEventListener("click", () => {
     if (idx >= 0) {
       state.items[idx].packed = Math.max(0, state.items[idx].packed - items[sku]);
     }
+    // 房間模式: 通知伺服器扣回件數 + 回沖個人計數 (否則同步會把件數又拉回)
+    if (state.roomMode && items[sku] > 0) {
+      queueRoomEvent("scan_sku", { sku, deltaQty: -items[sku] });
+      if (state.myPacked) state.myPacked[sku] = Math.max(0, (state.myPacked[sku] || 0) - items[sku]);
+    }
   }
   const cancelledId = ap.id;
   state.activeParcel = null;
+  if (state.roomMode) markUserActivity();
   saveState();
   renderScanPanel();
   renderPicking();
