@@ -21,8 +21,8 @@
 [data-glove-mode="1"] button:not(.tab-bar button):not(.filter-bar button):not(.theme-option):not([data-mpid-preset]) {
   min-height: 44px !important;
 }
-[data-glove-mode="1"] .qty-btn { min-width: 48px !important; min-height: 48px !important; font-size: 22px !important; }
-[data-glove-mode="1"] .ap-btn { min-width: 44px !important; min-height: 44px !important; font-size: 18px !important; }
+[data-glove-mode="1"] .qty-btn { min-width: 48px !important; min-height: 48px !important; font-size: 1.375rem !important; }
+[data-glove-mode="1"] .ap-btn { min-width: 44px !important; min-height: 44px !important; font-size: 1.125rem !important; }
 
 :root, [data-theme="default"] {
   color-scheme: light;
@@ -113,6 +113,31 @@
 [data-theme="dark"] .settings-card {
   background: var(--surface);
 }
+/* === 深色模式對比修正: 覆蓋寫死的淺色底 / 深色字 === */
+[data-theme="dark"] .completed-parcels-list { background: var(--surface); }
+[data-theme="dark"] .scan-input:focus { background: #1f2937; }
+[data-theme="dark"] .active-parcel {
+  background: linear-gradient(135deg, #3a2c10, #2e1f08);
+}
+[data-theme="dark"] .active-parcel-items { background: rgba(255,255,255,.06); }
+[data-theme="dark"] .item.status-essential-used { background: var(--primary-light); }
+[data-theme="dark"] .item.status-essential-used .item-qty,
+[data-theme="dark"] .item.status-essential-pending .item-qty { color: #a5b4fc; }
+[data-theme="dark"] .qty-btn.minus { background: #30363d; color: var(--text); }
+[data-theme="dark"] details summary:hover,
+[data-theme="dark"] details summary:active,
+[data-theme="dark"] .item-qty[data-qty-click]:active,
+[data-theme="dark"] .ap-btn:active,
+[data-theme="dark"] .spec-map-icon-btn:active,
+[data-theme="dark"] .resume-banner .btn:active { background: #21262d; }
+/* 行內寫死的淺色底 → 深色 surface */
+[data-theme="dark"] [style*="#fafbfc"],
+[data-theme="dark"] [style*="#fef3c7"] { background-color: var(--surface) !important; }
+/* 行內寫死的深色字 → 可讀的亮色 */
+[data-theme="dark"] [style*="color: #92400e"],
+[data-theme="dark"] [style*="color:#92400e"] { color: var(--warn) !important; }
+[data-theme="dark"] [style*="color: #166534"],
+[data-theme="dark"] [style*="color:#166534"] { color: var(--success) !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 html, body {
@@ -145,7 +170,7 @@ header {
 }
 header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -159,7 +184,7 @@ header h1 {
   color: white;
   width: 36px; height: 36px;
   border-radius: 8px;
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
 }
 .icon-btn:active { background: rgba(255,255,255,.3); }
@@ -169,7 +194,7 @@ header h1 {
   color: white;
   padding: 4px 10px 4px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -220,15 +245,15 @@ header h1 {
   50% { box-shadow: 0 4px 20px rgba(245, 158, 11, .5); }
 }
 .resume-banner .resume-info { flex: 1; min-width: 0; }
-.resume-banner .resume-title { font-size: 14px; font-weight: 700; }
-.resume-banner .resume-meta { font-size: 12px; opacity: .9; margin-top: 2px; }
+.resume-banner .resume-title { font-size: 0.875rem; font-weight: 700; }
+.resume-banner .resume-meta { font-size: 0.75rem; opacity: .9; margin-top: 2px; }
 .resume-banner .btn {
   background: white;
   color: var(--warn);
   font-weight: 700;
   min-height: 40px;
   padding: 8px 14px;
-  font-size: 14px;
+  font-size: 0.875rem;
   flex-shrink: 0;
 }
 .resume-banner .btn:active { background: #f3f4f6; }
@@ -249,7 +274,7 @@ header h1 {
   border: 0;
   border-radius: 10px 10px 0 0;
   padding: 10px 4px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-soft);
   cursor: pointer;
@@ -264,12 +289,12 @@ header h1 {
   line-height: 1.2;
 }
 .tab-bar button .tab-icon {
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1;
   transition: transform .18s ease;
 }
 .tab-bar button .tab-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.2px;
 }
 .tab-bar button:hover:not(.active) {
@@ -296,9 +321,9 @@ header h1 {
 }
 /* 窄螢幕: 字略小避免擠 */
 @media (max-width: 380px) {
-  .tab-bar button { padding: 8px 2px 10px; font-size: 11px; }
-  .tab-bar button .tab-icon { font-size: 20px; }
-  .tab-bar button .tab-label { font-size: 11px; }
+  .tab-bar button { padding: 8px 2px 10px; font-size: 0.6875rem; }
+  .tab-bar button .tab-icon { font-size: 1.25rem; }
+  .tab-bar button .tab-label { font-size: 0.6875rem; }
 }
 
 .panel {
@@ -311,18 +336,18 @@ header h1 {
 .panel.standalone { margin-top: 12px; border-radius: 12px; }
 .panel h2 {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--primary);
   font-weight: 600;
 }
-.hint { font-size: 13px; color: var(--text-soft); margin: 8px 0; }
+.hint { font-size: 0.8125rem; color: var(--text-soft); margin: 8px 0; }
 .hint ul { padding-left: 20px; margin: 4px 0; }
 
 textarea {
   width: 100%;
   min-height: 100px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -336,7 +361,7 @@ input[type=text], input[type=number] {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-family: inherit;
   background: #fafbfc;
 }
@@ -351,7 +376,7 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
   color: white;
   border: 0;
   padding: 12px 20px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   border-radius: 10px;
   cursor: pointer;
@@ -362,7 +387,7 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
 .btn.danger { background: var(--danger-bg); color: var(--danger); }
 .btn.outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
 .btn.full { width: 100%; }
-.btn.sm { padding: 8px 12px; font-size: 13px; min-height: 36px; }
+.btn.sm { padding: 8px 12px; font-size: 0.8125rem; min-height: 36px; }
 .row { display: flex; gap: 8px; }
 .row.tight { gap: 4px; }
 
@@ -370,7 +395,7 @@ details { margin: 10px 0; }
 details summary {
   cursor: pointer;
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--primary);
   font-weight: 600;
   background: var(--primary-light);
@@ -385,7 +410,7 @@ details summary {
 details summary::-webkit-details-marker { display: none; }
 details summary::before {
   content: "▶";
-  font-size: 10px;
+  font-size: 0.625rem;
   display: inline-block;
   transition: transform .2s;
 }
@@ -409,7 +434,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border: 1px solid var(--border);
   padding: 8px 14px;
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   cursor: pointer;
   white-space: nowrap;
@@ -429,14 +454,14 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   background: var(--primary);
   color: white;
   border: 0; border-radius: 10px;
-  font-size: 14px; font-weight: 600;
+  font-size: 0.875rem; font-weight: 600;
   cursor: pointer;
   font-family: inherit;
 }
 .scan-toggle:active { opacity: .9; }
 .scan-toggle .scan-status {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 0.6875rem;
   background: rgba(255,255,255,.2);
   padding: 2px 8px;
   border-radius: 10px;
@@ -453,7 +478,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .scan-input {
   width: 100%;
   padding: 14px;
-  font-size: 16px;
+  font-size: 1rem;
   font-family: ui-monospace, monospace;
   font-weight: 700;
   border: 2px solid var(--primary);
@@ -475,9 +500,9 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-radius: 10px;
   border-left: 4px solid var(--warn);
 }
-.active-parcel-label { font-size: 11px; color: var(--text-soft); }
+.active-parcel-label { font-size: 0.6875rem; color: var(--text-soft); }
 .active-parcel-id {
-  font-size: 16px;
+  font-size: 1rem;
   font-family: ui-monospace, monospace;
   font-weight: 700;
   color: var(--primary);
@@ -488,7 +513,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   background: rgba(255,255,255,.6);
   padding: 8px 10px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: ui-monospace, monospace;
   margin-bottom: 8px;
   min-height: 30px;
@@ -506,18 +531,18 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .ap-row .ap-sku {
   font-family: ui-monospace, monospace;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--primary);
 }
 .ap-row .ap-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-soft);
   font-weight: 600;
   margin-left: 6px;
 }
 .ap-row .ap-qty {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text);
   flex-shrink: 0;
   min-width: 35px;
@@ -531,7 +556,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   padding: 0;
 }
@@ -540,7 +565,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .ap-btn.danger:active { background: var(--danger-bg); }
 .scan-stats {
   display: flex; align-items: center; gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   margin-top: 10px;
   padding-top: 10px;
@@ -567,14 +592,14 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .item-info { flex: 1; min-width: 0; }
 .item-sku {
   font-family: ui-monospace, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--primary);
   font-weight: 700;
   word-break: break-all;
   letter-spacing: 0.2px;
 }
 .item-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text);
   font-weight: 600;
   margin-top: 2px;
@@ -590,19 +615,19 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   min-width: 80px;
 }
 .item-qty {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .item-qty .sep { color: var(--text-soft); font-weight: 400; margin: 0 2px; }
-.item-qty .expected { color: var(--text-soft); font-size: 18px; }
+.item-qty .expected { color: var(--text-soft); font-size: 1.125rem; }
 .item.status-done .item-qty { color: var(--success); }
 .item-qty .shipped-remaining { color: #94a3b8; }
 .item-qty .current.done, .item-qty .expected.done { color: var(--success); }
 .shipped-note {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--success);
   font-weight: 600;
   margin-top: 2px;
@@ -621,7 +646,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   color: white;
   padding: 1px 6px;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   margin-left: 4px;
   vertical-align: middle;
@@ -648,7 +673,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   width: 40px; height: 40px;
   border-radius: 50%;
   border: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -672,7 +697,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
-  font-size: 15px; font-weight: 600;
+  font-size: 0.9375rem; font-weight: 600;
   color: var(--primary);
   margin-bottom: 6px;
   font-family: inherit;
@@ -682,12 +707,12 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   background: var(--primary);
   color: white;
 }
-.cat-header .cat-emoji { font-size: 18px; }
+.cat-header .cat-emoji { font-size: 1.125rem; }
 .cat-header .cat-name { flex: 1; }
 .cat-header .cat-count {
   padding: 2px 10px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   background: rgba(31,78,120,.12);
   color: var(--primary);
@@ -696,7 +721,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   background: rgba(255,255,255,.25);
   color: white;
 }
-.cat-header .cat-arrow { font-size: 11px; opacity: .7; }
+.cat-header .cat-arrow { font-size: 0.6875rem; opacity: .7; }
 .cat-items { padding-left: 0; }
 
 /* 規格對應清單 - 每筆操作 */
@@ -706,7 +731,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-bottom: 1px solid var(--border);
 }
 .spec-map-row:last-child { border-bottom: 0; }
-.spec-map-content { flex: 1; min-width: 0; font-size: 12px; }
+.spec-map-content { flex: 1; min-width: 0; font-size: 0.75rem; }
 .spec-map-spec {
   color: var(--text);
   word-break: break-all;
@@ -715,7 +740,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .spec-map-summary {
   color: var(--primary);
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   word-break: break-all;
 }
 .spec-map-actions { display: flex; gap: 4px; flex-shrink: 0; }
@@ -725,7 +750,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   width: 28px; height: 28px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 0;
   display: flex; align-items: center; justify-content: center;
 }
@@ -752,7 +777,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .barcode-info {
   padding: 10px 16px;
   background: var(--primary-light);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--primary);
 }
 
@@ -763,16 +788,16 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 .barcode-category-header {
   display: flex; align-items: center; gap: 10px;
-  font-size: 22px; font-weight: 800;
+  font-size: 1.375rem; font-weight: 800;
   color: var(--primary);
   margin-bottom: 14px;
   padding-bottom: 8px;
   border-bottom: 3px solid var(--primary);
 }
-.barcode-category-header .cat-emoji { font-size: 28px; }
+.barcode-category-header .cat-emoji { font-size: 1.75rem; }
 .barcode-category-header .cat-name { flex: 1; }
 .barcode-category-header .cat-count {
-  font-size: 14px;
+  font-size: 0.875rem;
   background: var(--primary-light);
   color: var(--primary);
   padding: 4px 12px;
@@ -793,7 +818,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .barcode-row-left .shortcode {
   font-family: ui-monospace, monospace;
   font-weight: 900;
-  font-size: 28px;
+  font-size: 1.75rem;
   color: var(--primary);
   letter-spacing: 2px;
 }
@@ -811,7 +836,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 .barcode-row-right {
   flex: 0 0 180px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .barcode-row-right .sku {
   font-family: ui-monospace, monospace;
@@ -842,7 +867,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .barcode-cell .shortcode {
   font-family: ui-monospace, monospace;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--primary);
   letter-spacing: 1px;
   margin-bottom: 4px;
@@ -854,12 +879,12 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .barcode-cell .sku {
   font-family: ui-monospace, monospace;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-soft);
   margin-top: 2px;
 }
 .barcode-cell .name {
-  font-size: 9px;
+  font-size: 0.5625rem;
   color: var(--text-soft);
   margin-top: 2px;
   line-height: 1.2;
@@ -867,6 +892,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 
 @media print {
+  html { font-size: 16px !important; }
   body > *:not(#barcode-print-view) { display: none !important; }
   .no-print, .barcode-info { display: none !important; }
   #barcode-print-view {
@@ -897,7 +923,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .completed-parcel {
   border-bottom: 1px solid var(--border);
@@ -908,16 +934,16 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   font-family: ui-monospace, monospace;
   font-weight: 700;
   color: var(--success);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .completed-parcel-items {
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 0.6875rem;
   margin-top: 2px;
 }
 .completed-parcel-time {
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: 0.625rem;
   margin-left: 6px;
 }
 
@@ -938,19 +964,19 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   margin-bottom: 8px;
 }
 .history-item-date {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--primary);
 }
 .history-item-platform {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-soft);
   background: var(--bg);
   padding: 2px 8px;
   border-radius: 10px;
 }
 .history-item-summary {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   margin: 4px 0 8px;
 }
@@ -959,12 +985,12 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   display: flex;
   gap: 6px;
 }
-.history-item-actions .btn { font-size: 12px; padding: 6px 10px; min-height: 32px; flex: 1; }
+.history-item-actions .btn { font-size: 0.75rem; padding: 6px 10px; min-height: 32px; flex: 1; }
 .history-detail {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: ui-monospace, monospace;
   max-height: 200px;
   overflow-y: auto;
@@ -990,13 +1016,13 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .map-card.mapped { border-left-color: var(--success); }
 .map-card.skipped { border-left-color: #d1d5db; opacity: .6; }
 .map-spec {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
   line-height: 1.4;
 }
-.map-meta { font-size: 12px; color: var(--text-soft); margin-bottom: 10px; }
+.map-meta { font-size: 0.75rem; color: var(--text-soft); margin-bottom: 10px; }
 .map-meta .badge {
   display: inline-block;
   background: var(--primary-light);
@@ -1014,26 +1040,26 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   margin: 4px 0;
 }
 .mapped-sku .sku-info { flex: 1; min-width: 0; }
-.mapped-sku .sku-info .item-sku { font-size: 12px; }
-.mapped-sku .sku-info .item-name { font-size: 13px; }
+.mapped-sku .sku-info .item-sku { font-size: 0.75rem; }
+.mapped-sku .sku-info .item-name { font-size: 0.8125rem; }
 .mapped-sku .sku-qty {
   display: flex; align-items: center; gap: 4px;
 }
 .mapped-sku .sku-qty input {
   width: 50px;
   text-align: center;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 6px 4px;
 }
 .mapped-sku .sku-qty .qty-label {
-  font-size: 11px; color: var(--text-soft);
+  font-size: 0.6875rem; color: var(--text-soft);
 }
 .mapped-sku .remove-btn {
   background: transparent;
   border: 0;
   color: var(--danger);
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
   padding: 4px 8px;
 }
@@ -1048,7 +1074,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .sku-picker select {
   width: 100%;
   padding: 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-family: inherit;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1060,17 +1086,17 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .cat-section-header {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 4px 6px;
-  font-size: 13px; font-weight: 600;
+  font-size: 0.8125rem; font-weight: 600;
   color: var(--text-soft);
 }
-.cat-section-header .cat-emoji { font-size: 16px; }
+.cat-section-header .cat-emoji { font-size: 1rem; }
 .cat-section-header .cat-count {
   margin-left: auto;
   background: rgba(31,78,120,.08);
   color: var(--primary);
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 
@@ -1090,15 +1116,15 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-left: 4px solid var(--primary);
 }
 .menu-item-info { flex: 1; min-width: 0; }
-.menu-item .item-sku { font-size: 12px; font-weight: 700; }
-.menu-item .item-name { font-size: 14px; font-weight: 600; }
+.menu-item .item-sku { font-size: 0.75rem; font-weight: 700; }
+.menu-item .item-name { font-size: 0.875rem; font-weight: 600; }
 .menu-qty {
   display: flex; align-items: center; gap: 4px;
 }
 .menu-qty input {
   width: 56px;
   text-align: center;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   padding: 8px 4px;
   border: 1px solid var(--border);
@@ -1120,7 +1146,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .lib-item .star-btn {
   background: transparent;
   border: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
   cursor: pointer;
   padding: 4px;
 }
@@ -1154,18 +1180,18 @@ footer.summary-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   margin-bottom: 8px;
 }
-.summary-row strong { color: var(--text); font-size: 15px; }
+.summary-row strong { color: var(--text); font-size: 0.9375rem; }
 
 .empty-state {
   text-align: center;
   padding: 40px 20px;
   color: var(--text-soft);
 }
-.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
 
 .settings-grid {
   display: grid;
@@ -1204,17 +1230,17 @@ footer.summary-bar {
   border-color: var(--danger);
 }
 .settings-card .card-icon {
-  font-size: 30px;
+  font-size: 1.875rem;
   line-height: 1;
   margin-bottom: 4px;
 }
 .settings-card .card-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text);
 }
 .settings-card .card-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-soft);
   margin-top: 2px;
   line-height: 1.3;
@@ -1224,7 +1250,7 @@ footer.summary-bar {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--primary);
   background: var(--primary-light);
   border: none;
@@ -1246,7 +1272,7 @@ footer.summary-bar {
   align-items: center;
   gap: 6px;
   color: white;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
   margin-right: 8px;
@@ -1254,13 +1280,13 @@ footer.summary-bar {
   transition: background .15s;
 }
 .room-badge:hover { background: rgba(255,255,255,.28); }
-.room-badge .rb-icon { font-size: 14px; }
+.room-badge .rb-icon { font-size: 0.875rem; }
 .room-badge .rb-code { letter-spacing: 1px; font-family: ui-monospace, monospace; }
 .room-badge .rb-members {
   background: rgba(255,255,255,.2);
   padding: 1px 6px;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 .room-badge.syncing { animation: roomPulse 1s infinite; }
 @keyframes roomPulse {
@@ -1278,12 +1304,12 @@ footer.summary-bar {
 }
 .room-entry-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--primary);
   margin-bottom: 4px;
 }
 .room-entry-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-soft);
   margin-bottom: 10px;
 }
@@ -1325,16 +1351,16 @@ footer.summary-bar {
 .theme-info { flex: 1; min-width: 0; }
 .theme-name {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text);
 }
 .theme-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-soft);
   margin-top: 2px;
 }
 .theme-check {
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--primary);
   font-weight: 700;
   visibility: hidden;
@@ -1360,18 +1386,33 @@ footer.summary-bar {
 }
 .modal h2 { margin: 0 0 12px; color: var(--primary); }
 .report-section { margin: 16px 0; }
-.report-section h3 { margin: 0 0 8px; font-size: 14px; }
+.report-section h3 { margin: 0 0 8px; font-size: 0.875rem; }
 .report-line {
   background: var(--bg);
   padding: 8px 12px;
   border-radius: 6px;
   margin: 4px 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: ui-monospace, monospace;
 }
 .report-line.miss { background: var(--danger-bg); color: var(--danger); }
 .report-line.over { background: var(--warn-bg); color: #92400e; }
 .report-line.done { background: var(--success-bg); color: var(--success); }
+
+.numpad-btn {
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: all 0.05s;
+}
+.numpad-btn:active { background: var(--primary-light); transform: scale(0.95); }
+.numpad-btn.numpad-special { font-size: 1rem; color: var(--text-soft); }
 
 .toast {
   position: fixed;
@@ -1382,7 +1423,7 @@ footer.summary-bar {
   color: white;
   padding: 10px 18px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 0.875rem;
   z-index: 200;
   opacity: 0;
   transition: opacity .2s;
@@ -1460,8 +1501,8 @@ footer.summary-bar {
   <div class="panel" id="tab-content-a1" hidden>
     <h2>從通路後台匯入揀貨單</h2>
 
-    <label style="display:block; font-size:13px; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
-    <select id="platform-select" style="width:100%; padding:12px; font-size:15px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
+    <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
+    <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎 (Coupang)</option>
@@ -1485,19 +1526,19 @@ footer.summary-bar {
     <!-- 手動建單入口 -->
     <div style="margin: 14px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
       <button class="btn full" id="open-manual-order-btn" style="background: var(--primary);">📝 手動建單 (小單)</button>
-      <p class="hint" style="font-size: 11px; margin-top: 6px;">少量出貨不想搞 CSV? 點此填寄件單號後, 在備貨頁直接刷商品條碼自動建立 SKU 清單。</p>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">少量出貨不想搞 CSV? 點此填寄件單號後, 在備貨頁直接刷商品條碼自動建立 SKU 清單。</p>
     </div>
 
     <!-- 補寄訂單入口 -->
     <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--warn-bg); border-radius: 8px; border-left: 4px solid var(--warn);">
       <button class="btn full" id="open-replacement-order-btn" style="background: #92400e; color: white;">📮 補寄訂單 (售後)</button>
-      <p class="hint" style="font-size: 11px; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。需填客人姓名+手機。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。需填客人姓名+手機。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
     </div>
 
     <!-- 退貨確認入口 -->
     <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--success-bg); border-radius: 8px; border-left: 4px solid var(--success);">
       <button class="btn full" id="open-return-order-btn" style="background: #166534; color: white;">📥 退貨確認 (收貨)</button>
-      <p class="hint" style="font-size: 11px; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。庫存先不動 (等盤點功能完成後再串)。<strong>不推送 Discord/Sheets</strong>。</p>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。庫存先不動 (等盤點功能完成後再串)。<strong>不推送 Discord/Sheets</strong>。</p>
     </div>
 
     <details>
@@ -1540,11 +1581,11 @@ footer.summary-bar {
     <div class="history-search-row" style="position: relative; margin-bottom: 10px;">
       <input type="text" id="history-search" placeholder="🔍 搜尋寄件單號 / 客人姓名 / 手機 / SKU / 商品名 / 原因 / 備註..."
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-             style="width: 100%; padding: 8px 32px 8px 12px; font-size: 13px;">
+             style="width: 100%; padding: 8px 32px 8px 12px; font-size: 0.8125rem;">
       <button id="history-search-clear" hidden
               style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
                      background: var(--text-soft); color: white; border: 0; border-radius: 50%;
-                     width: 20px; height: 20px; cursor: pointer; font-size: 14px; line-height: 1;
+                     width: 20px; height: 20px; cursor: pointer; font-size: 0.875rem; line-height: 1;
                      padding: 0; display: flex; align-items: center; justify-content: center;"
               aria-label="清除搜尋">×</button>
     </div>
@@ -1561,7 +1602,7 @@ footer.summary-bar {
       <button class="btn outline sm" id="export-detail-btn" style="flex: 1;">📦 明細</button>
       <button class="btn outline sm danger" id="clear-history-btn" style="flex: 0.6;">🗑</button>
     </div>
-    <p class="hint" style="font-size: 11px; margin-top: 6px;">📤 摘要 = 每行一個 SKU 的彙總 · 📦 明細 = 每行一張寄件單裡的一個 SKU (含寄件編號)</p>
+    <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">📤 摘要 = 每行一個 SKU 的彙總 · 📦 明細 = 每行一張寄件單裡的一個 SKU (含寄件編號)</p>
   </div>
 
     <!-- Tab: 倉庫清冊 -->
@@ -1580,8 +1621,8 @@ footer.summary-bar {
     <div class="row" style="margin-top: 8px; gap: 8px;" id="inv-room-sync-row" hidden>
       <button class="btn sm" id="inv-room-sync-btn" style="flex: 1; background: var(--success);">↻ 對齊同事庫存 (房間模式)</button>
     </div>
-    <div id="inv-room-sync-info" class="hint" style="font-size: 11px; margin-top: 6px; min-height: 14px;"></div>
-    <p class="hint" style="font-size: 11px; margin-top: 6px;">🔍 盤點功能已移到右上 ⚙ 齒輪 → 盤點 卡片。</p>
+    <div id="inv-room-sync-info" class="hint" style="font-size: 0.6875rem; margin-top: 6px; min-height: 14px;"></div>
+    <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">🔍 盤點功能已移到右上 ⚙ 齒輪 → 盤點 卡片。</p>
 
     <div style="height: 14px"></div>
     <div id="inventory-summary" class="hint" style="background: var(--primary-light); padding: 10px; border-radius: 8px; margin-bottom: 10px;">尚未匯入庫存資料</div>
@@ -1613,20 +1654,20 @@ footer.summary-bar {
 <!-- PICKING VIEW: shown once a list is loaded -->
 <div id="picking-view" hidden>
   <!-- 預估完成時間 banner -->
-  <div id="time-estimate-banner" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--primary-light), rgba(37,99,235,0.05)); border-radius: 10px; border-left: 4px solid var(--primary); font-size: 13px; display: flex; align-items: center; gap: 10px;">
-    <span style="font-size: 18px;">⏱</span>
+  <div id="time-estimate-banner" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--primary-light), rgba(37,99,235,0.05)); border-radius: 10px; border-left: 4px solid var(--primary); font-size: 0.8125rem; display: flex; align-items: center; gap: 10px;">
+    <span style="font-size: 1.125rem;">⏱</span>
     <div style="flex: 1;">
       <strong>預計 <span id="est-time">—</span></strong>
-      <div style="font-size: 11px; color: var(--text-soft); margin-top: 2px;">依過去 7 天平均包貨速度</div>
+      <div style="font-size: 0.6875rem; color: var(--text-soft); margin-top: 2px;">依過去 7 天平均包貨速度</div>
     </div>
   </div>
   <!-- 房間動態 ticker -->
-  <div id="room-ticker" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--success-bg), rgba(22,163,74,0.08)); border-radius: 10px; border-left: 4px solid var(--success); font-size: 12px;">
+  <div id="room-ticker" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--success-bg), rgba(22,163,74,0.08)); border-radius: 10px; border-left: 4px solid var(--success); font-size: 0.75rem;">
     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-      <span style="font-size: 14px;">🔔</span>
-      <strong style="font-size: 12px;">即時動態</strong>
+      <span style="font-size: 0.875rem;">🔔</span>
+      <strong style="font-size: 0.75rem;">即時動態</strong>
     </div>
-    <div id="room-ticker-list" style="font-size: 11px; line-height: 1.7;"></div>
+    <div id="room-ticker-list" style="font-size: 0.6875rem; line-height: 1.7;"></div>
   </div>
   <!-- 裝箱掃描面板 (預設收合) -->
   <div id="scan-panel" class="scan-panel">
@@ -1646,16 +1687,16 @@ footer.summary-bar {
              enterkeyhint="done"
              placeholder="SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter"
              class="scan-input">
-      <div class="hint" style="font-size: 11px; margin-top: 4px; color: var(--text-soft);">
+      <div class="hint" style="font-size: 0.6875rem; margin-top: 4px; color: var(--text-soft);">
         💡 蝦皮 / 黑貓 / 國際小包 → 直接刷 QR<br>
         💡 7-11 / 全家 → QR 是內部代碼, <strong>用下方按鈕手動輸入</strong>
       </div>
-      <button class="btn full" id="manual-parcel-id-btn" style="margin-top: 8px; padding: 12px; background: #166534; color: white; font-weight: 700; font-size: 14px;">
+      <button class="btn full" id="manual-parcel-id-btn" style="margin-top: 8px; padding: 12px; background: #166534; color: white; font-weight: 700; font-size: 0.875rem;">
         📝 手動輸入 7-11 / 全家 編號
       </button>
-      <div style="margin-top: 6px; font-size: 11px; color: var(--text-soft); display: flex; align-items: center; gap: 6px;">
+      <div style="margin-top: 6px; font-size: 0.6875rem; color: var(--text-soft); display: flex; align-items: center; gap: 6px;">
         <span>💡 倍數: 輸入 <code style="background: var(--bg); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace;">*5</code> 後刷碼會 +5</span>
-        <span id="scan-multiplier-badge" hidden style="background: var(--warn); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 12px;">× 5</span>
+        <span id="scan-multiplier-badge" hidden style="background: var(--warn); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 0.75rem;">× 5</span>
       </div>
       <div id="active-parcel" class="active-parcel" hidden>
         <div class="active-parcel-info">
@@ -1705,7 +1746,7 @@ footer.summary-bar {
       <option value="book" selected>📖 分類本 (每類獨立頁)</option>
       <option value="dense">📋 緊湊 (全部一頁)</option>
     </select>
-    <span style="margin-left:auto; font-size:12px; color: var(--text-soft);">
+    <span style="margin-left:auto; font-size:0.75rem; color: var(--text-soft);">
       <span id="barcode-count">0</span> 個 SKU
     </span>
   </div>
@@ -1726,7 +1767,7 @@ footer.summary-bar {
       <p class="hint">下方列出有庫存但不在商品庫的 SKU, 來自「📦 倉庫清冊」匯入的資料。每筆指定分類後點 ＋ 加入。</p>
 
       <div class="row" style="gap:6px; margin: 8px 0;">
-        <select id="quick-add-cat" style="flex:1; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:6px; background:white;">
+        <select id="quick-add-cat" style="flex:1; padding:6px; font-size:0.8125rem; border:1px solid var(--border); border-radius:6px; background:white;">
           <option value="包裝">📦 包裝</option>
           <option value="吹風機">💨 吹風機</option>
           <option value="投影機">📽 投影機</option>
@@ -1754,7 +1795,7 @@ footer.summary-bar {
       <button class="btn full sm" id="bulk-import-btn" style="margin-top:6px;">匯入到商品庫</button>
     </details>
 
-    <h3 style="font-size:14px; margin: 16px 0 8px; color: var(--text-soft);">目前商品庫 (<span id="lib-count">0</span>)</h3>
+    <h3 style="font-size:0.875rem; margin: 16px 0 8px; color: var(--text-soft);">目前商品庫 (<span id="lib-count">0</span>)</h3>
     <div id="lib-items"></div>
 
     <div style="height: 12px"></div>
@@ -1773,7 +1814,7 @@ footer.summary-bar {
 
     <!-- 主選單: 卡片網格 -->
     <div id="settings-menu">
-      <p class="hint" style="background: var(--success-bg); color: var(--success); padding: 8px 10px; border-radius: 8px; font-size: 12px;">
+      <p class="hint" style="background: var(--success-bg); color: var(--success); padding: 8px 10px; border-radius: 8px; font-size: 0.75rem;">
         <strong>備貨清單會永久保留</strong>, 除非「取消出貨」或「✓ 出貨完成」。
       </p>
       <div class="settings-grid">
@@ -1817,34 +1858,34 @@ footer.summary-bar {
       <h3 style="margin: 0 0 8px;">🔍 盤點</h3>
       <p class="hint">掃描比對實際庫存與系統庫存的差異, 套用後覆蓋倉庫清冊。</p>
 
-      <div id="stocktake-status" style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px; font-size: 13px;">—</div>
+      <div id="stocktake-status" style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px; font-size: 0.8125rem;">—</div>
 
       <button class="btn full" id="stocktake-start-btn" style="background: var(--success); margin-bottom: 8px;">▶ 開始新盤點</button>
       <button class="btn full outline" id="stocktake-resume-btn" hidden style="margin-bottom: 8px;">↻ 繼續上次盤點</button>
 
       <details style="margin-top: 12px;">
-        <summary style="font-weight: 600; font-size: 13px;">⚙ 出貨自動扣帳設定</summary>
-        <label style="display:flex; align-items:center; gap:8px; padding: 8px 0; font-size: 13px;">
+        <summary style="font-weight: 600; font-size: 0.8125rem;">⚙ 出貨自動扣帳設定</summary>
+        <label style="display:flex; align-items:center; gap:8px; padding: 8px 0; font-size: 0.8125rem;">
           <input type="checkbox" id="auto-deduct-input" style="transform: scale(1.2);"> 出貨完成後自動從倉庫清冊扣件數
         </label>
-        <p class="hint" style="font-size: 11px;">勾選後, 每次「✓ 出貨完成」會把該批已裝件數從 stockMap 扣掉。退貨單 / 必要商品 (包裝材) 不扣。</p>
+        <p class="hint" style="font-size: 0.6875rem;">勾選後, 每次「✓ 出貨完成」會把該批已裝件數從 stockMap 扣掉。退貨單 / 必要商品 (包裝材) 不扣。</p>
 
         <div style="height: 8px;"></div>
-        <label style="display:block; font-size: 12px; color: var(--text-soft);">低庫存預警閾值 (件)</label>
+        <label style="display:block; font-size: 0.75rem; color: var(--text-soft);">低庫存預警閾值 (件)</label>
         <input type="number" id="safety-stock-input" min="0" max="999" value="10"
-               style="width: 100px; padding: 6px; font-size: 14px;">
-        <p class="hint" style="font-size: 11px;">小於此數的 SKU 會在倉庫清冊跳 ⚠ 低 標籤。</p>
+               style="width: 100px; padding: 6px; font-size: 0.875rem;">
+        <p class="hint" style="font-size: 0.6875rem;">小於此數的 SKU 會在倉庫清冊跳 ⚠ 低 標籤。</p>
 
         <div style="height: 12px;"></div>
-        <label style="display:flex; align-items:center; gap:8px; padding: 6px 0; font-size: 13px;">
+        <label style="display:flex; align-items:center; gap:8px; padding: 6px 0; font-size: 0.8125rem;">
           <input type="checkbox" id="auto-low-stock-alert-input" style="transform: scale(1.2);"> 出貨後自動推 Discord 低庫存告警
         </label>
-        <p class="hint" style="font-size: 11px;">出貨完成時若有 SKU 剛跨過低庫存閾值 (或變 0), 自動推訊息到 Discord webhook。</p>
+        <p class="hint" style="font-size: 0.6875rem;">出貨完成時若有 SKU 剛跨過低庫存閾值 (或變 0), 自動推訊息到 Discord webhook。</p>
       </details>
 
       <details style="margin-top: 12px;">
-        <summary style="font-weight: 600; font-size: 13px;">📜 盤點歷史 (<span id="stocktake-hist-count">0</span>)</summary>
-        <div id="stocktake-history-list" style="margin-top: 8px; font-size: 12px;"></div>
+        <summary style="font-weight: 600; font-size: 0.8125rem;">📜 盤點歷史 (<span id="stocktake-hist-count">0</span>)</summary>
+        <div id="stocktake-history-list" style="margin-top: 8px; font-size: 0.75rem;"></div>
       </details>
     </div>
 
@@ -1853,15 +1894,15 @@ footer.summary-bar {
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">🔊 聲音提示</h3>
       <p class="hint">刷槍成功、掃錯、出貨完成等動作的語音回饋。</p>
-      <label style="display:flex; align-items:center; gap:8px; padding: 12px 0; font-size: 14px;">
+      <label style="display:flex; align-items:center; gap:8px; padding: 12px 0; font-size: 0.875rem;">
         <input type="checkbox" id="sound-enabled-input" style="transform: scale(1.3);"> 開啟刷槍 / 完成聲音
       </label>
 
       <div style="margin: 12px 0;">
-        <label style="display:block; font-size: 13px; margin-bottom: 6px;">音量 <span id="sound-volume-label" style="color: var(--primary); font-weight: 700;">50%</span></label>
+        <label style="display:block; font-size: 0.8125rem; margin-bottom: 6px;">音量 <span id="sound-volume-label" style="color: var(--primary); font-weight: 700;">50%</span></label>
         <input type="range" id="sound-volume-input" min="0" max="100" step="5" value="50"
                style="width: 100%; accent-color: var(--primary);">
-        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-soft); margin-top: 2px;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.6875rem; color: var(--text-soft); margin-top: 2px;">
           <span>靜音</span><span>50%</span><span>100%</span>
         </div>
       </div>
@@ -1876,19 +1917,19 @@ footer.summary-bar {
       <p class="hint">挑一個眼睛舒服的配色。可隨時切換, 即刻套用。</p>
 
       <div style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px;">
-        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">🔤 字體大小</label>
+        <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px;">🔤 字體大小</label>
         <div class="row" style="gap: 4px;">
-          <button class="btn outline sm" data-font-choice="small" style="flex: 1; font-size: 12px;">小</button>
-          <button class="btn outline sm" data-font-choice="medium" style="flex: 1; font-size: 14px;">中</button>
-          <button class="btn outline sm" data-font-choice="large" style="flex: 1; font-size: 16px;">大</button>
-          <button class="btn outline sm" data-font-choice="xlarge" style="flex: 1; font-size: 18px;">特大</button>
+          <button class="btn outline sm" data-font-choice="small" style="flex: 1; font-size: 0.75rem;">小</button>
+          <button class="btn outline sm" data-font-choice="medium" style="flex: 1; font-size: 0.875rem;">中</button>
+          <button class="btn outline sm" data-font-choice="large" style="flex: 1; font-size: 1rem;">大</button>
+          <button class="btn outline sm" data-font-choice="xlarge" style="flex: 1; font-size: 1.125rem;">特大</button>
         </div>
       </div>
       <div style="margin: 14px 0; padding: 12px; background: var(--bg); border-radius: 10px;">
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem;">
           <input type="checkbox" id="glove-mode-input" style="transform: scale(1.3);"> 🧤 戴手套模式 (放大按鈕點擊區)
         </label>
-        <p class="hint" style="font-size: 11px; margin: 6px 0 0;">戴手套包貨時開啟。</p>
+        <p class="hint" style="font-size: 0.6875rem; margin: 6px 0 0;">戴手套包貨時開啟。</p>
       </div>
 
       <div class="theme-picker" id="theme-picker">
@@ -1925,19 +1966,19 @@ footer.summary-bar {
     <div id="settings-view-integration" class="settings-subview" hidden>
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">🌐 外部整合</h3>
-      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 8px; border-radius: 6px; font-size: 12px;">
+      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 8px; border-radius: 6px; font-size: 0.75rem;">
         ⚠ Cowork 預覽版會擋外部請求, 只有部署版可以正常推送。
       </p>
 
       <!-- 多人同步 Worker (新) -->
       <div style="margin-top: 14px; padding: 12px; background: var(--primary-light); border-radius: 10px; border-left: 4px solid var(--primary);">
-        <div style="font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 6px;">👥 多人同步 (Cloudflare Worker)</div>
-        <p class="hint" style="font-size: 11px; margin: 4px 0;">共同包貨用。先部署 Worker (見 picking_sync_worker_setup.md), 再填下面 URL + 暱稱。</p>
+        <div style="font-weight: 700; font-size: 0.8125rem; color: var(--primary); margin-bottom: 6px;">👥 多人同步 (Cloudflare Worker)</div>
+        <p class="hint" style="font-size: 0.6875rem; margin: 4px 0;">共同包貨用。先部署 Worker (見 picking_sync_worker_setup.md), 再填下面 URL + 暱稱。</p>
 
-        <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:8px;">Worker URL</label>
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-top:8px;">Worker URL</label>
         <input type="text" id="sync-worker-url-input" placeholder="https://koca-picking-sync.xxx.workers.dev" style="margin-bottom:6px;">
 
-        <label style="display:block; font-size:12px; color:var(--text-soft);">我的暱稱 (其他人會看到)</label>
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft);">我的暱稱 (其他人會看到)</label>
         <input type="text" id="my-name-input" placeholder="例: 阿明 / A / Kyle" maxlength="20" style="margin-bottom:6px;">
 
         <button class="btn outline sm full" id="sync-test-btn">📡 測試連線</button>
@@ -1945,31 +1986,31 @@ footer.summary-bar {
 
       <div style="height: 16px"></div>
       <p class="hint">每次「出貨完成」自動推送 (補寄訂單跳過)。</p>
-      <label style="display:block; font-size:12px; color:var(--text-soft); margin-top:12px;">Discord Webhook URL</label>
+      <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-top:12px;">Discord Webhook URL</label>
       <input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="margin-bottom:6px;">
       <button class="btn outline sm full" id="discord-test-btn">📡 測試 Discord</button>
 
       <div style="height: 14px"></div>
-      <label style="display:block; font-size:12px; color:var(--text-soft);">Google Apps Script Web App URL</label>
+      <label style="display:block; font-size:0.75rem; color:var(--text-soft);">Google Apps Script Web App URL</label>
       <input type="text" id="sheets-webhook-input" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:6px;">
       <button class="btn outline sm full" id="sheets-test-btn">📊 測試 Sheets</button>
 
       <div style="margin-top: 14px; padding: 10px; background: var(--bg); border-radius: 8px;">
-        <label style="display:flex; align-items:center; gap:8px; font-size: 13px; font-weight: 600;">
+        <label style="display:flex; align-items:center; gap:8px; font-size: 0.8125rem; font-weight: 600;">
           <input type="checkbox" id="auto-daily-backup-input" style="transform: scale(1.2);"> 💾 每日自動備份到 Discord
         </label>
-        <p class="hint" style="font-size: 11px; margin: 6px 0;">每天打開 App 自動推完整 JSON 到 Discord (一天一次)。<span id="last-backup-info"></span></p>
+        <p class="hint" style="font-size: 0.6875rem; margin: 6px 0;">每天打開 App 自動推完整 JSON 到 Discord (一天一次)。<span id="last-backup-info"></span></p>
         <button class="btn outline sm full" id="manual-backup-btn" style="margin-top: 4px;">📤 立刻備份一次</button>
       </div>
 
       <details style="margin-top:14px;">
         <summary>📖 Google Sheets 設定教學</summary>
-        <p class="hint" style="font-size:11px; line-height:1.6;">
+        <p class="hint" style="font-size:0.6875rem; line-height:1.6;">
           1. 開新的 Google Sheets<br>
           2. 選單「擴充功能 → Apps Script」<br>
           3. 貼以下程式碼:
         </p>
-        <pre style="background:#f5f7fa; padding:10px; font-size:10px; overflow-x:auto; border-radius:6px; line-height:1.4;">function doPost(e) {
+        <pre style="background:#f5f7fa; padding:10px; font-size:0.625rem; overflow-x:auto; border-radius:6px; line-height:1.4;">function doPost(e) {
   const d = JSON.parse(e.postData.contents);
   const sheet = SpreadsheetApp
     .getActiveSpreadsheet()
@@ -1986,7 +2027,7 @@ footer.summary-bar {
   return ContentService
     .createTextOutput("OK");
 }</pre>
-        <p class="hint" style="font-size:11px;">
+        <p class="hint" style="font-size:0.6875rem;">
           4. 「部署 → 新增部署」, 類型「網頁應用程式」<br>
           5. 「執行身分: 我」, 「存取權: 任何人」<br>
           6. 複製 Web App 網址 → 貼上方
@@ -2000,7 +2041,7 @@ footer.summary-bar {
       <h3 style="margin: 0 0 8px;">💾 資料搬家 / 備份</h3>
       <p class="hint">把整個 App 的資料 (商品庫 + 庫存 + 規格對應 + 出貨紀錄 + 設定) 存成一個 JSON 檔, 之後可以在另一個網址 / 手機匯入。</p>
 
-      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 10px; border-radius: 8px; font-size: 12px; margin-top: 12px;">
+      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 10px; border-radius: 8px; font-size: 0.75rem; margin-top: 12px;">
         ⚠ <strong>瀏覽器資料依「網址」分開</strong>。例如 koca-picking.pages.dev 跟 xxx.workers.dev 是兩個獨立的資料盒, 互相看不到。換網址前先匯出, 在新網址匯入, 才能延續。
       </p>
 
@@ -2014,7 +2055,7 @@ footer.summary-bar {
 
       <details style="margin-top: 14px;">
         <summary>包含哪些資料?</summary>
-        <ul style="font-size: 12px; color: var(--text-soft); line-height: 1.7; margin: 6px 0 0 18px; padding: 0;">
+        <ul style="font-size: 0.75rem; color: var(--text-soft); line-height: 1.7; margin: 6px 0 0 18px; padding: 0;">
           <li>商品庫 (SKU + 名稱 + 分類 + 條碼 + 必要商品標記)</li>
           <li>倉庫清冊 (75 SKU 的現有庫存)</li>
           <li>規格 → SKU 對應 (蝦皮揀貨單用)</li>
@@ -2045,7 +2086,7 @@ footer.summary-bar {
     <h2>⚡ 輸入裝箱數量</h2>
     <div id="qty-modal-info" class="hint" style="margin-bottom: 12px;"></div>
     <input type="number" id="qty-modal-input" inputmode="numeric" min="0" autocomplete="off"
-           style="font-size: 32px; text-align: center; padding: 16px; font-weight: 700;">
+           style="font-size: 2rem; text-align: center; padding: 16px; font-weight: 700;">
     <div style="height: 12px"></div>
     <div class="row">
       <button class="btn outline" id="qty-modal-zero" style="flex:1;">歸零</button>
@@ -2065,11 +2106,11 @@ footer.summary-bar {
     <h2 id="spec-edit-title">➕ 新增規格對應</h2>
     <p class="hint">先填入規格文字 (從通路 CSV 上看到的商品規格)，再選擇對應的 SKU 與數量。組合包可加多個 SKU。</p>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">規格文字</label>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">規格文字</label>
     <input type="text" id="spec-edit-text" placeholder="例如: Joy Lite 1 白色單主機 ●現貨">
 
     <div style="height: 12px"></div>
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:6px;">對應的 SKU (可多個)</label>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:6px;">對應的 SKU (可多個)</label>
     <div id="spec-edit-skus"></div>
 
     <button class="btn full sm outline" id="spec-edit-add-sku-btn" style="margin-top: 6px;">➕ 加入一個 SKU</button>
@@ -2093,11 +2134,11 @@ footer.summary-bar {
     <div style="height: 12px"></div>
     <button class="btn full" id="merge-append" style="background: var(--success); margin-bottom: 8px;">
       ➕ 追加合併
-      <span style="display:block; font-size:11px; font-weight:normal; margin-top:2px;">應出量累加, 已裝資料保留 (適合中午後新訂單)</span>
+      <span style="display:block; font-size:0.6875rem; font-weight:normal; margin-top:2px;">應出量累加, 已裝資料保留 (適合中午後新訂單)</span>
     </button>
     <button class="btn full danger" id="merge-replace" style="margin-bottom: 8px;">
       🔄 覆蓋現有
-      <span style="display:block; font-size:11px; font-weight:normal; margin-top:2px;">清空舊清單, 重新開始 (適合重新匯入)</span>
+      <span style="display:block; font-size:0.6875rem; font-weight:normal; margin-top:2px;">清空舊清單, 重新開始 (適合重新匯入)</span>
     </button>
     <button class="btn full outline" id="merge-cancel">取消</button>
   </div>
@@ -2121,10 +2162,10 @@ footer.summary-bar {
 <div id="stocktake-view" hidden>
   <div class="panel standalone" style="background: #fef3c7; border: 2px solid #f59e0b;">
     <div style="display:flex; align-items:center; gap:8px;">
-      <span style="font-size: 22px;">🔍</span>
+      <span style="font-size: 1.375rem;">🔍</span>
       <div style="flex:1;">
         <h2 style="margin: 0; color: #92400e;">盤點進行中</h2>
-        <div class="hint" style="font-size: 11px; margin: 0;" id="stocktake-meta">—</div>
+        <div class="hint" style="font-size: 0.6875rem; margin: 0;" id="stocktake-meta">—</div>
       </div>
     </div>
     <div style="height: 10px"></div>
@@ -2133,7 +2174,7 @@ footer.summary-bar {
            autocapitalize="characters" spellcheck="false" enterkeyhint="done"
            placeholder="刷 SKU 條碼或輸入 + Enter (每刷 +1)"
            class="scan-input" style="background: white;">
-    <div class="hint" style="font-size: 11px; margin-top: 4px;">💡 每刷一個 SKU = +1 實盤數。可在下方手動 ±。</div>
+    <div class="hint" style="font-size: 0.6875rem; margin-top: 4px;">💡 每刷一個 SKU = +1 實盤數。可在下方手動 ±。</div>
     <div class="row" style="gap: 6px; margin-top: 10px;">
       <button class="btn outline sm" id="stocktake-pause-btn" style="flex:1;">⏸ 暫離 (回主畫面)</button>
       <button class="btn sm" id="stocktake-finish-btn" style="flex:2; background: var(--success);">▶ 完成 + 出差異報告</button>
@@ -2143,7 +2184,7 @@ footer.summary-bar {
   </div>
 
   <div class="panel standalone">
-    <div id="stocktake-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 12px;">—</div>
+    <div id="stocktake-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.75rem;">—</div>
 
     <div class="filter-bar" id="stocktake-filter-bar" style="margin-bottom: 8px;">
       <button data-st-filter="all" class="active">全部 <span id="st-cnt-all">0</span></button>
@@ -2161,7 +2202,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="stocktake-diff-modal" hidden>
   <div class="modal" style="max-width: 600px;">
     <h2>📊 盤點差異報告</h2>
-    <p class="hint" style="font-size: 12px;">確認差異 → 套用實盤數會用「實盤」覆蓋系統庫存。</p>
+    <p class="hint" style="font-size: 0.75rem;">確認差異 → 套用實盤數會用「實盤」覆蓋系統庫存。</p>
 
     <div id="stocktake-diff-summary" class="hint" style="background: var(--bg); padding: 10px; border-radius: 8px; margin: 10px 0;"></div>
 
@@ -2181,20 +2222,23 @@ footer.summary-bar {
     <h2>📝 手動建單</h2>
     <p class="hint">適合 1-3 件的小單。建立後在備貨頁刷商品條碼自動加入清單, 每刷一次 +1。</p>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">通路</label>
-    <select id="manual-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">通路</label>
+    <select id="manual-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
       <option value="koca">🌐 KOCA官網</option>
     </select>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 / 訂單編號 <span style="color: var(--danger);">*</span></label>
-    <input type="text" id="manual-parcel-id" placeholder="例如: TW2659... 或 手-20260604-001"
-           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
-           autocapitalize="characters" spellcheck="false"
-           style="width: 100%; padding: 12px; font-size: 15px; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
-    <p class="hint" style="font-size: 11px; margin-top: 4px;">可直接刷寄件單條碼或手動輸入 (按 Enter 直接建立)。</p>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 / 訂單編號 <span style="color: var(--danger);">*</span></label>
+    <div style="display: flex; gap: 4px;">
+      <input type="text" id="manual-parcel-id" placeholder="例如: TW2659... 或 手-20260604-001"
+             inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+             autocapitalize="characters" spellcheck="false"
+             style="flex: 1; padding: 12px; font-size: 0.9375rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+      <button type="button" class="btn outline sm" data-open-numpad="manual-parcel-id" title="開啟內建鍵盤輸入" style="padding: 6px 14px; font-size: 1.125rem;">📲</button>
+    </div>
+    <p class="hint" style="font-size: 0.6875rem; margin-top: 4px;">可直接刷寄件單條碼或手動輸入 (按 Enter 直接建立)。</p>
 
     <div style="height: 16px"></div>
     <div class="row">
@@ -2208,30 +2252,30 @@ footer.summary-bar {
 <div class="modal-backdrop" id="manual-parcel-id-modal" hidden>
   <div class="modal" style="max-width: 520px;">
     <h2>📝 手動輸入寄件編號</h2>
-    <p class="hint" style="font-size: 12px;">7-11 / 全家 的 QR 是內部代碼 (司機 / 店員用), 沒辦法解出面單上的編號。</p>
+    <p class="hint" style="font-size: 0.75rem;">7-11 / 全家 的 QR 是內部代碼 (司機 / 店員用), 沒辦法解出面單上的編號。</p>
 
     <!-- iOS Live Text 提示 -->
-    <div style="background: var(--success-bg); color: var(--success); padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px; line-height: 1.6;">
+    <div style="background: var(--success-bg); color: var(--success); padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.75rem; line-height: 1.6;">
       <strong>💡 iPhone 14 Pro 免打字方法</strong>:<br>
       1. 點下方輸入框<br>
       2. 鍵盤右上會出現 <strong>📷 「掃描文字」</strong><br>
       3. 對準面單上的編號 → 自動填入
-      <br><span style="color: var(--text-soft); font-size: 11px;">需 iOS 15.4+ (你的 14 Pro 一定支援)</span>
+      <br><span style="color: var(--text-soft); font-size: 0.6875rem;">需 iOS 15.4+ (你的 14 Pro 一定支援)</span>
     </div>
 
     <!-- 通路快速鈕 -->
     <div class="row" style="gap: 4px;">
-      <button class="btn outline sm" data-mpid-preset="711" style="flex:1; font-size: 12px;">🏪 7-11 (C+數字)</button>
-      <button class="btn outline sm" data-mpid-preset="fami" style="flex:1; font-size: 12px;">🏬 全家 (純數字)</button>
-      <button class="btn outline sm" data-mpid-preset="free" style="flex:1; font-size: 12px;">✏ 自由輸入</button>
+      <button class="btn outline sm" data-mpid-preset="711" style="flex:1; font-size: 0.75rem;">🏪 7-11 (C+數字)</button>
+      <button class="btn outline sm" data-mpid-preset="fami" style="flex:1; font-size: 0.75rem;">🏬 全家 (純數字)</button>
+      <button class="btn outline sm" data-mpid-preset="free" style="flex:1; font-size: 0.75rem;">✏ 自由輸入</button>
     </div>
 
-    <div id="manual-parcel-id-hint" class="hint" style="font-size: 11px; margin-top: 4px; min-height: 14px; color: var(--text-soft);">點上方按鈕切換鍵盤類型</div>
+    <div id="manual-parcel-id-hint" class="hint" style="font-size: 0.6875rem; margin-top: 4px; min-height: 14px; color: var(--text-soft);">點上方按鈕切換鍵盤類型</div>
 
     <input type="text" id="manual-parcel-id-input" placeholder="點上方按鈕後輸入"
            inputmode="email" lang="en" autocomplete="off" autocorrect="off"
            autocapitalize="characters" spellcheck="false"
-           style="width: 100%; padding: 16px; font-size: 22px; font-weight: 700; text-align: center; letter-spacing: 1px; font-family: ui-monospace, monospace; border: 2px solid var(--primary); border-radius: 10px; margin-top: 6px;">
+           style="width: 100%; padding: 16px; font-size: 1.375rem; font-weight: 700; text-align: center; letter-spacing: 1px; font-family: ui-monospace, monospace; border: 2px solid var(--primary); border-radius: 10px; margin-top: 6px;">
 
     <div style="height: 14px"></div>
     <div class="row">
@@ -2245,7 +2289,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="perf-stats-modal" hidden>
   <div class="modal" style="max-width: 560px;">
     <h2>📊 包貨績效統計</h2>
-    <p class="hint" style="font-size: 12px;">統計每位同仁的包貨數量、件數、平均時間 (依寄件單號裝箱時間計算)。</p>
+    <p class="hint" style="font-size: 0.75rem;">統計每位同仁的包貨數量、件數、平均時間 (依寄件單號裝箱時間計算)。</p>
 
     <div class="filter-bar" id="perf-range-bar" style="margin: 10px 0;">
       <button data-perf-range="today" class="active">本日</button>
@@ -2265,13 +2309,13 @@ footer.summary-bar {
 <div class="modal-backdrop" id="customers-modal" hidden>
   <div class="modal" style="max-width: 600px;">
     <h2>👥 客戶管理</h2>
-    <p class="hint" style="font-size: 12px;">依「客人手機」彙整補寄/退貨次數。3 次以上 = ⛔ 高風險, 1-2 次 = ⚠ 需注意。</p>
+    <p class="hint" style="font-size: 0.75rem;">依「客人手機」彙整補寄/退貨次數。3 次以上 = ⛔ 高風險, 1-2 次 = ⚠ 需注意。</p>
 
     <input type="text" id="customers-search" placeholder="🔍 搜尋姓名 / 手機"
            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-           style="width: 100%; padding: 8px; font-size: 13px; margin: 10px 0;">
+           style="width: 100%; padding: 8px; font-size: 0.8125rem; margin: 10px 0;">
 
-    <div id="customers-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+    <div id="customers-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.75rem;"></div>
     <div id="customers-content" style="max-height: 55vh; overflow-y: auto;"></div>
 
     <div style="height: 14px"></div>
@@ -2283,7 +2327,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="top-sku-modal" hidden>
   <div class="modal" style="max-width: 580px;">
     <h2>📈 熱銷 SKU 排行</h2>
-    <p class="hint" style="font-size: 12px;">依出貨件數排序 (排除補寄/退貨)。</p>
+    <p class="hint" style="font-size: 0.75rem;">依出貨件數排序 (排除補寄/退貨)。</p>
 
     <div class="filter-bar" id="top-sku-range-bar" style="margin: 10px 0;">
       <button data-tsku-range="month" class="active">本月</button>
@@ -2293,7 +2337,7 @@ footer.summary-bar {
       <button data-tsku-range="all">全部</button>
     </div>
 
-    <div id="top-sku-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+    <div id="top-sku-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.75rem;"></div>
     <div id="top-sku-content" style="max-height: 55vh; overflow-y: auto;"></div>
 
     <div style="height: 14px"></div>
@@ -2305,7 +2349,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="return-analysis-modal" hidden>
   <div class="modal" style="max-width: 640px;">
     <h2>🔁 退貨分析</h2>
-    <p class="hint" style="font-size: 12px;">從退貨紀錄分析原因熱點 + 退貨最多的 SKU。</p>
+    <p class="hint" style="font-size: 0.75rem;">從退貨紀錄分析原因熱點 + 退貨最多的 SKU。</p>
 
     <div class="filter-bar" id="return-range-bar" style="margin: 10px 0;">
       <button data-return-range="month" class="active">本月</button>
@@ -2315,7 +2359,7 @@ footer.summary-bar {
       <button data-return-range="all">全部</button>
     </div>
 
-    <div id="return-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+    <div id="return-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.75rem;"></div>
 
     <div id="return-analysis-content" style="max-height: 60vh; overflow-y: auto;"></div>
 
@@ -2329,37 +2373,50 @@ footer.summary-bar {
   <div class="modal" style="max-width: 540px;">
     <h2>📮 補寄訂單</h2>
     <p class="hint">售後補寄專用 - 需填客人聯絡資訊。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機出貨紀錄。</p>
+    <div style="background: var(--warn-bg); padding: 8px 10px; border-radius: 6px; font-size: 0.6875rem; color: #92400e; margin: 6px 0;">
+      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人姓名/手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
+    </div>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">原通路</label>
-    <select id="repl-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原通路</label>
+    <select id="repl-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
       <option value="koca">🌐 KOCA官網</option>
     </select>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 <span style="color: var(--danger);">*</span></label>
-    <input type="text" id="repl-parcel-id" placeholder="例如: TW2659..."
-           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
-           autocapitalize="characters" spellcheck="false"
-           style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 <span style="color: var(--danger);">*</span></label>
+    <div style="display: flex; gap: 4px;">
+      <input type="text" id="repl-parcel-id" placeholder="例如: TW2659..."
+             inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+             autocapitalize="characters" spellcheck="false"
+             style="flex: 1; padding: 10px; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+      <button type="button" class="btn outline sm" data-open-numpad="repl-parcel-id" title="開啟內建鍵盤輸入" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+    </div>
 
     <div class="row" style="margin-top: 12px;">
       <div style="flex: 1.2;">
-        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
-        <input type="text" id="repl-customer-name" placeholder="例: 王小明"
-               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
+        <div style="display: flex; gap: 4px;">
+          <input type="text" id="repl-customer-name" placeholder="例: 王小明"
+                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+          <button type="button" class="btn outline sm" data-paste-target="repl-customer-name" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
+        </div>
       </div>
       <div style="flex: 1;">
-        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
-        <input type="tel" id="repl-customer-phone" placeholder="0912345678" inputmode="tel"
-               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
+        <div style="display: flex; gap: 4px;">
+          <input type="tel" id="repl-customer-phone" placeholder="0912345678" inputmode="tel"
+                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+          <button type="button" class="btn outline sm" data-open-numpad="repl-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+          <button type="button" class="btn outline sm" data-paste-target="repl-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
+        </div>
       </div>
     </div>
     <div id="repl-customer-risk" style="margin-top: 6px;"></div>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">補寄原因</label>
-    <select id="repl-reason" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; background:white;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">補寄原因</label>
+    <select id="repl-reason" style="width:100%; padding:10px; font-size:0.875rem; border:1px solid var(--border); border-radius:8px; background:white;">
       <option value="商品缺漏">商品缺漏</option>
       <option value="商品瑕疵">商品瑕疵</option>
       <option value="客人退換">客人退換</option>
@@ -2368,9 +2425,9 @@ footer.summary-bar {
       <option value="其他">其他</option>
     </select>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
     <textarea id="repl-note" placeholder="例如: 原訂單 #ABC123、客人客服對話日期等"
-              style="width: 100%; padding: 10px; font-size: 13px; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
+              style="width: 100%; padding: 10px; font-size: 0.8125rem; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
 
     <div style="height: 16px"></div>
     <div class="row">
@@ -2385,37 +2442,50 @@ footer.summary-bar {
   <div class="modal" style="max-width: 540px;">
     <h2>📥 退貨確認</h2>
     <p class="hint">客人退貨包裹寄回來, 拆包刷商品條碼確認收到內容。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
+    <div style="background: var(--warn-bg); padding: 8px 10px; border-radius: 6px; font-size: 0.6875rem; color: #92400e; margin: 6px 0;">
+      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人姓名/手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
+    </div>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 10px 0 4px;">原訂單通路</label>
-    <select id="ret-platform-select" style="width:100%; padding:10px; font-size:14px; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原訂單通路</label>
+    <select id="ret-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
       <option value="koca">🌐 KOCA官網</option>
     </select>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">退貨回件寄件單號 <span style="color: var(--danger);">*</span></label>
-    <input type="text" id="ret-parcel-id" placeholder="客人寄回來的寄件單號 (例: TW...)"
-           inputmode="email" lang="en" autocomplete="off" autocorrect="off"
-           autocapitalize="characters" spellcheck="false"
-           style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">退貨回件寄件單號 <span style="color: var(--danger);">*</span></label>
+    <div style="display: flex; gap: 4px;">
+      <input type="text" id="ret-parcel-id" placeholder="客人寄回來的寄件單號 (例: TW...)"
+             inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+             autocapitalize="characters" spellcheck="false"
+             style="flex: 1; padding: 10px; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+      <button type="button" class="btn outline sm" data-open-numpad="ret-parcel-id" title="開啟內建鍵盤輸入" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+    </div>
 
     <div class="row" style="margin-top: 12px;">
       <div style="flex: 1.2;">
-        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
-        <input type="text" id="ret-customer-name" placeholder="例: 王小明"
-               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
+        <div style="display: flex; gap: 4px;">
+          <input type="text" id="ret-customer-name" placeholder="例: 王小明"
+                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+          <button type="button" class="btn outline sm" data-paste-target="ret-customer-name" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
+        </div>
       </div>
       <div style="flex: 1;">
-        <label style="display:block; font-size:12px; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
-        <input type="tel" id="ret-customer-phone" placeholder="0912345678" inputmode="tel"
-               style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px;">
+        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
+        <div style="display: flex; gap: 4px;">
+          <input type="tel" id="ret-customer-phone" placeholder="0912345678" inputmode="tel"
+                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+          <button type="button" class="btn outline sm" data-open-numpad="ret-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+          <button type="button" class="btn outline sm" data-paste-target="ret-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
+        </div>
       </div>
     </div>
     <div id="ret-customer-risk" style="margin-top: 6px;"></div>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">退貨原因</label>
-    <select id="ret-reason" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; background:white;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">退貨原因</label>
+    <select id="ret-reason" style="width:100%; padding:10px; font-size:0.875rem; border:1px solid var(--border); border-radius:8px; background:white;">
       <option value="不喜歡/不適合">不喜歡 / 不適合</option>
       <option value="商品瑕疵">商品瑕疵</option>
       <option value="商品錯誤">商品錯誤</option>
@@ -2424,13 +2494,16 @@ footer.summary-bar {
       <option value="其他">其他</option>
     </select>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">原訂單號 (選填)</label>
-    <input type="text" id="ret-original-order" placeholder="客人原本下單的訂單編號"
-           style="width: 100%; padding: 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px;">
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">原訂單號 (選填)</label>
+    <div style="display: flex; gap: 4px;">
+      <input type="text" id="ret-original-order" placeholder="客人原本下單的訂單編號"
+             style="flex: 1; padding: 10px; font-size: 0.8125rem; border: 1px solid var(--border); border-radius: 8px;">
+      <button type="button" class="btn outline sm" data-paste-target="ret-original-order" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
+    </div>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
     <textarea id="ret-note" placeholder="例如: 商品狀況、退款金額、客服對話紀錄"
-              style="width: 100%; padding: 10px; font-size: 13px; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
+              style="width: 100%; padding: 10px; font-size: 0.8125rem; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
 
     <div style="height: 16px"></div>
     <div class="row">
@@ -2446,7 +2519,7 @@ footer.summary-bar {
     <h2>🏠 開新房間</h2>
     <p class="hint">把目前備貨清單上傳到 Worker, 取得邀請碼分享給另一位同仁加入一起包貨。</p>
 
-    <div id="create-room-status" class="hint" style="margin: 14px 0; padding: 10px; background: var(--bg); border-radius: 8px; font-size: 12px;"></div>
+    <div id="create-room-status" class="hint" style="margin: 14px 0; padding: 10px; background: var(--bg); border-radius: 8px; font-size: 0.75rem;"></div>
 
     <div style="height: 8px"></div>
     <div class="row">
@@ -2462,10 +2535,10 @@ footer.summary-bar {
     <h2>🚪 加入房間</h2>
     <p class="hint">輸入另一位同仁分享給你的 4 碼邀請碼。</p>
 
-    <label style="display:block; font-size:12px; color:var(--text-soft); margin: 12px 0 4px;">邀請碼</label>
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">邀請碼</label>
     <input type="text" id="join-room-code" placeholder="例: K7N3" maxlength="4"
            inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-           style="text-transform: uppercase; font-size: 24px; text-align: center; letter-spacing: 8px; font-weight: 700; padding: 14px; font-family: ui-monospace, monospace;">
+           style="text-transform: uppercase; font-size: 1.5rem; text-align: center; letter-spacing: 8px; font-weight: 700; padding: 14px; font-family: ui-monospace, monospace;">
 
     <div id="join-room-status" class="hint" style="margin: 10px 0; min-height: 16px;"></div>
 
@@ -2509,14 +2582,46 @@ footer.summary-bar {
 
 <div class="toast" id="toast"></div>
 
+<!-- 內建數字鍵盤 (繞過 iOS 藍牙鍵盤限制) -->
+<div id="numpad-overlay" hidden style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  background: white; border-top: 3px solid var(--primary);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.2);
+  padding: 12px 12px 16px; max-height: 56vh; overflow-y: auto;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 0.6875rem; color: var(--text-soft);" id="numpad-label">輸入中</div>
+      <div style="font-size: 1.375rem; font-weight: 700; font-family: ui-monospace, monospace; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="numpad-display">—</div>
+    </div>
+    <button id="numpad-done" style="background: var(--success); color: white; border: 0; border-radius: 10px; padding: 10px 20px; font-weight: 700; font-size: 0.875rem; cursor: pointer; margin-left: 8px;">✓ 完成</button>
+  </div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+    <button data-numpad-key="1" class="numpad-btn">1</button>
+    <button data-numpad-key="2" class="numpad-btn">2</button>
+    <button data-numpad-key="3" class="numpad-btn">3</button>
+    <button data-numpad-key="4" class="numpad-btn">4</button>
+    <button data-numpad-key="5" class="numpad-btn">5</button>
+    <button data-numpad-key="6" class="numpad-btn">6</button>
+    <button data-numpad-key="7" class="numpad-btn">7</button>
+    <button data-numpad-key="8" class="numpad-btn">8</button>
+    <button data-numpad-key="9" class="numpad-btn">9</button>
+    <button data-numpad-key="-" class="numpad-btn numpad-special">−</button>
+    <button data-numpad-key="0" class="numpad-btn">0</button>
+    <button data-numpad-key="backspace" class="numpad-btn numpad-special">⌫</button>
+  </div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+    <button data-numpad-key="clear" class="numpad-btn numpad-special">🗑 清空</button>
+    <button data-numpad-key="paste" class="numpad-btn numpad-special">📋 貼上</button>
+  </div>
+</div>
+
 <!-- Undo FAB -->
 <button id="undo-fab" hidden style="position: fixed; bottom: 110px; right: 14px; z-index: 90;
   background: #1f2937; color: white; border: 0; border-radius: 999px;
-  padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+  padding: 10px 16px; font-size: 0.8125rem; font-weight: 700; cursor: pointer;
   box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 6px; font-family: inherit;">
   <span>↩ 撤回</span>
-  <span id="undo-fab-info" style="font-size: 11px; opacity: 0.85;">—</span>
-  <span id="undo-fab-countdown" style="background: rgba(255,255,255,0.2); border-radius: 10px; padding: 1px 8px; font-size: 11px;">5</span>
+  <span id="undo-fab-info" style="font-size: 0.6875rem; opacity: 0.85;">—</span>
+  <span id="undo-fab-countdown" style="background: rgba(255,255,255,0.2); border-radius: 10px; padding: 1px 8px; font-size: 0.6875rem;">5</span>
 </button>
 
 <script>
@@ -2625,18 +2730,19 @@ function getActiveMemberCount() {
 }
 
 function getAdaptiveSyncInterval() {
-  const BURST_INTERVAL = 3000;    // 3 秒 (對方剛有動作, 30 秒內快速 catch)
-  const BASE_INTERVAL = 7000;     // 7 秒基礎
-  const IDLE_INTERVAL = 15000;    // 15 秒 (連續無變化 + 閒置)
-  const SOLO_INTERVAL = 30000;    // 30 秒 (獨自一人時)
+  const BURST_INTERVAL = 3000;     // 3 秒 (對方剛有動作, 30 秒內快速 catch — 保留即時感)
+  const BASE_INTERVAL = 10000;     // 10 秒基礎 (雙人作業中)
+  const IDLE_INTERVAL = 30000;     // 30 秒 (雙人但連續無變化 + 閒置)
+  const SOLO_INTERVAL = 60000;     // 60 秒 (獨自一人時, 只需偵測有人加入)
+  const SOLO_IDLE_INTERVAL = 120000; // 120 秒 (獨自一人且久未操作 → 最省)
   const idleMs = Date.now() - _lastUserActivity;
   const memberCount = getActiveMemberCount();
-  // Burst 模式: 對方剛有動作, 維持 30 秒快速輪詢
+  // Burst 模式: 對方剛有動作, 維持快速輪詢 (僅雙人時)
   if (_activityBurstUntil && Date.now() < _activityBurstUntil && memberCount > 1) {
     return BURST_INTERVAL;
   }
-  // 獨自一人 → 30 秒輪詢就夠
-  if (memberCount <= 1) return SOLO_INTERVAL;
+  // 獨自一人 → 慢速輪詢就夠 (久未操作再放更慢)
+  if (memberCount <= 1) return idleMs > 120000 ? SOLO_IDLE_INTERVAL : SOLO_INTERVAL;
   if (_consecutiveNoChange >= 5 && idleMs > 30000) return IDLE_INTERVAL;
   return BASE_INTERVAL;
 }
@@ -3334,6 +3440,15 @@ function renderRoomBadge() {
   document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
 }
 
+let _lastHistorySaveOk = true;
+let _storageErrorAt = 0;
+function notifyStorageFull(label) {
+  console.warn("[storage] FAILED:", label);
+  const now = Date.now();
+  if (now - _storageErrorAt < 8000) return; // 節流, 避免連續彈窗
+  _storageErrorAt = now;
+  try { showToast("⚠ 儲存空間可能已滿，資料未存檔！請到 ⚙ 備份並清理舊紀錄"); } catch(e){}
+}
 function saveState() {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -3342,7 +3457,7 @@ function saveState() {
       localStorage.setItem(STATE_BACKUP_KEY, JSON.stringify({ ...state, savedAt: new Date().toISOString() }));
     }
     console.log("[state] saved", state.items.length, "items");
-  } catch(e) { console.warn("[storage] saveState failed", e); }
+  } catch(e) { notifyStorageFull("saveState"); }
 }
 function loadState() {
   try {
@@ -3488,12 +3603,12 @@ function loadCollapsed() {
 }
 function saveSpecMap() { try { localStorage.setItem(SPEC_MAP_KEY, JSON.stringify(specMap)); } catch(e) { console.warn("[storage] saveSpecMap", e); } }
 function saveHistory() {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
-  catch(e) { console.warn("[storage] saveHistory failed", e); }
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); return true; }
+  catch(e) { notifyStorageFull("saveHistory"); return false; }
 }
 function saveStock() {
-  try { localStorage.setItem(STOCK_KEY, JSON.stringify(stockMap)); }
-  catch(e) { console.warn("[storage] saveStock failed", e); }
+  try { localStorage.setItem(STOCK_KEY, JSON.stringify(stockMap)); return true; }
+  catch(e) { notifyStorageFull("saveStock"); return false; }
 }
 function loadStock() {
   try {
@@ -3550,8 +3665,13 @@ function appendHistory() {
     },
   };
   history.unshift(entry); // 新的放最前面
-  saveHistory();
-  console.log("[history] saved entry", entry.id, "items:", items.length);
+  _lastHistorySaveOk = saveHistory();
+  if (!_lastHistorySaveOk) {
+    history.shift(); // 存檔失敗 → 還原, 不留半套資料 (避免重試時重複)
+    console.warn("[history] save FAILED, entry rolled back", entry.id);
+  } else {
+    console.log("[history] saved entry", entry.id, "items:", items.length);
+  }
   return entry;
 }
 
@@ -3870,7 +3990,7 @@ function renderMenu() {
       <div class="empty-state">
         <div class="icon">⭐</div>
         <div>商品庫還是空的</div>
-        <div style="font-size:13px; margin-top:8px;">點下方「📚 管理商品庫」加入主賣商品</div>
+        <div style="font-size:0.8125rem; margin-top:8px;">點下方「📚 管理商品庫」加入主賣商品</div>
       </div>`;
   } else {
     const groups = groupByCategory(library);
@@ -3926,10 +4046,10 @@ function renderUnmappedSkus() {
     return `
       <div class="row-line" style="display:flex; align-items:center; padding: 6px 8px; border-bottom: 1px solid var(--border-light); gap: 6px;">
         <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 600; font-size: 12px;">${escapeHtml(sku)}</div>
-          <div style="font-size: 11px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(st.name || "(無名稱)")} · 庫存 ${st.qty || 0}</div>
+          <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(sku)}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(st.name || "(無名稱)")} · 庫存 ${st.qty || 0}</div>
         </div>
-        <select data-unmapped-cat="${escapeHtml(sku)}" style="font-size: 11px; padding: 3px; border:1px solid var(--border); border-radius:4px; background:white;">
+        <select data-unmapped-cat="${escapeHtml(sku)}" style="font-size: 0.6875rem; padding: 3px; border:1px solid var(--border); border-radius:4px; background:white;">
           ${catOptions}
         </select>
         <button class="btn sm" data-unmapped-add="${escapeHtml(sku)}" style="padding: 3px 10px; font-weight: 700;">+</button>
@@ -3954,7 +4074,7 @@ function renderLibrary() {
         <div class="item-info">
           <div class="item-sku">${escapeHtml(p.sku)}${p.essential ? ' <span class="essential-badge">必要</span>' : ''}</div>
           <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
-          <div style="font-size:10px; color:var(--text-soft); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap;">
+          <div style="font-size:0.625rem; color:var(--text-soft); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap;">
             <span>條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>${customBc ? ' (自訂)' : ''}</span>
             <span>單價: <span style="font-family:monospace; color:${price > 0 ? 'var(--success)' : 'var(--danger)'};">$${price.toFixed(2)}</span></span>
           </div>
@@ -4165,7 +4285,7 @@ function renderA1Mapping() {
 
     return `
       <div class="map-card ${cls}" data-idx="${idx}">
-        <div class="map-spec">${escapeHtml(item.spec)}${isAmbig && item.productName ? `<div style="font-size:11px; color:var(--text-soft); margin-top:4px;">⚠ 規格「${escapeHtml(item.spec)}」, 改用商品名稱識別:<br>📦 ${escapeHtml(item.productName)}</div>` : ''}</div>
+        <div class="map-spec">${escapeHtml(item.spec)}${isAmbig && item.productName ? `<div style="font-size:0.6875rem; color:var(--text-soft); margin-top:4px;">⚠ 規格「${escapeHtml(item.spec)}」, 改用商品名稱識別:<br>📦 ${escapeHtml(item.productName)}</div>` : ''}</div>
         <div class="map-meta">
           <span class="badge">${item.orderQty} 筆訂單</span>
         </div>
@@ -4316,7 +4436,7 @@ function renderInventory() {
       sumEl.innerHTML = '尚未匯入庫存資料。點「📥 匯入庫存 CSV」上傳商品庫存 CSV。';
     } else {
       const updateStr = lastUpdated ? new Date(lastUpdated).toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12: false }) : "—";
-      sumEl.innerHTML = `<div><strong>庫存 SKU</strong> ${stockSkuCount} 個 · <strong>總件數</strong> ${stockTotal.toLocaleString()} 件 · ⚠ 低 ${cntLow} · 缺 ${cntOut}</div><div style="font-size:11px; color:var(--text-soft); margin-top:4px;">最後更新: ${updateStr}</div>`;
+      sumEl.innerHTML = `<div><strong>庫存 SKU</strong> ${stockSkuCount} 個 · <strong>總件數</strong> ${stockTotal.toLocaleString()} 件 · ⚠ 低 ${cntLow} · 缺 ${cntOut}</div><div style="font-size:0.6875rem; color:var(--text-soft); margin-top:4px;">最後更新: ${updateStr}</div>`;
     }
   }
 
@@ -4360,20 +4480,20 @@ function renderInventory() {
 
       let qtyHtml;
       if (qty === null) {
-        qtyHtml = '<span style="color: var(--text-soft); font-size: 11px;">未匯入</span>';
+        qtyHtml = '<span style="color: var(--text-soft); font-size: 0.6875rem;">未匯入</span>';
       } else if (qty === 0) {
-        qtyHtml = `<span style="color: var(--danger); font-weight: 700; font-size: 16px;">${qty}</span> <span style="color: var(--danger); font-size: 11px;">缺貨</span>`;
+        qtyHtml = `<span style="color: var(--danger); font-weight: 700; font-size: 1rem;">${qty}</span> <span style="color: var(--danger); font-size: 0.6875rem;">缺貨</span>`;
       } else if (qty < getLowStockThreshold()) {
-        qtyHtml = `<span style="color: #92400e; font-weight: 700; font-size: 16px;">${qty}</span> <span style="color: #92400e; font-size: 11px;">⚠ 低</span>`;
+        qtyHtml = `<span style="color: #92400e; font-weight: 700; font-size: 1rem;">${qty}</span> <span style="color: #92400e; font-size: 0.6875rem;">⚠ 低</span>`;
       } else {
-        qtyHtml = `<span style="font-weight: 700; font-size: 16px;">${qty.toLocaleString()}</span>`;
+        qtyHtml = `<span style="font-weight: 700; font-size: 1rem;">${qty.toLocaleString()}</span>`;
       }
 
       return `
         <div class="row-line" style="display:flex; justify-content:space-between; align-items:center; padding: 8px 10px; border-bottom: 1px solid var(--border-light); gap: 8px;">
           <div style="flex:1; min-width:0;">
-            <div style="font-weight: 600; font-size: 13px;">${escapeHtml(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 11px;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 10px;">未入庫</span>' : ''}</div>
-            <div style="font-size: 12px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(name)}</div>
+            <div style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 0.6875rem;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 0.625rem;">未入庫</span>' : ''}</div>
+            <div style="font-size: 0.75rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(name)}</div>
           </div>
           <div style="text-align: right; white-space: nowrap;">${qtyHtml}</div>
         </div>
@@ -4381,7 +4501,7 @@ function renderInventory() {
     }).join("");
     return `
       <div class="cat-group" style="margin-bottom: 10px;">
-        <div class="cat-header" style="background: var(--primary-light); padding: 8px 10px; font-weight: 600; font-size: 13px;">
+        <div class="cat-header" style="background: var(--primary-light); padding: 8px 10px; font-weight: 600; font-size: 0.8125rem;">
           ${catEmoji} ${escapeHtml(cat)} <span style="color: var(--text-soft); font-weight: normal;">(${skus.length})</span>
         </div>
         <div>${itemsHtml}</div>
@@ -4684,13 +4804,13 @@ function renderStockTake() {
     return `
       <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light);">
         <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 600; font-size: 12px;">${escapeHtml(r.sku)}</div>
-          <div style="font-size: 11px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+          <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 11px; color: var(--text-soft);">系統 ${r.system}</div>
-          <div style="font-size: 13px; font-weight: 700;">實盤 ${r.actual}</div>
-          <div style="font-size: 11px; color: ${diffColor}; font-weight: 600;">${diffText}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft);">系統 ${r.system}</div>
+          <div style="font-size: 0.8125rem; font-weight: 700;">實盤 ${r.actual}</div>
+          <div style="font-size: 0.6875rem; color: ${diffColor}; font-weight: 600;">${diffText}</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 28px; height: 24px; cursor: pointer; font-weight: 700;">+</button>
@@ -4707,7 +4827,7 @@ function renderStockTakeStatusInSettings() {
   if (stockTake) {
     const counts = stockTake.counts || {};
     const startedAt = new Date(stockTake.startedAt);
-    status.innerHTML = `<span style="color: #92400e;">⏸ <strong>盤點進行中</strong></span> · 已掃 ${Object.keys(counts).length} SKU / ${Object.values(counts).reduce((s,q)=>s+q,0)} 件<br><span style="font-size: 11px; color: var(--text-soft);">開始於 ${startedAt.toLocaleString("zh-TW", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>`;
+    status.innerHTML = `<span style="color: #92400e;">⏸ <strong>盤點進行中</strong></span> · 已掃 ${Object.keys(counts).length} SKU / ${Object.values(counts).reduce((s,q)=>s+q,0)} 件<br><span style="font-size: 0.6875rem; color: var(--text-soft);">開始於 ${startedAt.toLocaleString("zh-TW", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>`;
     document.getElementById("stocktake-start-btn").hidden = true;
     document.getElementById("stocktake-resume-btn").hidden = false;
   } else {
@@ -4727,7 +4847,7 @@ function renderStockTakeStatusInSettings() {
         const d = new Date(h.completedAt);
         return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-light);">
           <div style="font-weight: 600;">${d.toLocaleString("zh-TW", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})}</div>
-          <div style="font-size: 11px; color: var(--text-soft);">${h.countedSkus} SKU / ${h.totalActual} 件 · ＋${h.plusCount} −${h.minusCount} · 未盤 ${h.notCountedCount}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft);">${h.countedSkus} SKU / ${h.totalActual} 件 · ＋${h.plusCount} −${h.minusCount} · 未盤 ${h.notCountedCount}</div>
         </div>`;
       }).join("");
     }
@@ -4793,7 +4913,7 @@ function showStockTakeDiffReport() {
   const notCounted = results.filter(r => !r.inStockTake);
   const totalActual = (stockTake.counts ? Object.values(stockTake.counts).reduce((s,q)=>s+q,0) : 0);
   const summary = document.getElementById("stocktake-diff-summary");
-  summary.innerHTML = `<div style="font-size: 13px;">
+  summary.innerHTML = `<div style="font-size: 0.8125rem;">
     <div><strong>已盤 ${counted.length} SKU · 共 ${totalActual} 件</strong></div>
     <div style="margin-top: 4px;">
       ✓ 一致 ${equal.length} · <span style="color: var(--success);">＋多 ${plus.length}</span> · <span style="color: var(--danger);">−少 ${minus.length}</span> · 未盤 ${notCounted.length}
@@ -4812,10 +4932,10 @@ function showStockTakeDiffReport() {
       return `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: ${bg}; border-radius: 6px; margin-bottom: 4px;">
           <div style="min-width: 0; flex: 1;">
-            <div style="font-weight: 600; font-size: 12px;">${escapeHtml(r.sku)}</div>
-            <div style="font-size: 10px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+            <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}</div>
+            <div style="font-size: 0.625rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
           </div>
-          <div style="text-align: right; font-size: 12px;">
+          <div style="text-align: right; font-size: 0.75rem;">
             ${r.system} → <strong>${r.actual}</strong>
             <span style="color: ${color}; font-weight: 700; margin-left: 6px;">${r.diff > 0 ? '+' : ''}${r.diff}</span>
           </div>
@@ -4823,7 +4943,7 @@ function showStockTakeDiffReport() {
       `;
     }).join("");
     if (notCounted.length > 0) {
-      content.innerHTML += `<div style="text-align: center; color: var(--text-soft); font-size: 11px; margin-top: 8px;">⚠ 還有 ${notCounted.length} 個 SKU 未盤 (套用後不影響它們的庫存)</div>`;
+      content.innerHTML += `<div style="text-align: center; color: var(--text-soft); font-size: 0.6875rem; margin-top: 8px;">⚠ 還有 ${notCounted.length} 個 SKU 未盤 (套用後不影響它們的庫存)</div>`;
     }
   }
   document.getElementById("stocktake-diff-modal").hidden = false;
@@ -4951,10 +5071,10 @@ function renderPerfStats(range) {
     return `
       <div style="background: ${idx === 0 ? 'var(--warn-bg)' : 'var(--bg)'}; border-radius: 10px; padding: 12px; margin-bottom: 10px;">
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 8px;">
-          <div style="font-weight: 700; font-size: 16px;">${idx === 0 ? '🏆 ' : ''}${escapeHtml(name)}${isMe ? ' <span style="font-size: 11px; color: var(--primary);">(你)</span>' : ''}</div>
-          <div style="font-size: 13px; color: var(--text-soft);">${d.parcels} 單 · ${d.items} 件</div>
+          <div style="font-weight: 700; font-size: 1rem;">${idx === 0 ? '🏆 ' : ''}${escapeHtml(name)}${isMe ? ' <span style="font-size: 0.6875rem; color: var(--primary);">(你)</span>' : ''}</div>
+          <div style="font-size: 0.8125rem; color: var(--text-soft);">${d.parcels} 單 · ${d.items} 件</div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.75rem;">
           <div>⏱ 平均: <strong>${formatDuration(d.avgSec)}</strong></div>
           <div>🚀 時速: <strong>${d.parcelsPerHour.toFixed(1)} 單/時</strong></div>
           <div>⚡ 最快: <strong>${formatDuration(d.fastestSec)}</strong></div>
@@ -5031,11 +5151,11 @@ function renderCustomers(query) {
         <div style="display:flex; justify-content:space-between; align-items:baseline;">
           <div>
             <strong>${risk.icon} ${escapeHtml(c.name || "(未填名)")}</strong>
-            <span style="font-family: ui-monospace, monospace; font-size: 12px; margin-left: 6px; color: var(--text-soft);">${escapeHtml(c.phone || "")}</span>
-            ${risk.label ? `<span style="color: ${risk.color}; font-size: 11px; font-weight: 700; margin-left: 4px;">${risk.label}</span>` : ''}
+            <span style="font-family: ui-monospace, monospace; font-size: 0.75rem; margin-left: 6px; color: var(--text-soft);">${escapeHtml(c.phone || "")}</span>
+            ${risk.label ? `<span style="color: ${risk.color}; font-size: 0.6875rem; font-weight: 700; margin-left: 4px;">${risk.label}</span>` : ''}
           </div>
         </div>
-        <div style="font-size: 11px; color: var(--text-soft); margin-top: 4px;">
+        <div style="font-size: 0.6875rem; color: var(--text-soft); margin-top: 4px;">
           📮 補寄 ${c.replacement} 次 · 📥 退貨 ${c.return} 次 · 最近: ${lastSeen}
         </div>
       </div>
@@ -5103,12 +5223,12 @@ function renderReturnAnalysis(range) {
   // 退貨原因排行
   const reasonsRanked = Object.entries(data.reasonCount).sort((a, b) => b[1] - a[1]);
   const maxReason = reasonsRanked.length > 0 ? reasonsRanked[0][1] : 1;
-  let reasonHtml = '<h3 style="font-size: 14px; margin: 0 0 8px;">📊 退貨原因排行</h3>';
+  let reasonHtml = '<h3 style="font-size: 0.875rem; margin: 0 0 8px;">📊 退貨原因排行</h3>';
   for (const [reason, count] of reasonsRanked) {
     const pct = Math.max(2, Math.round(count / maxReason * 100));
     reasonHtml += `
       <div style="margin-bottom: 6px;">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
           <span>${escapeHtml(reason)}</span>
           <strong>${count} 次</strong>
         </div>
@@ -5121,7 +5241,7 @@ function renderReturnAnalysis(range) {
 
   // 退貨最多 SKU
   const skuRanked = Object.entries(data.skuReturnCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  let skuHtml = '<h3 style="font-size: 14px; margin: 16px 0 8px;">🔴 退貨次數最多 SKU (Top 10)</h3>';
+  let skuHtml = '<h3 style="font-size: 0.875rem; margin: 16px 0 8px;">🔴 退貨次數最多 SKU (Top 10)</h3>';
   if (skuRanked.length === 0) {
     skuHtml += '<div class="hint" style="text-align: center;">無</div>';
   } else {
@@ -5135,21 +5255,21 @@ function renderReturnAnalysis(range) {
       skuHtml += `
         <div style="margin-bottom: 8px; padding: 8px 10px; background: var(--bg); border-radius: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <strong style="font-size: 13px; font-family: ui-monospace, monospace;">${escapeHtml(sku)}</strong>
-            <span style="color: var(--danger); font-weight: 700; font-size: 14px;">${count} 件</span>
+            <strong style="font-size: 0.8125rem; font-family: ui-monospace, monospace;">${escapeHtml(sku)}</strong>
+            <span style="color: var(--danger); font-weight: 700; font-size: 0.875rem;">${count} 件</span>
           </div>
-          <div style="font-size: 11px; color: var(--text-soft); margin: 2px 0;">${escapeHtml(name)}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft); margin: 2px 0;">${escapeHtml(name)}</div>
           <div style="background: var(--border-light); height: 4px; border-radius: 2px; overflow: hidden; margin: 4px 0;">
             <div style="background: var(--danger); height: 100%; width: ${pct}%;"></div>
           </div>
-          <div style="font-size: 11px; color: var(--text-soft);">主因: ${escapeHtml(topReasonsText)}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft);">主因: ${escapeHtml(topReasonsText)}</div>
         </div>
       `;
     }
   }
 
   // 熱力圖: 原因 × Top SKU
-  let heatmapHtml = '<h3 style="font-size: 14px; margin: 16px 0 8px;">🌡 熱力圖 (原因 × Top SKU)</h3>';
+  let heatmapHtml = '<h3 style="font-size: 0.875rem; margin: 16px 0 8px;">🌡 熱力圖 (原因 × Top SKU)</h3>';
   if (skuRanked.length > 0) {
     const topSkus = skuRanked.slice(0, 8).map(([sku]) => sku);
     // 找最大值給顏色強度
@@ -5160,11 +5280,11 @@ function renderReturnAnalysis(range) {
         if (c > maxCell) maxCell = c;
       }
     }
-    heatmapHtml += '<div style="overflow-x: auto;"><table style="border-collapse: collapse; font-size: 11px; min-width: 100%;">';
+    heatmapHtml += '<div style="overflow-x: auto;"><table style="border-collapse: collapse; font-size: 0.6875rem; min-width: 100%;">';
     // header
     heatmapHtml += '<thead><tr><th style="text-align: left; padding: 4px 6px; font-weight: 600; background: var(--bg); position: sticky; left: 0;">SKU</th>';
     for (const r of RETURN_REASONS) {
-      heatmapHtml += `<th style="text-align: center; padding: 4px 4px; font-weight: 600; background: var(--bg); font-size: 10px; min-width: 60px;">${escapeHtml(r)}</th>`;
+      heatmapHtml += `<th style="text-align: center; padding: 4px 4px; font-weight: 600; background: var(--bg); font-size: 0.625rem; min-width: 60px;">${escapeHtml(r)}</th>`;
     }
     heatmapHtml += '</tr></thead><tbody>';
     for (const sku of topSkus) {
@@ -5179,7 +5299,7 @@ function renderReturnAnalysis(range) {
       heatmapHtml += '</tr>';
     }
     heatmapHtml += '</tbody></table></div>';
-    heatmapHtml += '<p class="hint" style="font-size: 11px; margin-top: 6px;">紅色越深 = 該 SKU 因該原因退貨件數越多</p>';
+    heatmapHtml += '<p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">紅色越深 = 該 SKU 因該原因退貨件數越多</p>';
   }
 
   content.innerHTML = reasonHtml + skuHtml + heatmapHtml;
@@ -5324,13 +5444,13 @@ function renderTopSKUs(range) {
     const rankColor = idx < 3 ? 'white' : 'var(--text-soft)';
     return `
       <div style="display:flex; align-items:center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-light);">
-        <div style="background: ${rankBg}; color: ${rankColor}; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${idx + 1}</div>
+        <div style="background: ${rankBg}; color: ${rankColor}; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8125rem;">${idx + 1}</div>
         <div style="flex: 1; min-width: 0;">
           <div style="display: flex; justify-content: space-between; gap: 6px; align-items: baseline;">
-            <span style="font-weight: 700; font-size: 12px; font-family: ui-monospace, monospace;">${escapeHtml(it.sku)}</span>
-            <span style="font-weight: 700; font-size: 14px; color: var(--primary);">${it.qty} 件</span>
+            <span style="font-weight: 700; font-size: 0.75rem; font-family: ui-monospace, monospace;">${escapeHtml(it.sku)}</span>
+            <span style="font-weight: 700; font-size: 0.875rem; color: var(--primary);">${it.qty} 件</span>
           </div>
-          <div style="font-size: 11px; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.name || "")}${it.category ? ' · ' + escapeHtml(it.category) : ''} · ${it.orders} 訂單</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(it.name || "")}${it.category ? ' · ' + escapeHtml(it.category) : ''} · ${it.orders} 訂單</div>
           <div style="background: var(--border-light); height: 4px; border-radius: 2px; margin-top: 4px; overflow: hidden;">
             <div style="background: var(--primary); height: 100%; width: ${pct}%;"></div>
           </div>
@@ -5410,10 +5530,10 @@ function showCustomerRiskWarning(phone, hintElId) {
   if (!c) { el.innerHTML = ""; return; }
   const risk = getCustomerRisk(c);
   if (risk.level === "normal") {
-    el.innerHTML = `<span style="color: var(--text-soft); font-size: 11px;">ℹ ${escapeHtml(c.name || "")} 過去無售後紀錄</span>`;
+    el.innerHTML = `<span style="color: var(--text-soft); font-size: 0.6875rem;">ℹ ${escapeHtml(c.name || "")} 過去無售後紀錄</span>`;
     return;
   }
-  el.innerHTML = `<div style="background: ${risk.bg}; color: ${risk.color}; padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 4px;">
+  el.innerHTML = `<div style="background: ${risk.bg}; color: ${risk.color}; padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; margin-top: 4px;">
     <strong>${risk.icon} ${escapeHtml(c.name || "此手機")} ${risk.label}</strong>: 過去 📮 補寄 ${c.replacement} 次 · 📥 退貨 ${c.return} 次
   </div>`;
 }
@@ -5488,7 +5608,7 @@ function renderHistory() {
   const totalQtyRepl = thisMonthRepl.reduce((s, e) => s + e.summary.totalPacked, 0);
   const totalQtyReturn = thisMonthReturn.reduce((s, e) => s + e.summary.totalPacked, 0);
   stats.innerHTML = `
-    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:13px;">
+    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:0.8125rem;">
       <div><strong>本月一般</strong> ${thisMonthNormal.length} 次 · ${totalQtyNormal} 件</div>
       <div style="color:#92400e;"><strong>本月補寄</strong> ${thisMonthRepl.length} 次 · ${totalQtyRepl} 件</div>
       <div style="color:#166534;"><strong>本月退貨</strong> ${thisMonthReturn.length} 次 · ${totalQtyReturn} 件</div>
@@ -5513,7 +5633,7 @@ function renderHistory() {
     if (stats && q) {
       const origInner = stats.innerHTML;
       stats.innerHTML = origInner +
-        `<div style="margin-top: 6px; padding: 6px 10px; background: var(--warn-bg); color: #92400e; border-radius: 6px; font-size: 12px; font-weight: 600;">🔍 搜尋「${escapeHtml(historySearchQuery)}」找到 ${displayed.length} 筆</div>`;
+        `<div style="margin-top: 6px; padding: 6px 10px; background: var(--warn-bg); color: #92400e; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">🔍 搜尋「${escapeHtml(historySearchQuery)}」找到 ${displayed.length} 筆</div>`;
     }
   }
   if (displayed.length === 0) {
@@ -5536,18 +5656,18 @@ function renderHistory() {
       // 先列寄件單號 (含 🔗 追蹤按鈕)
       const parcels = e.parcels || [];
       if (parcels.length > 0) {
-        detail += `<div style="font-size: 11px; color: var(--text-soft); margin-bottom: 6px;">📦 寄件單號 (${parcels.length} 筆)</div>`;
+        detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 6px;">📦 寄件單號 (${parcels.length} 筆)</div>`;
         for (const p of parcels) {
-          const byTag = p.packedBy ? ` <span style="color: var(--text-soft); font-size: 10px;">(${escapeHtml(p.packedBy)})</span>` : '';
+          const byTag = p.packedBy ? ` <span style="color: var(--text-soft); font-size: 0.625rem;">(${escapeHtml(p.packedBy)})</span>` : '';
           detail += `<div class="row-line" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 4px 0;">
-            <span style="font-family: ui-monospace, monospace; font-size: 12px;">${escapeHtml(p.id)}${byTag}</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 0.75rem;">${escapeHtml(p.id)}${byTag}</span>
             <span style="display:flex; gap: 2px;">${makeTrackingButtonsHtml(p.id, { size: "normal" })}</span>
           </div>`;
         }
         detail += `<div style="height: 8px"></div>`;
       }
       // 接著列商品
-      detail += `<div style="font-size: 11px; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
+      detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
       for (const it of e.items) {
         const cls = it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "");
         detail += `<div class="row-line ${cls}"><span>${escapeHtml(it.sku)} · ${escapeHtml(it.name)}</span><span>${it.packed}/${it.expected}</span></div>`;
@@ -5557,7 +5677,7 @@ function renderHistory() {
     return `
       <div class="history-item ${isPartial ? 'partial' : ''}">
         <div class="history-item-header">
-          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 4px;">📝 手建</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 11px; margin-top: 2px; color: #92400e;">👤 ${escapeHtml(e.replacementInfo.customerName || "")} · 📱 ${escapeHtml(e.replacementInfo.customerPhone || "")} · 原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 11px; margin-top: 2px; color: #166534;">👤 ${escapeHtml(e.returnInfo.customerName || "")} · 📱 ${escapeHtml(e.returnInfo.customerPhone || "")} · 原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}
+          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📝 手建</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #92400e;">👤 ${escapeHtml(e.replacementInfo.customerName || "")} · 📱 ${escapeHtml(e.replacementInfo.customerPhone || "")} · 原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #166534;">👤 ${escapeHtml(e.returnInfo.customerName || "")} · 📱 ${escapeHtml(e.returnInfo.customerPhone || "")} · 原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
         </div>
         <div class="history-item-summary">
@@ -6017,7 +6137,7 @@ function renderCompletedParcelsList() {
     const t = new Date(p.completedAt);
     const timeStr = t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
     const itemsStr = Object.entries(p.items || {}).map(([sku, q]) => `${sku}×${q}`).join("、");
-    const byTag = (state.roomMode && p.packedBy) ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 0 6px; border-radius: 8px; font-size: 10px;">${escapeHtml(p.packedBy)}</span>` : '';
+    const byTag = (state.roomMode && p.packedBy) ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 0 6px; border-radius: 8px; font-size: 0.625rem;">${escapeHtml(p.packedBy)}</span>` : '';
     const trackBtn = makeTrackingButtonsHtml(p.id, { size: "small" });
     return `<div class="completed-parcel">
       <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span>${trackBtn}${byTag}<span class="completed-parcel-time">${timeStr}</span></div>
@@ -6196,7 +6316,7 @@ function renderEssentialList() {
     list.innerHTML = "尚無";
     return;
   }
-  list.innerHTML = essentials.map(p => `<div style="padding:3px 0;font-size:12px;"><strong style="color:var(--primary);">${escapeHtml(p.sku)}</strong> · ${escapeHtml(p.name || "")}</div>`).join("");
+  list.innerHTML = essentials.map(p => `<div style="padding:3px 0;font-size:0.75rem;"><strong style="color:var(--primary);">${escapeHtml(p.sku)}</strong> · ${escapeHtml(p.name || "")}</div>`).join("");
 }
 
 function renderSpecMapList() {
@@ -6945,7 +7065,7 @@ function renderSpecEditSkus() {
   const libOptions = library.map(p => `<option value="${escapeHtml(p.sku)}">${escapeHtml(p.sku)} — ${escapeHtml(p.name)}</option>`).join("");
   wrap.innerHTML = editingMappings.map((m, i) => `
     <div class="mapped-sku" style="margin-bottom: 6px;">
-      <select data-spec-sku-idx="${i}" style="flex:1; padding:6px; font-size:12px; font-family: inherit; border:1px solid var(--border); border-radius:6px;">
+      <select data-spec-sku-idx="${i}" style="flex:1; padding:6px; font-size:0.75rem; font-family: inherit; border:1px solid var(--border); border-radius:6px;">
         <option value="">-- 選 SKU --</option>
         ${libOptions.replace(`value="${escapeHtml(m.sku)}"`, `value="${escapeHtml(m.sku)}" selected`)}
       </select>
@@ -7816,14 +7936,14 @@ document.getElementById("room-badge").addEventListener("click", () => {
   let liveStatsHtml = "";
   if (liveRanked.length > 0) {
     const maxParcels = liveRanked[0][1].parcels;
-    liveStatsHtml = '<h3 style="font-size: 13px; margin: 0 0 8px;">📊 本次包貨即時對比</h3>';
+    liveStatsHtml = '<h3 style="font-size: 0.8125rem; margin: 0 0 8px;">📊 本次包貨即時對比</h3>';
     for (const [name, st] of liveRanked) {
       const pct = maxParcels > 0 ? Math.max(4, Math.round(st.parcels / maxParcels * 100)) : 0;
       const isMe = name === settings.myName;
-      const myMarker = isMe ? ' <span style="font-size: 10px; color: var(--primary); font-weight: 700;">(你)</span>' : '';
+      const myMarker = isMe ? ' <span style="font-size: 0.625rem; color: var(--primary); font-weight: 700;">(你)</span>' : '';
       liveStatsHtml += `
         <div style="margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
             <span><strong>${escapeHtml(name)}</strong>${myMarker}</span>
             <span><strong style="color: var(--primary);">${st.parcels}</strong> 單 · ${st.items} 件</span>
           </div>
@@ -7850,20 +7970,20 @@ document.getElementById("room-badge").addEventListener("click", () => {
     else statusText = `⚪ ${Math.round(sinceMs/3600000)} 小時前活動`;
     return `<div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
       <div>
-        <strong>${escapeHtml(name)}</strong>${isMe ? ' <span style="font-size:11px; color: var(--primary);">(你)</span>' : ''}
-        <div style="font-size:11px; color:var(--text-soft);">${statusText}${escapeHtml(myActiveText)}</div>
+        <strong>${escapeHtml(name)}</strong>${isMe ? ' <span style="font-size:0.6875rem; color: var(--primary);">(你)</span>' : ''}
+        <div style="font-size:0.6875rem; color:var(--text-soft);">${statusText}${escapeHtml(myActiveText)}</div>
       </div>
     </div>`;
   }).join("") || '<div class="hint">尚無成員資料</div>';
   const lastSync = state.roomLastSyncAt ? new Date(state.roomLastSyncAt).toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", second:"2-digit"}) : "—";
   content.innerHTML = `
     <div style="background: var(--primary-light); padding: 12px; border-radius: 10px; margin-bottom: 12px;">
-      <div style="font-size: 11px; color: var(--text-soft);">邀請碼</div>
-      <div style="font-size: 32px; font-weight: 700; letter-spacing: 4px; font-family: ui-monospace, monospace; color: var(--primary);">${escapeHtml(state.roomCode || "—")}</div>
-      <div style="font-size: 11px; color: var(--text-soft); margin-top: 4px;">最後同步: ${lastSync}</div>
+      <div style="font-size: 0.6875rem; color: var(--text-soft);">邀請碼</div>
+      <div style="font-size: 2rem; font-weight: 700; letter-spacing: 4px; font-family: ui-monospace, monospace; color: var(--primary);">${escapeHtml(state.roomCode || "—")}</div>
+      <div style="font-size: 0.6875rem; color: var(--text-soft); margin-top: 4px;">最後同步: ${lastSync}</div>
     </div>
     ${liveStatsHtml}
-    <h3 style="font-size: 13px; margin: 0 0 8px;">成員 (${Object.keys(state.roomMembers || {}).length})</h3>
+    <h3 style="font-size: 0.8125rem; margin: 0 0 8px;">成員 (${Object.keys(state.roomMembers || {}).length})</h3>
     ${memberRows}
   `;
   m.hidden = false;
@@ -8084,6 +8204,103 @@ if (_mbBtn) {
 const _undoFab = document.getElementById("undo-fab");
 if (_undoFab) _undoFab.addEventListener("click", undoLastAction);
 
+// 📲 內建數字鍵盤
+let _numpadTargetId = null;
+const NUMPAD_LABELS = {
+  "manual-parcel-id": "寄件單號",
+  "repl-parcel-id": "寄件單號",
+  "repl-customer-phone": "客人手機",
+  "ret-parcel-id": "寄件單號",
+  "ret-customer-phone": "客人手機",
+};
+function openNumpad(targetId, label) {
+  _numpadTargetId = targetId;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  document.getElementById("numpad-label").textContent = NUMPAD_LABELS[targetId] || label || ("輸入: " + targetId);
+  document.getElementById("numpad-display").textContent = target.value || "(空)";
+  document.getElementById("numpad-overlay").hidden = false;
+  try { target.scrollIntoView({ block: "center" }); } catch(e){}
+}
+function closeNumpad() {
+  document.getElementById("numpad-overlay").hidden = true;
+  _numpadTargetId = null;
+}
+function numpadInput(key) {
+  if (!_numpadTargetId) return;
+  const target = document.getElementById(_numpadTargetId);
+  if (!target) return;
+  if (key === "backspace") {
+    target.value = target.value.slice(0, -1);
+  } else if (key === "clear") {
+    target.value = "";
+  } else if (key === "paste") {
+    // 貼上邏輯共用全域 paste handler
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(text => {
+        if (text) {
+          let clean = text.trim();
+          if (target.type === "tel") clean = clean.replace(/[^\d\s\-+()]/g, "").trim();
+          target.value = clean;
+          target.dispatchEvent(new Event("input", { bubbles: true }));
+          document.getElementById("numpad-display").textContent = target.value || "(空)";
+        }
+      });
+    }
+    return;
+  } else {
+    target.value += key;
+  }
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  document.getElementById("numpad-display").textContent = target.value || "(空)";
+}
+
+// numpad 按鍵代理
+document.body.addEventListener("click", (e) => {
+  const k = e.target.closest("button[data-numpad-key]");
+  if (k) {
+    e.preventDefault();
+    numpadInput(k.dataset.numpadKey);
+    return;
+  }
+  const open = e.target.closest("button[data-open-numpad]");
+  if (open) {
+    e.preventDefault();
+    openNumpad(open.dataset.openNumpad, open.title || "");
+    return;
+  }
+});
+document.getElementById("numpad-done").addEventListener("click", closeNumpad);
+document.getElementById("numpad-overlay").addEventListener("click", (e) => {
+  // 點 overlay 之外 (背景區域) 才關
+  if (e.target.id === "numpad-overlay") closeNumpad();
+});
+
+// 📋 全域貼上按鈕代理
+document.body.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-paste-target]");
+  if (!btn) return;
+  e.preventDefault();
+  const targetId = btn.dataset.pasteTarget;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      showToast("⚠ 此瀏覽器不支援讀剪貼簿"); target.focus(); return;
+    }
+    const text = await navigator.clipboard.readText();
+    if (!text) { showToast("剪貼簿是空的"); return; }
+    let clean = text.trim();
+    if (target.type === "tel") clean = clean.replace(/[^\d\s\-+()]/g, "").trim();
+    target.value = clean;
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    showToast(`📋 已貼上: ${clean.substring(0, 20)}${clean.length > 20 ? "..." : ""}`);
+  } catch(err) {
+    showToast("⚠ 無法讀剪貼簿 (iOS Safari 需 HTTPS + 授權)");
+    target.focus();
+  }
+});
+
 // 字體大小 picker (代理在 settings-modal click 處理)
 function refreshFontPicker() {
   const current = settings.fontSize || "medium";
@@ -8211,8 +8428,8 @@ function showHealthCheck(issues, onForce) {
     const bg = it.level === "critical" ? "var(--danger-bg)" : "var(--warn-bg)";
     const fg = it.level === "critical" ? "var(--danger)" : "#92400e";
     return `<div style="background: ${bg}; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
-      <div style="color: ${fg}; font-weight: 600; font-size: 14px;">${it.icon} ${escapeHtml(it.title)}</div>
-      <div style="color: var(--text-soft); font-size: 12px; margin-top: 4px; white-space: pre-wrap;">${escapeHtml(it.detail)}</div>
+      <div style="color: ${fg}; font-weight: 600; font-size: 0.875rem;">${it.icon} ${escapeHtml(it.title)}</div>
+      <div style="color: var(--text-soft); font-size: 0.75rem; margin-top: 4px; white-space: pre-wrap;">${escapeHtml(it.detail)}</div>
     </div>`;
   }).join("");
   const modal = document.getElementById("health-modal");
@@ -8558,6 +8775,11 @@ async function closeRoomOnServer(code) {
 function actuallyCompleteShipping() {
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
+  // 資料安全: 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失
+  if (entry && !_lastHistorySaveOk) {
+    alert("⚠ 出貨紀錄存檔失敗（可能儲存空間已滿）。\n\n為避免資料遺失，本次清單不會被清空。\n請先到 ⚙ → 資料搬家/備份 匯出備份、或清掉舊出貨紀錄，再按一次「出貨完成」。");
+    return;
+  }
   console.log("[state] shipping completed, archived to history, clearing state");
   // 房間模式: 通知 server 歸檔房間 + 本機停止同步
   const roomCodeAtCompletion = state.roomCode;
@@ -8619,7 +8841,9 @@ function actuallyCompleteShipping() {
 }
 
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
-  // 先跑健康檢查
+  // 先關掉出貨報告 modal (避免兩個 modal 疊在一起)
+  reportModal.hidden = true;
+  // 跑健康檢查
   const issues = runHealthCheck();
   if (issues.length > 0) {
     SOUND.scanError();
@@ -8627,7 +8851,11 @@ document.getElementById("complete-shipping-btn").addEventListener("click", () =>
     return;
   }
   // 無異常, 直接 confirm
-  if (!confirm("✓ 健康檢查通過。確定完成本次出貨? 清空後會存到出貨紀錄。")) return;
+  if (!confirm("✓ 健康檢查通過。確定完成本次出貨? 清空後會存到出貨紀錄。")) {
+    // 取消了 → 重新打開報告 modal 讓使用者繼續看
+    reportModal.hidden = false;
+    return;
+  }
   actuallyCompleteShipping();
 });
 
