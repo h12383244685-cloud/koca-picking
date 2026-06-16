@@ -2710,43 +2710,51 @@ let _lastUserActivity = Date.now(); // 上次使用者活動時間
 
 let _quickSyncTimeout = null;
 let _activityBurstUntil = 0;
+
+// === 房間 / 同步參數 (集中設定, 取代散落各處的寫死數字, 之後好調) ===
+const ROOM_CONFIG = {
+  QUICK_SYNC_MS: 500,         // 操作後 debounce 多久同步一次
+  MEMBER_ONLINE_MS: 120000,   // 判定同事在線門檻 (須 > Worker 60s presence 更新間隔)
+  BADGE_ONLINE_MS: 120000,    // 徽章顯示在線門檻
+  BURST_MS: 3000,             // 對方剛有動作時的快速輪詢
+  BASE_MS: 10000,             // 雙人作業中的基礎輪詢
+  IDLE_MS: 30000,             // 雙人但閒置無變化時的輪詢
+  SOLO_MS: 60000,             // 獨自一人
+  SOLO_IDLE_MS: 120000,       // 獨自一人且久未操作 (最省)
+  IDLE_THRESHOLD_MS: 30000,   // 閒置判定門檻
+  NOCHANGE_BEFORE_IDLE: 5,    // 連續無變化幾次後進入閒置頻率
+};
+
 function markUserActivity() {
   _lastUserActivity = Date.now();
   _consecutiveNoChange = 0;
-  // 我剛做了動作 → 500ms 後同步 (debounce, 連續動作合成一次), 對方馬上看到
+  // 我剛做了動作 → debounce 後同步 (連續動作合成一次), 對方馬上看到
   if (_quickSyncTimeout) clearTimeout(_quickSyncTimeout);
   _quickSyncTimeout = setTimeout(() => {
     if (state.roomMode && !document.hidden) syncRoom();
     _quickSyncTimeout = null;
-  }, 500);
+  }, ROOM_CONFIG.QUICK_SYNC_MS);
 }
 
 function getActiveMemberCount() {
   if (!state.roomMembers) return 0;
   const now = Date.now();
-  // 門檻 120 秒: 必須大於 Worker 端 presence 更新間隔 (60 秒) + 輪詢間隔,
-  // 否則同事在 30~60 秒空窗會被誤判成離線 → 誤入「獨自模式」、爆發同步不啟動 → 看不到對方進度
   return Object.values(state.roomMembers).filter(m =>
-    m && m.lastSeen && (now - new Date(m.lastSeen).getTime()) < 120000
+    m && m.lastSeen && (now - new Date(m.lastSeen).getTime()) < ROOM_CONFIG.MEMBER_ONLINE_MS
   ).length;
 }
 
 function getAdaptiveSyncInterval() {
-  const BURST_INTERVAL = 3000;     // 3 秒 (對方剛有動作, 30 秒內快速 catch — 保留即時感)
-  const BASE_INTERVAL = 10000;     // 10 秒基礎 (雙人作業中)
-  const IDLE_INTERVAL = 30000;     // 30 秒 (雙人但連續無變化 + 閒置)
-  const SOLO_INTERVAL = 60000;     // 60 秒 (獨自一人時, 只需偵測有人加入)
-  const SOLO_IDLE_INTERVAL = 120000; // 120 秒 (獨自一人且久未操作 → 最省)
   const idleMs = Date.now() - _lastUserActivity;
   const memberCount = getActiveMemberCount();
   // Burst 模式: 對方剛有動作, 維持快速輪詢 (僅雙人時)
   if (_activityBurstUntil && Date.now() < _activityBurstUntil && memberCount > 1) {
-    return BURST_INTERVAL;
+    return ROOM_CONFIG.BURST_MS;
   }
   // 獨自一人 → 慢速輪詢就夠 (久未操作再放更慢)
-  if (memberCount <= 1) return idleMs > 120000 ? SOLO_IDLE_INTERVAL : SOLO_INTERVAL;
-  if (_consecutiveNoChange >= 5 && idleMs > 30000) return IDLE_INTERVAL;
-  return BASE_INTERVAL;
+  if (memberCount <= 1) return idleMs > ROOM_CONFIG.SOLO_IDLE_MS ? ROOM_CONFIG.SOLO_IDLE_MS : ROOM_CONFIG.SOLO_MS;
+  if (_consecutiveNoChange >= ROOM_CONFIG.NOCHANGE_BEFORE_IDLE && idleMs > ROOM_CONFIG.IDLE_THRESHOLD_MS) return ROOM_CONFIG.IDLE_MS;
+  return ROOM_CONFIG.BASE_MS;
 }
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
@@ -2794,17 +2802,18 @@ function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) { console.warn("[settings] save failed", e); }
 }
 
-// ===== 💾 每日自動備份 =====
-async function doDailyBackupIfNeeded(force) {
+// ===== 💾 自動備份 (每日 + 重要異動) =====
+async function doDailyBackupIfNeeded(force, silent) {
   if (!force) {
     if (!settings.autoDailyBackup) return;
     if (!settings.discordWebhook) return;
     const today = new Date().toISOString().slice(0, 10);
     if (settings.lastBackupDate === today) return;
   }
-  if (!settings.discordWebhook) { showToast("⚠ 沒設 Discord webhook"); return; }
+  if (!settings.discordWebhook) { if (!silent) showToast("⚠ 沒設 Discord webhook"); return; }
   try {
-    const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString(), type: "auto-daily" } };
+    const reason = silent ? "auto-change" : (force ? "manual" : "auto-daily");
+    const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString(), type: reason } };
     let count = 0;
     for (const k of BACKUP_KEYS) {
       const v = localStorage.getItem(k);
@@ -2812,22 +2821,45 @@ async function doDailyBackupIfNeeded(force) {
     }
     const json = JSON.stringify(dump, null, 2);
     const today = new Date().toISOString().slice(0, 10);
+    const stamp = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "");
     const blob = new Blob([json], { type: "application/json" });
     const formData = new FormData();
+    const title = silent ? `💾 **自動備份 (出貨後)**` : `📦 **${today} 備份**`;
     formData.append("payload_json", JSON.stringify({
-      content: `📦 **${today} 每日備份**\n${count} 項資料 · ${(json.length / 1024).toFixed(1)} KB`,
+      content: `${title}\n${count} 項資料 · ${(json.length / 1024).toFixed(1)} KB`,
     }));
-    formData.append("file", blob, `picking_backup_${today}.json`);
+    formData.append("file", blob, `picking_backup_${stamp}.json`);
     const res = await fetch(settings.discordWebhook, { method: "POST", body: formData });
     if (res.ok) {
       settings.lastBackupDate = today;
       saveSettings();
-      if (force) showToast(`✓ 已備份到 Discord (${count} 項)`);
+      if (force && !silent) showToast(`✓ 已備份到 Discord (${count} 項)`);
     } else {
-      if (force) showToast("⚠ Discord 拒絕: HTTP " + res.status);
+      if (force && !silent) showToast("⚠ Discord 拒絕: HTTP " + res.status);
     }
   } catch(e) {
-    if (force) showToast("⚠ 備份失敗: " + e.message);
+    if (force && !silent) showToast("⚠ 備份失敗: " + e.message);
+  }
+}
+
+// 重要異動後自動備份 (有節流, 避免洗版): 只要設了 webhook 就會跑, 不需手動開開關
+let _backupTimer = null;
+let _lastEventBackupAt = 0;
+const BACKUP_MIN_INTERVAL_MS = 3 * 60000; // 至少間隔 3 分鐘
+function backupSoon(reason) {
+  if (!settings.discordWebhook) return; // 沒設 webhook → 靜默跳過
+  const now = Date.now();
+  const since = now - _lastEventBackupAt;
+  if (since >= BACKUP_MIN_INTERVAL_MS) {
+    _lastEventBackupAt = now;
+    doDailyBackupIfNeeded(true, true).catch(() => {});
+  } else if (!_backupTimer) {
+    // 太頻繁 → 排在節流窗結束時補一次 (合併期間的多次異動)
+    _backupTimer = setTimeout(() => {
+      _backupTimer = null;
+      _lastEventBackupAt = Date.now();
+      doDailyBackupIfNeeded(true, true).catch(() => {});
+    }, BACKUP_MIN_INTERVAL_MS - since);
   }
 }
 
@@ -3215,6 +3247,7 @@ async function syncRoom(opts) {
       myName: settings.myName,
       events: eventsToSend,
       myActiveParcel: state.activeParcel,
+      knownVersion: state._lastSeenRoomVer || 0, // 省傳輸: 告訴伺服器我目前的版本, 沒變就不用回整包
     };
     if (opts.pushStock) {
       reqBody.stockMapPush = stockMap;
@@ -3246,7 +3279,8 @@ async function syncRoom(opts) {
         _activityBurstUntil = Date.now() + 30000;
       }
     }
-    mergeRoomState(data.room);
+    // 輕量回應 (data.room 不存在) = 伺服器確認無變化且我已是最新 → 不需合併
+    if (data.room) mergeRoomState(data.room);
     state.roomLastSyncAt = new Date().toISOString();
   } catch(e) {
     console.warn("[room] sync failed", e);
@@ -3437,7 +3471,7 @@ function renderRoomBadge() {
   const now = Date.now();
   const activeMembers = Object.entries(state.roomMembers || {}).filter(([n, m]) => {
     if (!m || !m.lastSeen) return false;
-    return (now - new Date(m.lastSeen).getTime()) < 120000; // 120 秒內算在線 (須 > Worker 60 秒 presence 更新間隔, 否則同事被誤判離線)
+    return (now - new Date(m.lastSeen).getTime()) < ROOM_CONFIG.BADGE_ONLINE_MS;
   });
   document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
 }
@@ -4131,6 +4165,8 @@ function renderPicking() {
         if (it.essential) {
           const skuShipped = shipped[it.sku] || 0;
           const currentActive = it.packed - skuShipped;
+          // 房間模式: 自由計數商品「各自獨立」— 大數字只顯示自己包的, 完全不顯示同事
+          const myQty = state.roomMode ? ((state.myPacked && state.myPacked[it.sku]) || 0) : currentActive;
           return `
         <div class="item status-${s}">
           <div class="item-info">
@@ -4139,11 +4175,11 @@ function renderPicking() {
           </div>
           <div class="item-counter">
             <div class="item-qty" data-qty-click data-idx="${realIdx}" role="button" tabindex="0">
-              <span class="current">${currentActive}</span>
+              <span class="current">${myQty}</span>
               ${skuShipped > 0 ? `<div class="shipped-note">今日已出 ${skuShipped}</div>` : ''}
             </div>
             <div class="qty-controls">
-              <button class="qty-btn minus" data-pick-act="minus" data-idx="${realIdx}" ${currentActive === 0 ? "disabled" : ""}>−</button>
+              <button class="qty-btn minus" data-pick-act="minus" data-idx="${realIdx}" ${myQty === 0 ? "disabled" : ""}>−</button>
               <button class="qty-btn plus" data-pick-act="plus" data-idx="${realIdx}">＋</button>
             </div>
           </div>
@@ -8866,6 +8902,8 @@ function actuallyCompleteShipping() {
   } else if (skipWebhook) {
     console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
   }
+  // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
+  backupSoon("出貨完成");
 }
 
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
