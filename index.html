@@ -79,6 +79,25 @@
   --warn-bg: #2e1f08;
   --shadow: 0 2px 6px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
 }
+
+/* 🎨 KOCA 品牌 - 主橘 #E84A02 + 品牌輔助色 (依 VI 手冊) */
+[data-theme="koca"] {
+  color-scheme: light;
+  --bg: #F1F1F1;            /* 品牌輔助淺灰 */
+  --surface: #ffffff;
+  --primary: #E84A02;       /* 品牌主橘 PANTONE 1665C */
+  --primary-light: #FDE7DA; /* 主橘淡底 (選取/高亮) */
+  --text: #2B2926;          /* 接近品牌深灰 #3E3A39, 對比足 */
+  --text-soft: #8D7F74;     /* 品牌暖灰 */
+  --border: #E3DED8;
+  --success: #1F9E8E;       /* 品牌薄荷綠深版 (可讀) */
+  --success-bg: #E4F4F1;    /* 薄荷綠 #9BD8D1 淡底 */
+  --danger: #C62828;        /* 紅 (與主橘區隔) */
+  --danger-bg: #FCE9E9;
+  --warn: #B5651D;          /* 琥珀 (與主橘區隔) */
+  --warn-bg: #FCEEDF;       /* 品牌淺橘 #F9A46D 淡底 */
+  --shadow: 0 1px 3px rgba(62,58,57,.08), 0 1px 2px rgba(62,58,57,.05);
+}
 /* 暗色模式: 內嵌 white 背景的元素改用 surface */
 [data-theme="dark"] [style*="background: white"],
 [data-theme="dark"] [style*="background:white"],
@@ -1532,13 +1551,19 @@ footer.summary-bar {
     <!-- 補寄訂單入口 -->
     <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--warn-bg); border-radius: 8px; border-left: 4px solid var(--warn);">
       <button class="btn full" id="open-replacement-order-btn" style="background: #92400e; color: white;">📮 補寄訂單 (售後)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。需填客人姓名+手機。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。客人手機選填。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
     </div>
 
     <!-- 退貨確認入口 -->
     <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--success-bg); border-radius: 8px; border-left: 4px solid var(--success);">
       <button class="btn full" id="open-return-order-btn" style="background: #166534; color: white;">📥 退貨確認 (收貨)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。庫存先不動 (等盤點功能完成後再串)。<strong>不推送 Discord/Sheets</strong>。</p>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。完成後**良品自動加回庫存**(瑕疵/破損不入庫)。<strong>不推送 Discord/Sheets</strong>。</p>
+    </div>
+
+    <!-- 入倉驗收入口 -->
+    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid #1F4E78;">
+      <button class="btn full" id="open-inbound-btn" style="background: #1F4E78; color: white;">🏭 入倉驗收 (進貨)</button>
+      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">廠商進貨到倉時用。填進貨單號 → 刷商品條碼清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
     </div>
 
     <details>
@@ -1594,6 +1619,7 @@ footer.summary-bar {
       <button data-hist-filter="normal">📦 一般 <span id="hist-cnt-normal">0</span></button>
       <button data-hist-filter="replacement">📮 補寄 <span id="hist-cnt-replacement">0</span></button>
       <button data-hist-filter="return">📥 退貨 <span id="hist-cnt-return">0</span></button>
+      <button data-hist-filter="inbound">🏭 進貨 <span id="hist-cnt-inbound">0</span></button>
     </div>
     <div id="history-list"></div>
     <div style="height: 12px"></div>
@@ -1959,6 +1985,15 @@ footer.summary-bar {
           </div>
           <div class="theme-check">✓</div>
         </button>
+
+        <button class="theme-option" data-theme-choice="koca">
+          <div class="theme-swatch" style="background: linear-gradient(135deg, #E84A02 50%, #3E3A39 50%); border: 1px solid #E84A02;"></div>
+          <div class="theme-info">
+            <div class="theme-name">🎨 KOCA 品牌</div>
+            <div class="theme-desc">品牌主橘 + 官方配色 (依 VI 手冊)</div>
+          </div>
+          <div class="theme-check">✓</div>
+        </button>
       </div>
     </div>
 
@@ -2001,6 +2036,18 @@ footer.summary-bar {
         </label>
         <p class="hint" style="font-size: 0.6875rem; margin: 6px 0;">每天打開 App 自動推完整 JSON 到 Discord (一天一次)。<span id="last-backup-info"></span></p>
         <button class="btn outline sm full" id="manual-backup-btn" style="margin-top: 4px;">📤 立刻備份一次</button>
+      </div>
+
+      <div style="margin-top: 14px; padding: 10px; background: var(--warn-bg); border-radius: 8px; border-left: 3px solid var(--warn);">
+        <label style="display:flex; align-items:center; gap:8px; font-size: 0.8125rem; font-weight: 600;">
+          <input type="checkbox" id="koca-outbound-input" style="transform: scale(1.2);"> 🏭 出貨推送到 KOCA 庫存系統
+        </label>
+        <p class="hint" style="font-size: 0.6875rem; margin: 6px 0;">
+          出貨完成時把出貨單透過上方「同步 Worker」轉發到 KOCA API(會<strong>真的扣 KOCA 庫存</strong>、寫紀錄、同步 Google Sheet)。只推一般/手動出貨;補寄/退貨/入倉不推;包裝/零件不送。<br>
+          ⚠ 需先在 Worker 設好 <code>KOCA_API_KEY</code> 與 <code>SPIDEY_KEY</code>(金鑰不放這裡)。建議先用假單打 staging 測格式,確認無誤再開。
+        </p>
+        <label style="display:block; font-size:0.6875rem; color:var(--text-soft); margin-top:6px;">X-Spidey-Key(來源驗證,需與 Worker 的 SPIDEY_KEY 相同)</label>
+        <input type="text" id="koca-spidey-key-input" placeholder="貼上 Spidey Key" autocomplete="off" style="margin-bottom:0;">
       </div>
 
       <details style="margin-top:14px;">
@@ -2372,9 +2419,9 @@ footer.summary-bar {
 <div class="modal-backdrop" id="replacement-order-modal" hidden>
   <div class="modal" style="max-width: 540px;">
     <h2>📮 補寄訂單</h2>
-    <p class="hint">售後補寄專用 - 需填客人聯絡資訊。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機出貨紀錄。</p>
+    <p class="hint">售後補寄專用 - 客人手機選填。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機出貨紀錄。</p>
     <div style="background: var(--warn-bg); padding: 8px 10px; border-radius: 6px; font-size: 0.6875rem; color: #92400e; margin: 6px 0;">
-      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人姓名/手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
+      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
     </div>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原通路</label>
@@ -2394,23 +2441,13 @@ footer.summary-bar {
       <button type="button" class="btn outline sm" data-open-numpad="repl-parcel-id" title="開啟內建鍵盤輸入" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
     </div>
 
-    <div class="row" style="margin-top: 12px;">
-      <div style="flex: 1.2;">
-        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
-        <div style="display: flex; gap: 4px;">
-          <input type="text" id="repl-customer-name" placeholder="例: 王小明"
-                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
-          <button type="button" class="btn outline sm" data-paste-target="repl-customer-name" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
-        </div>
-      </div>
-      <div style="flex: 1;">
-        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
-        <div style="display: flex; gap: 4px;">
-          <input type="tel" id="repl-customer-phone" placeholder="0912345678" inputmode="tel"
-                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
-          <button type="button" class="btn outline sm" data-open-numpad="repl-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
-          <button type="button" class="btn outline sm" data-paste-target="repl-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
-        </div>
+    <div style="margin-top: 12px;">
+      <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--text-soft); font-weight: normal;">(選填)</span></label>
+      <div style="display: flex; gap: 4px;">
+        <input type="tel" id="repl-customer-phone" placeholder="0912345678" inputmode="tel"
+               style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+        <button type="button" class="btn outline sm" data-open-numpad="repl-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+        <button type="button" class="btn outline sm" data-paste-target="repl-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
       </div>
     </div>
     <div id="repl-customer-risk" style="margin-top: 6px;"></div>
@@ -2443,7 +2480,7 @@ footer.summary-bar {
     <h2>📥 退貨確認</h2>
     <p class="hint">客人退貨包裹寄回來, 拆包刷商品條碼確認收到內容。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
     <div style="background: var(--warn-bg); padding: 8px 10px; border-radius: 6px; font-size: 0.6875rem; color: #92400e; margin: 6px 0;">
-      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人姓名/手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
+      💡 <strong>藍牙掃描器連著螢幕鍵盤不會出現?</strong> 從 LINE / 訊息複製客人手機 → 點欄位旁的 <strong>📋</strong> 一鍵貼上。
     </div>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原訂單通路</label>
@@ -2463,23 +2500,13 @@ footer.summary-bar {
       <button type="button" class="btn outline sm" data-open-numpad="ret-parcel-id" title="開啟內建鍵盤輸入" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
     </div>
 
-    <div class="row" style="margin-top: 12px;">
-      <div style="flex: 1.2;">
-        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人姓名 <span style="color: var(--danger);">*</span></label>
-        <div style="display: flex; gap: 4px;">
-          <input type="text" id="ret-customer-name" placeholder="例: 王小明"
-                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
-          <button type="button" class="btn outline sm" data-paste-target="ret-customer-name" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
-        </div>
-      </div>
-      <div style="flex: 1;">
-        <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--danger);">*</span></label>
-        <div style="display: flex; gap: 4px;">
-          <input type="tel" id="ret-customer-phone" placeholder="0912345678" inputmode="tel"
-                 style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
-          <button type="button" class="btn outline sm" data-open-numpad="ret-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
-          <button type="button" class="btn outline sm" data-paste-target="ret-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
-        </div>
+    <div style="margin-top: 12px;">
+      <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-bottom:4px;">客人手機 <span style="color: var(--text-soft); font-weight: normal;">(選填)</span></label>
+      <div style="display: flex; gap: 4px;">
+        <input type="tel" id="ret-customer-phone" placeholder="0912345678" inputmode="tel"
+               style="flex: 1; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 8px;">
+        <button type="button" class="btn outline sm" data-open-numpad="ret-customer-phone" title="開啟內建數字鍵盤" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+        <button type="button" class="btn outline sm" data-paste-target="ret-customer-phone" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
       </div>
     </div>
     <div id="ret-customer-risk" style="margin-top: 6px;"></div>
@@ -2509,6 +2536,33 @@ footer.summary-bar {
     <div class="row">
       <button class="btn outline" id="ret-cancel" style="flex:1;">取消</button>
       <button class="btn" id="ret-create" style="flex:2; background: #166534; color: white;">▶ 開始拆包確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- 入倉驗收 modal -->
+<div class="modal-backdrop" id="inbound-modal" hidden>
+  <div class="modal" style="max-width: 540px;">
+    <h2>🏭 入倉驗收 (進貨)</h2>
+    <p class="hint">廠商進貨到倉時用。填進貨單號 → 刷商品條碼清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
+
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">進貨單號 <span style="color: var(--danger);">*</span></label>
+    <div style="display: flex; gap: 4px;">
+      <input type="text" id="inb-order-id" placeholder="進貨單 / 採購單 / 廠商出貨單號"
+             inputmode="email" lang="en" autocomplete="off" autocorrect="off"
+             autocapitalize="characters" spellcheck="false"
+             style="flex: 1; padding: 10px; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px;">
+      <button type="button" class="btn outline sm" data-open-numpad="inb-order-id" title="開啟內建鍵盤輸入" style="padding: 6px 10px; font-size: 1.125rem;">📲</button>
+    </div>
+
+    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
+    <textarea id="inb-note" placeholder="例如: 廠商名稱、到貨日期、箱數"
+              style="width: 100%; padding: 10px; font-size: 0.8125rem; min-height: 60px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
+
+    <div style="height: 16px"></div>
+    <div class="row">
+      <button class="btn outline" id="inb-cancel" style="flex:1;">取消</button>
+      <button class="btn" id="inb-create" style="flex:2; background: #1F4E78; color: white;">▶ 開始驗收</button>
     </div>
   </div>
 </div>
@@ -2691,13 +2745,15 @@ const DEFAULT_LIBRARY = [
   { sku: "AF-CYK625-W",      name: "珍珠白【半導體製冷】北極熊御用款",         category: "加購品" },
   { sku: "AF-CYK625-B",      name: "海洋藍【半導體製冷】北極熊御用款",         category: "加購品" },
   { sku: "AF-CYK625-PR",     name: "薰衣草【半導體製冷】北極熊御用款",         category: "加購品" },
+  { sku: "RC-BT",            name: "藍牙遙控器",                         category: "零件", essential: true },
+  { sku: "RC-IR",            name: "紅外線遙控器",                       category: "零件", essential: true },
 ];
 const CATEGORY_EMOJI = {
-  "包裝": "📦", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "加購品": "🎁", "其他": "📌",
+  "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "加購品": "🎁", "其他": "📌",
 };
-const CATEGORY_ORDER = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
+const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
 
-let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null,
+let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null,
   // 房間模式
   roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, roomLastSyncAt: null,
   myPacked: {}, // 房間模式: 本機追蹤「我」貢獻了多少 (不同步, 純顯示用)
@@ -2794,6 +2850,10 @@ let settings = {
   lastBackupDate: null,      // 上次備份日期 (YYYY-MM-DD)
   fontSize: "medium",        // "small" | "medium" | "large" | "xlarge"
   gloveMode: false,          // 戴手套模式
+  kocaOutboundEnabled: false, // 出貨完成後推送到 KOCA 庫存 API (預設關, 測試過再開)
+  spideyKey: "",             // X-Spidey-Key: App→Worker 的來源驗證金鑰 (Worker 比對 env.SPIDEY_KEY)
+  docNoDate: null,           // doc_no 流水號的日期 (YYYYMMDD)
+  docNoSeq: 0,               // 當日 doc_no 流水號
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
@@ -3062,6 +3122,48 @@ function buildPickingOutboundPayload(entry) {
   };
 }
 
+// 推送出貨單到 KOCA 庫存 API (透過自己的 Worker 轉發, 金鑰留在 Worker secret)
+// 預設關閉 (settings.kocaOutboundEnabled), 只推一般/手動出貨, 排除包裝/零件, 並會真的扣 KOCA 庫存
+async function pushKocaOutbound(entry) {
+  if (!settings.kocaOutboundEnabled) return;
+  if (!entry || entry.kocaPushed) return;
+  // 補寄/退貨/入倉不推 (避免亂扣)
+  if (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound") return;
+  if (!settings.syncWorkerUrl) { setTimeout(() => showToast("⚠ KOCA 推送需先設定同步 Worker URL"), 800); return; }
+  // 只送真正商品 SKU: 排除包裝/零件 (essential), qty>0
+  const items = (entry.items || [])
+    .filter(it => !it.essential && (it.packed || 0) > 0)
+    .map(it => {
+      const libItem = library.find(p => p.sku === it.sku);
+      return { sku: it.sku, qty: it.packed, price: (libItem && libItem.price) || 0, remark: "" };
+    });
+  if (items.length === 0) return;
+  const doc_no = entry.doc_no || generateDocNo(entry.completedAt, entry.id);
+  if (!entry.doc_no) { entry.doc_no = doc_no; try { saveHistory(); } catch (e) {} }
+  const d = new Date(entry.completedAt);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  // KOCA API 專屬 customer 對應 (依阿福規格: 蝦皮 / 官網), 不動 Discord/Sheets 用的 PLATFORM_TO_CUSTOMER
+  const _kocaCustomerMap = { a1: "蝦皮", koca: "官網", momo: "MOMO", coupang: "酷澎" };
+  const customer = _kocaCustomerMap[entry.platform] || PLATFORM_TO_CUSTOMER[entry.platform] || entry.platform || "其他";
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/outbound", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+      body: JSON.stringify({ doc_no, date: dateStr, customer, items }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      entry.kocaPushed = true; try { saveHistory(); } catch (e) {}
+      setTimeout(() => showToast(`✅ 已推送 KOCA 庫存 (單 ${doc_no})`), 800);
+    } else {
+      setTimeout(() => showToast(`⚠ KOCA 推送失敗 ${data.status || res.status || ""}`), 800);
+      console.warn("[koca] outbound failed", data);
+    }
+  } catch (e) {
+    setTimeout(() => showToast(`⚠ KOCA 推送錯誤: ${(e.message || e)}`.slice(0, 50)), 800);
+  }
+}
+
 const SOUND = {
   scanSku: () => playBeep(880, 80),                           // 高音叮 (刷 SKU 成功 +1)
   scanError: () => { playBeep(220, 150); setTimeout(() => playBeep(220, 150), 180); }, // 雙低音 (錯誤)
@@ -3176,6 +3278,7 @@ async function createRoom() {
     state.roomCode = data.code;
     state.roomMembers = data.room.members || {};
     state.roomActiveParcels = {};
+    state._lastSeenRoomVer = (data.room && data.room.version) || 0; // 省一次多餘的整包同步
     state.roomLastSyncAt = new Date().toISOString();
     state.myPacked = {}; // 新開房 → 我的貢獻歸零
     saveState();
@@ -3207,12 +3310,15 @@ async function joinRoom(code) {
     state.scanMode = true;
     state.manualMode = false;
     state.replacementInfo = null;
+    state.returnInfo = null;
+    state.inboundInfo = null;
     state.appendLevel = 1;
     state.continuationOf = null;
     state.roomMode = true;
     state.roomCode = code;
     state.roomMembers = room.members || {};
     state.roomActiveParcels = room.activeParcels || {};
+    state._lastSeenRoomVer = room.version || 0; // 省一次多餘的整包同步
     state.roomLastSyncAt = new Date().toISOString();
     state.myPacked = {}; // 新加入房間 → 我的貢獻歸零
     state.loadedDate = new Date().toISOString().slice(0, 10);
@@ -3509,6 +3615,7 @@ function loadState() {
         if (typeof state.manualMode === "undefined") state.manualMode = false;
         if (typeof state.replacementInfo === "undefined") state.replacementInfo = null;
         if (typeof state.returnInfo === "undefined") state.returnInfo = null;
+        if (typeof state.inboundInfo === "undefined") state.inboundInfo = null;
         if (typeof state.roomMode === "undefined") state.roomMode = false;
         if (typeof state.roomCode === "undefined") state.roomCode = null;
         if (!state.roomMembers) state.roomMembers = {};
@@ -3626,6 +3733,21 @@ function loadLibrary() {
       }
       try { localStorage.setItem(priceMigKey, "1"); } catch(e) {}
     }
+    // 一次性遷移: 補上「零件」自由計數商品 (藍牙 / 紅外線遙控器)
+    const partsMigKey = "lib_parts_mig_v1";
+    if (!localStorage.getItem(partsMigKey)) {
+      const _parts = [
+        { sku: "RC-BT", name: "藍牙遙控器", category: "零件", essential: true },
+        { sku: "RC-IR", name: "紅外線遙控器", category: "零件", essential: true },
+      ];
+      for (const p of _parts) {
+        if (!library.find(x => x.sku === p.sku)) {
+          library.push({ ...p, barcode: p.sku, price: 0 });
+          migrated = true;
+        }
+      }
+      try { localStorage.setItem(partsMigKey, "1"); } catch(e) {}
+    }
     if (migrated) saveLibrary();
   } catch(e) {}
 }
@@ -3665,6 +3787,7 @@ function loadHistory() {
   } catch(e) { console.warn("[storage] loadHistory failed", e); }
 }
 function appendHistory() {
+  _lastHistorySaveOk = true; // 每次開頭重置, 避免殘留上一次的結果
   // 從當前 state.items 建一筆紀錄
   if (!state.items || state.items.length === 0) return;
   // 收尾還在進行中的 parcel (若有)
@@ -3689,9 +3812,10 @@ function appendHistory() {
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
     appendLevel: state.appendLevel || 1,
     continuationOf: state.continuationOf || null,
-    orderType: state.returnInfo ? "return" : (state.replacementInfo ? "replacement" : (state.manualMode ? "manual" : "normal")),
+    orderType: state.inboundInfo ? "inbound" : (state.returnInfo ? "return" : (state.replacementInfo ? "replacement" : (state.manualMode ? "manual" : "normal"))),
     replacementInfo: state.replacementInfo ? { ...state.replacementInfo } : null,
     returnInfo: state.returnInfo ? { ...state.returnInfo } : null,
+    inboundInfo: state.inboundInfo ? { ...state.inboundInfo } : null,
     summary: {
       totalSku: items.length,
       completedSku: completedSkus,
@@ -3912,19 +4036,20 @@ function checkBundleRule(triggerIdx, deltaAdded) {
   const rule = BUNDLE_RULES.find(r => r.trigger === triggerIt.sku);
   if (!rule || !Array.isArray(rule.children) || rule.children.length === 0) return;
 
-  // 預先檢查每個 child 是否在清單; 收集缺漏的給 toast 提醒
+  // 檢查每個 child 是否在清單 (手動模式缺漏的會在「確認連動」後才自動加入)
   const childResolved = rule.children.map(c => {
     const idx = state.items.findIndex(it => it.sku === c.sku);
     return { ...c, idx, totalQty: c.qty * deltaAdded };
   });
   const missing = childResolved.filter(c => c.idx < 0);
-  if (missing.length > 0) {
+  // 一般 CSV 模式: 缺漏子項不自動加 (避免加入訂單沒有的東西), 只提醒
+  if (missing.length > 0 && !state.manualMode) {
     const msg = missing.map(c => `${c.name} × ${c.totalQty}`).join(", ");
     showToast(`⚠ ${rule.triggerName} 套組: ${msg} 不在今日清單`);
-    // 若全部 child 都缺, 直接 return; 否則繼續詢問
     if (missing.length === rule.children.length) return;
   }
-  const available = childResolved.filter(c => c.idx >= 0);
+  // 手動 / 補寄 / 退貨 / 入倉 (manualMode): 缺漏子項會在確認後自動加入, 故全部視為可連動
+  const available = state.manualMode ? childResolved : childResolved.filter(c => c.idx >= 0);
   if (available.length === 0) return;
 
   // 詢問 (延遲執行避免阻塞掃描 buffer)
@@ -3937,22 +4062,26 @@ function checkBundleRule(triggerIdx, deltaAdded) {
     );
     if (ok) {
       let addedCount = 0;
-      const skipped = [];
       for (const c of available) {
-        // 重新驗證 idx (因 setTimeout 中可能 state 已變)
-        const recheckIdx = state.items.findIndex(it => it.sku === c.sku);
+        let recheckIdx = state.items.findIndex(it => it.sku === c.sku);
+        // 手動模式: 子項不在清單就先自動加入, 再計數
+        if (recheckIdx < 0 && state.manualMode) {
+          const libP = library.find(p => p.sku === c.sku);
+          state.items.push({
+            sku: c.sku,
+            name: (libP && libP.name) || c.name || c.sku,
+            category: (libP && libP.category) || "其他",
+            expected: 0, packed: 0,
+          });
+          recheckIdx = state.items.length - 1;
+          if (state.roomMode) queueRoomEvent("item_add", { sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: 0, essential: false });
+        }
         if (recheckIdx >= 0) {
           bumpPickItem(recheckIdx, c.totalQty, { suppressBundle: true });
           addedCount++;
-        } else {
-          skipped.push(c.name);
         }
       }
-      if (skipped.length > 0) {
-        showToast(`⚠ ${skipped.join(", ")} 已不在清單, 略過`);
-      } else if (addedCount > 0) {
-        showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
-      }
+      if (addedCount > 0) showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
     }
   }, 50);
 }
@@ -5614,15 +5743,18 @@ function renderHistory() {
   const cntAll = history.length;
   const cntReplacement = history.filter(e => e.orderType === "replacement").length;
   const cntReturn = history.filter(e => e.orderType === "return").length;
-  const cntNormal = cntAll - cntReplacement - cntReturn; // 一般 + 手建 都算「一般」
+  const cntInbound = history.filter(e => e.orderType === "inbound").length;
+  const cntNormal = cntAll - cntReplacement - cntReturn - cntInbound; // 一般 + 手建 都算「一般」
   const cAllEl = document.getElementById("hist-cnt-all");
   const cNormalEl = document.getElementById("hist-cnt-normal");
   const cReplEl = document.getElementById("hist-cnt-replacement");
   const cRetEl = document.getElementById("hist-cnt-return");
+  const cInbEl = document.getElementById("hist-cnt-inbound");
   if (cAllEl) cAllEl.textContent = cntAll;
   if (cNormalEl) cNormalEl.textContent = cntNormal;
   if (cReplEl) cReplEl.textContent = cntReplacement;
   if (cRetEl) cRetEl.textContent = cntReturn;
+  if (cInbEl) cInbEl.textContent = cntInbound;
   // filter bar active state
   document.querySelectorAll("#history-filter-bar button").forEach(b => {
     b.classList.toggle("active", b.dataset.histFilter === historyFilter);
@@ -5641,7 +5773,7 @@ function renderHistory() {
   });
   const thisMonthRepl = thisMonth.filter(e => e.orderType === "replacement");
   const thisMonthReturn = thisMonth.filter(e => e.orderType === "return");
-  const thisMonthNormal = thisMonth.filter(e => e.orderType !== "replacement" && e.orderType !== "return");
+  const thisMonthNormal = thisMonth.filter(e => e.orderType !== "replacement" && e.orderType !== "return" && e.orderType !== "inbound");
   const totalQtyNormal = thisMonthNormal.reduce((s, e) => s + e.summary.totalPacked, 0);
   const totalQtyRepl = thisMonthRepl.reduce((s, e) => s + e.summary.totalPacked, 0);
   const totalQtyReturn = thisMonthReturn.reduce((s, e) => s + e.summary.totalPacked, 0);
@@ -5657,11 +5789,13 @@ function renderHistory() {
   // 依 orderType filter 篩選
   let displayed = history;
   if (historyFilter === "normal") {
-    displayed = history.filter(e => e.orderType !== "replacement" && e.orderType !== "return");
+    displayed = history.filter(e => e.orderType !== "replacement" && e.orderType !== "return" && e.orderType !== "inbound");
   } else if (historyFilter === "replacement") {
     displayed = history.filter(e => e.orderType === "replacement");
   } else if (historyFilter === "return") {
     displayed = history.filter(e => e.orderType === "return");
+  } else if (historyFilter === "inbound") {
+    displayed = history.filter(e => e.orderType === "inbound");
   }
   // 套用關鍵字搜尋
   const q = (historySearchQuery || "").trim().toLowerCase();
@@ -5675,7 +5809,7 @@ function renderHistory() {
     }
   }
   if (displayed.length === 0) {
-    const label = historyFilter === "replacement" ? "補寄訂單" : (historyFilter === "return" ? "退貨" : (historyFilter === "normal" ? "一般出貨" : ""));
+    const label = historyFilter === "replacement" ? "補寄訂單" : (historyFilter === "return" ? "退貨" : (historyFilter === "inbound" ? "進貨" : (historyFilter === "normal" ? "一般出貨" : "")));
     const searchHint = q ? ` (搜尋: ${escapeHtml(historySearchQuery)})` : '';
     list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>沒有${label}紀錄${searchHint}</div></div>`;
     return;
@@ -5715,7 +5849,7 @@ function renderHistory() {
     return `
       <div class="history-item ${isPartial ? 'partial' : ''}">
         <div class="history-item-header">
-          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📝 手建</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #92400e;">👤 ${escapeHtml(e.replacementInfo.customerName || "")} · 📱 ${escapeHtml(e.replacementInfo.customerPhone || "")} · 原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #166534;">👤 ${escapeHtml(e.returnInfo.customerName || "")} · 📱 ${escapeHtml(e.returnInfo.customerPhone || "")} · 原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}
+          <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📝 手建</span>` : ''}${e.orderType === "inbound" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">🏭 進貨</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #92400e;">${e.replacementInfo.customerName ? `👤 ${escapeHtml(e.replacementInfo.customerName)} · ` : ""}${e.replacementInfo.customerPhone ? `📱 ${escapeHtml(e.replacementInfo.customerPhone)} · ` : ""}原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #166534;">${e.returnInfo.customerName ? `👤 ${escapeHtml(e.returnInfo.customerName)} · ` : ""}${e.returnInfo.customerPhone ? `📱 ${escapeHtml(e.returnInfo.customerPhone)} · ` : ""}原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}${e.orderType === "inbound" && e.inboundInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: var(--primary);">📋 進貨單 ${escapeHtml(e.inboundInfo.orderNo || "")}${e.inboundInfo.note ? " · " + escapeHtml(e.inboundInfo.note) : ""}</div>` : ''}
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
         </div>
         <div class="history-item-summary">
@@ -5947,6 +6081,8 @@ function processScan(code) {
     renderMultiplierBadge();
   }
   const _mul = _scanMultiplier;
+  // 抓進 _mul 後立刻把倍數歸 1: 確保不管後面走成功或任何錯誤/早退分支, 都不會殘留倍數到下一次刷碼
+  _scanMultiplier = 1; renderMultiplierBadge();
 
   const original = code;
   window._lastScanWasInternalQr = null;
@@ -6071,6 +6207,24 @@ function processScan(code) {
         if (!confirm(`⚠ ${name} 正在處理 ${code}\n\n你還是要接手嗎? (建議口頭確認分工)`)) return;
         break;
       }
+    }
+  }
+
+  // 補寄/退貨/入倉「一次一張單」: 刷到「新的一張單」(非當前、也非已完成的) → 先存檔, 再跳視窗問下一張
+  if (state.replacementInfo || state.returnInfo || state.inboundInfo) {
+    const _curId = state.activeParcel && state.activeParcel.id;
+    const _isExisting = (state.completedParcels || []).some(p => p.id === code);
+    if (code !== _curId && !_isExisting) {
+      const _mode = state.inboundInfo ? "inbound" : (state.replacementInfo ? "replacement" : "return");
+      const _label = _mode === "inbound" ? "入倉" : (_mode === "replacement" ? "補寄" : "退貨");
+      const _next = _mode === "inbound" ? "下一張進貨單" : "下一位";
+      if (!confirm(`要結束目前這筆${_label}並存檔, 換${_next} (${code}) 嗎?`)) return;
+      if (state.activeParcel) finalizeActiveParcel(false);
+      actuallyCompleteShipping(); // 存檔目前這筆, 並清空 state
+      if (_mode === "inbound") openInboundModal(code);
+      else if (_mode === "replacement") openReplacementModal(code);
+      else openReturnModal(code);
+      return;
     }
   }
 
@@ -7654,7 +7808,7 @@ document.addEventListener("keydown", (e) => {
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
   // 若任何 modal 開啟中, 不攔截 (避免衝突)
   // 補上 merge-modal, health-modal (追加合併確認 / 出貨健康檢查), 避免在 modal 中刷錯
-  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "return-order-modal", "create-room-modal", "join-room-modal", "room-info-modal", "manual-parcel-id-modal", "perf-stats-modal", "customers-modal", "top-sku-modal", "return-analysis-modal"];
+  const modals = ["qty-modal", "spec-edit-modal", "settings-modal", "report-modal", "lib-modal", "merge-modal", "health-modal", "manual-order-modal", "replacement-order-modal", "return-order-modal", "inbound-modal", "create-room-modal", "join-room-modal", "room-info-modal", "manual-parcel-id-modal", "perf-stats-modal", "customers-modal", "top-sku-modal", "return-analysis-modal"];
   for (const id of modals) {
     const el = document.getElementById(id);
     if (el && !el.hidden) return;
@@ -7832,6 +7986,8 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   if (_svLbl) _svLbl.textContent = (settings.soundVolume || 50) + "%";
   document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
   document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
+  { const _ko = document.getElementById("koca-outbound-input"); if (_ko) _ko.checked = !!settings.kocaOutboundEnabled; }
+  { const _sk = document.getElementById("koca-spidey-key-input"); if (_sk) _sk.value = settings.spideyKey || ""; }
   const swUrl = document.getElementById("sync-worker-url-input");
   if (swUrl) swUrl.value = settings.syncWorkerUrl || "";
   const myNm = document.getElementById("my-name-input");
@@ -8111,6 +8267,10 @@ function applyTheme(theme) {
   } else {
     document.documentElement.setAttribute("data-theme", theme);
   }
+  // 手機狀態列 / PWA 主題色跟著主題走
+  const _themeColors = { default: "#1F4E78", warm: "#5c4a2f", dark: "#0a0e14", koca: "#E84A02" };
+  const _meta = document.querySelector('meta[name="theme-color"]');
+  if (_meta) _meta.content = _themeColors[theme] || "#1F4E78";
 }
 function applyFontSize(size) {
   if (!size || size === "medium") document.documentElement.removeAttribute("data-font-size");
@@ -8242,6 +8402,22 @@ document.getElementById("sheets-webhook-input").addEventListener("input", (e) =>
   saveSettings();
 });
 
+const _kocaInp = document.getElementById("koca-outbound-input");
+if (_kocaInp) {
+  _kocaInp.addEventListener("change", (e) => {
+    settings.kocaOutboundEnabled = e.target.checked;
+    saveSettings();
+    showToast(e.target.checked ? "✅ 已開啟 KOCA 出貨推送 (記得 Worker 要設好金鑰)" : "已關閉 KOCA 出貨推送");
+  });
+}
+const _spideyInp = document.getElementById("koca-spidey-key-input");
+if (_spideyInp) {
+  _spideyInp.addEventListener("input", (e) => {
+    settings.spideyKey = e.target.value.trim();
+    saveSettings();
+  });
+}
+
 // 每日自動備份
 function updateBackupInfoLabel() {
   const el = document.getElementById("last-backup-info");
@@ -8276,6 +8452,7 @@ const NUMPAD_LABELS = {
   "repl-customer-phone": "客人手機",
   "ret-parcel-id": "寄件單號",
   "ret-customer-phone": "客人手機",
+  "inb-order-id": "進貨單號",
 };
 function openNumpad(targetId, label) {
   _numpadTargetId = targetId;
@@ -8590,19 +8767,20 @@ document.getElementById("manual-create").addEventListener("click", () => {
 });
 
 // 補寄訂單 modal 事件
-document.getElementById("open-replacement-order-btn").addEventListener("click", () => {
+function openReplacementModal(prefillId) {
   document.getElementById("repl-platform-select").value = currentPlatform || "a1";
-  document.getElementById("repl-parcel-id").value = "";
-  document.getElementById("repl-customer-name").value = "";
+  document.getElementById("repl-parcel-id").value = prefillId || "";
   document.getElementById("repl-customer-phone").value = "";
   document.getElementById("repl-reason").value = "商品缺漏";
   document.getElementById("repl-note").value = "";
   document.getElementById("replacement-order-modal").hidden = false;
   setTimeout(() => {
-    const inp = document.getElementById("repl-parcel-id");
+    // 有預填單號(下一位客人) → 直接聚焦手機; 否則聚焦單號
+    const inp = document.getElementById(prefillId ? "repl-customer-phone" : "repl-parcel-id");
     if (inp) inp.focus();
   }, 100);
-});
+}
+document.getElementById("open-replacement-order-btn").addEventListener("click", () => openReplacementModal(""));
 document.getElementById("repl-cancel").addEventListener("click", () => {
   document.getElementById("replacement-order-modal").hidden = true;
 });
@@ -8612,7 +8790,7 @@ document.getElementById("replacement-order-modal").addEventListener("click", (e)
 document.getElementById("repl-create").addEventListener("click", () => {
   const platform = document.getElementById("repl-platform-select").value;
   const rawId = document.getElementById("repl-parcel-id").value.trim();
-  const customerName = document.getElementById("repl-customer-name").value.trim();
+  const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("repl-customer-phone").value.trim();
   if (state.roomMode) {
     if (!checkRoomBeforeReset("建立補寄單")) return;
@@ -8622,10 +8800,8 @@ document.getElementById("repl-create").addEventListener("click", () => {
   const note = document.getElementById("repl-note").value.trim();
 
   if (!rawId) { showToast("⚠ 寄件單號必填"); document.getElementById("repl-parcel-id").focus(); return; }
-  if (!customerName) { showToast("⚠ 客人姓名必填"); document.getElementById("repl-customer-name").focus(); return; }
-  if (!customerPhone) { showToast("⚠ 客人手機必填"); document.getElementById("repl-customer-phone").focus(); return; }
-  // 簡單手機格式檢查 (台灣 10 碼 09xx)
-  if (!/^[\d\s\-+()]{8,20}$/.test(customerPhone)) {
+  // 客人手機改為選填 (蝦皮/MOMO/酷澎拿不到手機); 有填才檢查格式
+  if (customerPhone && !/^[\d\s\-+()]{8,20}$/.test(customerPhone)) {
     if (!confirm(`「${customerPhone}」看起來不太像手機, 仍要建立?`)) {
       document.getElementById("repl-customer-phone").focus();
       return;
@@ -8676,7 +8852,7 @@ document.getElementById("repl-create").addEventListener("click", () => {
   saveState();
   document.getElementById("replacement-order-modal").hidden = true;
   SOUND.parcelStart();
-  showToast(`📮 補寄單 ${parcelId} (${customerName}) 已建立`);
+  showToast(`📮 補寄單 ${parcelId}${customerPhone ? ` (${customerPhone})` : ""} 已建立`);
   if (window.__homeOverride) window.__homeOverride = false;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -8690,20 +8866,20 @@ document.getElementById("repl-customer-phone").addEventListener("input", (e) => 
 });
 
 // 退貨確認 modal 事件
-document.getElementById("open-return-order-btn").addEventListener("click", () => {
+function openReturnModal(prefillId) {
   document.getElementById("ret-platform-select").value = currentPlatform || "a1";
-  document.getElementById("ret-parcel-id").value = "";
-  document.getElementById("ret-customer-name").value = "";
+  document.getElementById("ret-parcel-id").value = prefillId || "";
   document.getElementById("ret-customer-phone").value = "";
   document.getElementById("ret-reason").value = "不喜歡/不適合";
   document.getElementById("ret-original-order").value = "";
   document.getElementById("ret-note").value = "";
   document.getElementById("return-order-modal").hidden = false;
   setTimeout(() => {
-    const inp = document.getElementById("ret-parcel-id");
+    const inp = document.getElementById(prefillId ? "ret-customer-phone" : "ret-parcel-id");
     if (inp) inp.focus();
   }, 100);
-});
+}
+document.getElementById("open-return-order-btn").addEventListener("click", () => openReturnModal(""));
 document.getElementById("ret-cancel").addEventListener("click", () => {
   document.getElementById("return-order-modal").hidden = true;
 });
@@ -8713,16 +8889,15 @@ document.getElementById("return-order-modal").addEventListener("click", (e) => {
 document.getElementById("ret-create").addEventListener("click", () => {
   const platform = document.getElementById("ret-platform-select").value;
   const rawId = document.getElementById("ret-parcel-id").value.trim();
-  const customerName = document.getElementById("ret-customer-name").value.trim();
+  const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("ret-customer-phone").value.trim();
   const reason = document.getElementById("ret-reason").value;
   const originalOrderNo = document.getElementById("ret-original-order").value.trim();
   const note = document.getElementById("ret-note").value.trim();
 
   if (!rawId) { showToast("⚠ 退貨寄件單號必填"); document.getElementById("ret-parcel-id").focus(); return; }
-  if (!customerName) { showToast("⚠ 客人姓名必填"); document.getElementById("ret-customer-name").focus(); return; }
-  if (!customerPhone) { showToast("⚠ 客人手機必填"); document.getElementById("ret-customer-phone").focus(); return; }
-  if (!/^[\d\s\-+()]{8,20}$/.test(customerPhone)) {
+  // 客人手機改為選填; 有填才檢查格式
+  if (customerPhone && !/^[\d\s\-+()]{8,20}$/.test(customerPhone)) {
     if (!confirm(`「${customerPhone}」看起來不太像手機, 仍要建立?`)) {
       document.getElementById("ret-customer-phone").focus();
       return;
@@ -8770,7 +8945,59 @@ document.getElementById("ret-create").addEventListener("click", () => {
   saveState();
   document.getElementById("return-order-modal").hidden = true;
   SOUND.parcelStart();
-  showToast(`📥 退貨確認 ${parcelId} (${customerName}) 已開始`);
+  showToast(`📥 退貨確認 ${parcelId}${customerPhone ? ` (${customerPhone})` : ""} 已開始`);
+  if (window.__homeOverride) window.__homeOverride = false;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// 入倉驗收 modal 事件
+function openInboundModal(prefillId) {
+  document.getElementById("inb-order-id").value = prefillId || "";
+  document.getElementById("inb-note").value = "";
+  document.getElementById("inbound-modal").hidden = false;
+  setTimeout(() => {
+    const inp = document.getElementById("inb-order-id");
+    if (inp) inp.focus();
+  }, 100);
+}
+document.getElementById("open-inbound-btn").addEventListener("click", () => openInboundModal(""));
+document.getElementById("inb-cancel").addEventListener("click", () => {
+  document.getElementById("inbound-modal").hidden = true;
+});
+document.getElementById("inbound-modal").addEventListener("click", (e) => {
+  if (e.target.id === "inbound-modal") document.getElementById("inbound-modal").hidden = true;
+});
+document.getElementById("inb-create").addEventListener("click", () => {
+  const rawId = document.getElementById("inb-order-id").value.trim();
+  const note = document.getElementById("inb-note").value.trim();
+  if (!rawId) { showToast("⚠ 進貨單號必填"); document.getElementById("inb-order-id").focus(); return; }
+  if (state.roomMode) {
+    if (!checkRoomBeforeReset("建立入倉驗收單")) return;
+    leaveRoom(true);
+  }
+  const orderId = rawId.substring(0, 64);
+  if (state.items.length > 0) {
+    if (!confirm(`你目前有未完成的清單 (${state.items.length} SKU)。\n\n繼續建立入倉單會放棄目前清單, 確定?`)) return;
+  }
+  state = {
+    items: [],
+    filter: "all",
+    loadedDate: new Date().toISOString().slice(0, 10),
+    scanMode: true,
+    activeParcel: { id: orderId, items: {}, startedAt: new Date().toISOString() },
+    completedParcels: [],
+    appendLevel: 1,
+    continuationOf: null,
+    manualMode: true,
+    replacementInfo: null,
+    returnInfo: null,
+    inboundInfo: { orderNo: orderId, note, createdAt: new Date().toISOString() },
+  };
+  saveState();
+  document.getElementById("inbound-modal").hidden = true;
+  SOUND.parcelStart();
+  showToast(`🏭 入倉驗收 ${orderId} 已開始`);
   if (window.__homeOverride) window.__homeOverride = false;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -8852,15 +9079,15 @@ function actuallyCompleteShipping() {
     leaveRoom(true);
     closeRoomOnServer(roomCodeAtCompletion);
   }
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null, returnInfo: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
   render();
   SOUND.shipDone();
   showToast("✓ 本次出貨完成，已存入紀錄");
-  // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 必要商品=包裝材也不扣)
-  if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement") {
+  // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
+  if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement" && entry.orderType !== "inbound") {
     let deducted = 0;
     const lowStockSkus = [];
     const threshold = getLowStockThreshold();
@@ -8890,9 +9117,36 @@ function actuallyCompleteShipping() {
     }
   }
 
+  // 退貨入庫: 客人退回的良品加回庫存 (瑕疵 / 運送破損不入庫)
+  if (entry && entry.orderType === "return") {
+    const _badReasons = ["商品瑕疵", "運送破損"];
+    const _reason = (entry.returnInfo && entry.returnInfo.reason) || "";
+    if (!_badReasons.includes(_reason)) {
+      let restocked = 0;
+      const _now = new Date().toISOString();
+      for (const it of (entry.items || [])) {
+        if (it.essential) continue;
+        if ((it.packed || 0) <= 0) continue;
+        if (!stockMap[it.sku]) {
+          const libItem = library.find(p => p.sku === it.sku);
+          stockMap[it.sku] = { qty: 0, name: (libItem && libItem.name) || it.name || "", updatedAt: _now };
+        }
+        stockMap[it.sku].qty = (stockMap[it.sku].qty || 0) + it.packed;
+        stockMap[it.sku].updatedAt = _now;
+        restocked++;
+      }
+      if (restocked > 0) {
+        saveStock();
+        setTimeout(() => showToast(`📈 退貨良品入庫 ${restocked} SKU`), 600);
+      }
+    } else {
+      setTimeout(() => showToast(`⚠ 退貨原因「${_reason}」, 未自動入庫`), 600);
+    }
+  }
+
   // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
-  // 補寄訂單 / 退貨確認不推送 (使用者要求只記本機)
-  const skipWebhook = entry && (entry.orderType === "replacement" || entry.orderType === "return");
+  // 補寄訂單 / 退貨確認 / 入倉驗收不推送 (使用者要求只記本機)
+  const skipWebhook = entry && (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound");
   if (entry && !skipWebhook && (settings.discordWebhook || settings.sheetsWebhook)) {
     const outbound = buildPickingOutboundPayload(entry);
     pushToDiscordRaw({
@@ -8902,6 +9156,8 @@ function actuallyCompleteShipping() {
   } else if (skipWebhook) {
     console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
   }
+  // 推送出貨到 KOCA 庫存 API (預設關閉; 補寄/退貨/入倉不推; 透過 Worker 轉發)
+  pushKocaOutbound(entry);
   // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
   backupSoon("出貨完成");
 }
