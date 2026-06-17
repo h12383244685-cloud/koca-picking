@@ -2680,6 +2680,7 @@ footer.summary-bar {
 
 <script>
 const STATE_KEY = "picking_state_v2";
+const PENDING_KEY = "picking_pending_events_v1"; // 房間模式待送事件 (存本機, 防重整/當機掉刷)
 const LIB_KEY = "picking_library_v1";
 const MENU_QTY_KEY = "picking_menu_qty_v1";
 const LIB_INIT_KEY = "picking_lib_initialized_v1";
@@ -2759,6 +2760,20 @@ let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activ
   myPacked: {}, // 房間模式: 本機追蹤「我」貢獻了多少 (不同步, 純顯示用)
 };
 let pendingEvents = [];   // 待上傳的事件 (room 模式才用)
+// 待送事件存本機: 重整/當機/手機殺分頁時不掉刷 (重送由 Worker 用 event id 去重)
+function savePendingEvents() {
+  try {
+    if (pendingEvents.length > 0) localStorage.setItem(PENDING_KEY, JSON.stringify(pendingEvents));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch (e) {}
+}
+function loadPendingEvents() {
+  try {
+    const s = localStorage.getItem(PENDING_KEY);
+    if (s) { const arr = JSON.parse(s); if (Array.isArray(arr)) pendingEvents = arr; }
+  } catch (e) {}
+}
+let _syncFailCount = 0;   // 連續同步失敗次數 (連線狀態指示用)
 let syncTimer = null;     // setTimeout handle
 let syncInFlight = false; // 防止平行同步
 let _consecutiveNoChange = 0; // 連續 server 回 didChange=false 的次數
@@ -2770,13 +2785,13 @@ let _activityBurstUntil = 0;
 // === 房間 / 同步參數 (集中設定, 取代散落各處的寫死數字, 之後好調) ===
 const ROOM_CONFIG = {
   QUICK_SYNC_MS: 500,         // 操作後 debounce 多久同步一次
-  MEMBER_ONLINE_MS: 120000,   // 判定同事在線門檻 (須 > Worker 60s presence 更新間隔)
-  BADGE_ONLINE_MS: 120000,    // 徽章顯示在線門檻
-  BURST_MS: 3000,             // 對方剛有動作時的快速輪詢
+  MEMBER_ONLINE_MS: 240000,   // 判定同事在線門檻 (須 > Worker 150s presence 更新間隔)
+  BADGE_ONLINE_MS: 240000,    // 徽章顯示在線門檻
+  BURST_MS: 3000,             // 對方剛有動作時的快速輪詢 (只讀不寫 KV, 保留即時感)
   BASE_MS: 10000,             // 雙人作業中的基礎輪詢
   IDLE_MS: 30000,             // 雙人但閒置無變化時的輪詢
-  SOLO_MS: 60000,             // 獨自一人
-  SOLO_IDLE_MS: 120000,       // 獨自一人且久未操作 (最省)
+  SOLO_MS: 90000,             // 獨自一人 (60→90s, 省請求)
+  SOLO_IDLE_MS: 300000,       // 獨自一人且久未操作 (120→300s, 最省)
   IDLE_THRESHOLD_MS: 30000,   // 閒置判定門檻
   NOCHANGE_BEFORE_IDLE: 5,    // 連續無變化幾次後進入閒置頻率
 };
@@ -3255,6 +3270,7 @@ function queueRoomEvent(type, data) {
     by: settings.myName || "?",
     ts: new Date().toISOString(),
   });
+  savePendingEvents();
 }
 
 async function createRoom() {
@@ -3373,8 +3389,10 @@ async function syncRoom(opts) {
       }
       throw new Error(data.error);
     }
-    // 清掉已送出的事件 (注意: 新加進來的事件不要被清掉)
+    // 清掉已送出的事件 (注意: 新加進來的事件不要被清掉) + 存本機 + 連線恢復
     pendingEvents = pendingEvents.slice(eventsToSend.length);
+    savePendingEvents();
+    _syncFailCount = 0;
     // 追蹤 server 回的 didChange (用於自適應頻率)
     if (data.didChange === false) {
       _consecutiveNoChange++;
@@ -3390,9 +3408,11 @@ async function syncRoom(opts) {
     state.roomLastSyncAt = new Date().toISOString();
   } catch(e) {
     console.warn("[room] sync failed", e);
+    _syncFailCount++;
   } finally {
     if (badge) badge.classList.remove("syncing");
     syncInFlight = false;
+    renderRoomBadge(); // 更新連線狀態顯示
   }
 }
 
@@ -3501,6 +3521,7 @@ function flushPendingEventsBeacon() {
     const ok = navigator.sendBeacon(url, body);
     if (ok) {
       pendingEvents = [];
+      savePendingEvents();
       console.log("[room] beacon flushed events");
     }
   } catch(e) { console.warn("[room] beacon failed", e); }
@@ -3555,6 +3576,8 @@ function leaveRoom(notifyServer) {
   state.roomActiveParcels = {};
   state.myPacked = {};
   pendingEvents = [];
+  savePendingEvents();
+  _syncFailCount = 0;
   // 清掉自適應同步殘留狀態 (避免下次加房時殘留)
   _activityBurstUntil = 0;
   _consecutiveNoChange = 0;
@@ -3573,7 +3596,9 @@ function renderRoomBadge() {
     return;
   }
   badge.hidden = false;
-  document.getElementById("rb-code").textContent = state.roomCode;
+  const reconnecting = _syncFailCount >= 2; // 連續 2 次同步失敗 = 視為中斷
+  document.getElementById("rb-code").textContent = (reconnecting ? "⚠" : "") + state.roomCode;
+  badge.title = reconnecting ? "⚠ 同步中斷,重連中…(刷的會先存著,連回來自動補送)" : "點此看房間狀態";
   const now = Date.now();
   const activeMembers = Object.entries(state.roomMembers || {}).filter(([n, m]) => {
     if (!m || !m.lastSeen) return false;
@@ -9420,10 +9445,17 @@ document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform
 render();
 // 若上次離線前在房間模
 // 若上次離線前在房間模式, 自動恢復同步
+loadPendingEvents(); // 還原上次沒送出的事件 (重整/當機不掉刷), startSyncTimer 會自動補送
 if (state.roomMode && state.roomCode && settings.syncWorkerUrl) {
   startSyncTimer();
 }
 renderRoomBadge();
+// 網路恢復時立刻補同步 (斷網復原不必等下一輪輪詢)
+window.addEventListener("online", () => {
+  if (state.roomMode) { _syncFailCount = 0; syncRoom(); }
+  renderRoomBadge();
+});
+window.addEventListener("offline", () => { _syncFailCount = 2; renderRoomBadge(); });
 // 每日自動備份 (3 秒後跑, 避免阻塞 init)
 setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
 </script>
