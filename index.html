@@ -514,20 +514,50 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 .active-parcel {
   margin-top: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   background: linear-gradient(135deg, #fef3c7, #fde68a);
   border-radius: 10px;
   border-left: 4px solid var(--warn);
+  /* 手機重點: 釘在標題列下方, 往下捲備貨清單時當前訂單永遠看得到, 不被遮擋 */
+  position: sticky;
+  top: var(--header-h, 56px);
+  z-index: 9;
+  box-shadow: 0 3px 10px rgba(0,0,0,.10);
 }
-.active-parcel-label { font-size: 0.6875rem; color: var(--text-soft); }
+/* 永遠可見的精簡列 (整列可點: 收合 / 展開明細) */
+.active-parcel-bar {
+  display: block; width: 100%;
+  border: 0; background: transparent;
+  padding: 2px 0; margin: 0; cursor: pointer;
+  text-align: left; font: inherit; color: inherit;
+}
+.apbar-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.apbar-sub { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.active-parcel-label { font-size: 0.6875rem; color: var(--text-soft); flex-shrink: 0; }
 .active-parcel-id {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-family: ui-monospace, monospace;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--primary);
-  margin-bottom: 8px;
   word-break: break-all;
+  line-height: 1.1;
 }
+.apbar-count {
+  margin-left: auto; flex-shrink: 0;
+  background: var(--primary); color: #fff;
+  font-size: 0.95rem; font-weight: 800;
+  padding: 2px 12px; border-radius: 999px;
+}
+.apbar-last {
+  flex: 1; min-width: 0;
+  font-size: 0.85rem; color: var(--text-soft);
+  font-family: ui-monospace, monospace; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.apbar-caret { flex-shrink: 0; color: var(--text-soft); font-size: 0.9rem; transition: transform .15s; }
+.active-parcel.collapsed .apbar-caret { transform: rotate(-90deg); }
+.active-parcel.collapsed .active-parcel-body { display: none; }
+.active-parcel-body { margin-top: 8px; }
 .active-parcel-items {
   background: rgba(255,255,255,.6);
   padding: 10px 12px;
@@ -536,7 +566,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   font-family: ui-monospace, monospace;
   margin-bottom: 8px;
   min-height: 40px;
-  max-height: 360px;
+  max-height: min(42vh, 360px);
   overflow-y: auto;
 }
 .active-parcel-items .empty { color: var(--text-soft); }
@@ -910,10 +940,15 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   min-height: 22px;
 }
 
+#barcode-content .bc-item { position: relative; }
+#barcode-content .bc-check { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; z-index: 2; cursor: pointer; }
+#barcode-content .bc-item:not(.bc-sel) { opacity: .4; } /* 螢幕上: 沒勾的變淡 = 不會印 */
 @media print {
   html { font-size: 16px !important; }
   body > *:not(#barcode-print-view) { display: none !important; }
   .no-print, .barcode-info { display: none !important; }
+  #barcode-content .bc-item:not(.bc-sel) { display: none !important; } /* 只印有勾選的 SKU */
+  #barcode-content .barcode-category:not(:has(.bc-item.bc-sel)) { display: none !important; } /* 該分類沒勾任何商品 → 連標題都不印 */
   #barcode-print-view {
     position: static;
     padding: 0;
@@ -967,6 +1002,14 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 }
 
 /* 出貨紀錄 卡片 */
+.hist-day { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.hist-day-sum { cursor: pointer; padding: 11px 12px; font-weight: 700; font-size: 0.9375rem; list-style: none; display: flex; align-items: center; gap: 6px; }
+.hist-day-sum::-webkit-details-marker { display: none; }
+.hist-day-sum::before { content: "▶"; font-size: 0.6875rem; color: var(--text-soft); transition: transform .15s; }
+.hist-day[open] > .hist-day-sum::before { transform: rotate(90deg); }
+.hist-day[open] > .hist-day-sum { border-bottom: 1px solid var(--border); }
+.hist-day-body { padding: 8px; }
+.hist-day-body .history-item:last-child { margin-bottom: 0; }
 .history-item {
   background: var(--surface);
   border-radius: 12px;
@@ -1561,8 +1604,8 @@ footer.summary-bar {
     </div>
 
     <!-- 入倉驗收入口 -->
-    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid #1F4E78;">
-      <button class="btn full" id="open-inbound-btn" style="background: #1F4E78; color: white;">🏭 入倉驗收 (進貨)</button>
+    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
+      <button class="btn full" id="open-inbound-btn" style="background: var(--primary); color: white;">🏭 入倉驗收 (進貨)</button>
       <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">廠商進貨到倉時用。填進貨單號 → 刷商品條碼清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
     </div>
 
@@ -1724,17 +1767,6 @@ footer.summary-bar {
         <span>💡 倍數: 輸入 <code style="background: var(--bg); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace;">*5</code> 後刷碼會 +5</span>
         <span id="scan-multiplier-badge" hidden style="background: var(--warn); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 0.75rem;">× 5</span>
       </div>
-      <div id="active-parcel" class="active-parcel" hidden>
-        <div class="active-parcel-info">
-          <div class="active-parcel-label">當前訂單</div>
-          <div class="active-parcel-id" id="active-parcel-id">—</div>
-        </div>
-        <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
-        <div class="row" style="gap: 6px;">
-          <button class="btn outline sm danger" id="cancel-parcel-btn" style="flex: 1;">✗ 取消此筆</button>
-          <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 再刷一次 / 手動完成此筆</button>
-        </div>
-      </div>
       <div class="scan-stats">
         ✓ 已完成 <strong id="completed-parcels-count">0</strong> 筆訂單
       </div>
@@ -1742,6 +1774,27 @@ footer.summary-bar {
         <summary>📋 查看已完成訂單明細</summary>
         <div id="completed-parcels-list" class="completed-parcels-list">尚無</div>
       </details>
+    </div>
+  </div>
+  <!-- 當前訂單: 移到掃描面板外, 直接掛在 picking-view 底下, 才能釘在頂端跨整份備貨清單捲動都看得到 -->
+  <div id="active-parcel" class="active-parcel" hidden>
+    <button type="button" class="active-parcel-bar" id="active-parcel-bar" aria-expanded="true" title="點一下收合 / 展開明細">
+      <div class="apbar-head">
+        <span class="active-parcel-label">當前訂單</span>
+        <span class="active-parcel-id" id="active-parcel-id">—</span>
+        <span class="apbar-count" id="active-parcel-count">0 件</span>
+      </div>
+      <div class="apbar-sub">
+        <span class="apbar-last" id="active-parcel-last">尚未刷碼</span>
+        <span class="apbar-caret" id="active-parcel-caret">▾</span>
+      </div>
+    </button>
+    <div class="active-parcel-body" id="active-parcel-body">
+      <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
+      <div class="row" style="gap: 6px;">
+        <button class="btn outline sm danger" id="cancel-parcel-btn" style="flex: 1;">✗ 取消此筆</button>
+        <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 再刷一次 / 手動完成此筆</button>
+      </div>
     </div>
   </div>
   <div class="filter-bar" id="filter-bar">
@@ -1766,18 +1819,20 @@ footer.summary-bar {
 <!-- SKU 條碼列印視圖 -->
 <div id="barcode-print-view" hidden>
   <div class="barcode-toolbar no-print">
-    <button class="btn sm" onclick="window.print()">🖨 列印</button>
+    <button class="btn sm" id="barcode-print-go">🖨 列印 (<span id="barcode-sel-count">0</span>)</button>
     <button class="btn outline sm" id="barcode-close-btn">關閉</button>
+    <button class="btn outline sm" id="barcode-select-all">✅ 全選</button>
+    <button class="btn outline sm" id="barcode-select-none">☐ 全不選</button>
     <select id="barcode-layout-mode" style="margin-left:8px; padding:6px; font-family:inherit; border:1px solid var(--border); border-radius:6px;">
       <option value="book" selected>📖 分類本 (每類獨立頁)</option>
       <option value="dense">📋 緊湊 (全部一頁)</option>
     </select>
     <span style="margin-left:auto; font-size:0.75rem; color: var(--text-soft);">
-      <span id="barcode-count">0</span> 個 SKU
+      共 <span id="barcode-count">0</span> 個 SKU
     </span>
   </div>
   <div class="barcode-info no-print">
-    💡 集中放在包貨桌或裝訂成本子。刷槍掃 SKU 條碼 = 當前訂單該 SKU +1（需先刷寄件單）。
+    💡 <strong>勾選要列印的 SKU</strong>(預設都不勾,避免浪費紙)。要全印按「✅ 全選」;只補印幾個就勾那幾個。集中放在包貨桌或裝訂成本子,刷槍掃 = 當前訂單該 SKU +1。
   </div>
   <div id="barcode-content"></div>
 </div>
@@ -2562,7 +2617,7 @@ footer.summary-bar {
     <div style="height: 16px"></div>
     <div class="row">
       <button class="btn outline" id="inb-cancel" style="flex:1;">取消</button>
-      <button class="btn" id="inb-create" style="flex:2; background: #1F4E78; color: white;">▶ 開始驗收</button>
+      <button class="btn" id="inb-create" style="flex:2; background: var(--primary); color: white;">▶ 開始驗收</button>
     </div>
   </div>
 </div>
@@ -2691,11 +2746,14 @@ const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
+// ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
+//   customer      = Discord/Sheets 紀錄用的客戶名
+//   kocaCustomer  = KOCA 庫存 API 專屬客戶名 (依阿福規格, 與上面可不同)
 const PLATFORMS = {
-  a1:      { label: "蝦皮",       hint: "把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。" },
-  momo:    { label: "MOMO",          hint: "從 MOMO 後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 MOMO 客製化，會用 A1 邏輯嘗試。如果失敗請把 CSV 給開發者。" },
-  coupang: { label: "酷澎 Coupang",  hint: "從酷澎賣家中心匯出訂單 CSV 上傳。⚠ 解析器尚未針對酷澎客製化。" },
-  koca:    { label: "KOCA 官網",     hint: "從 KOCA 自架官網後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 KOCA 客製化。" },
+  a1:      { label: "蝦皮",       emoji: "🛒", customer: "蝦皮",    kocaCustomer: "蝦皮", hint: "把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。" },
+  momo:    { label: "MOMO",          emoji: "🛍", customer: "MOMO",    kocaCustomer: "MOMO", hint: "從 MOMO 後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 MOMO 客製化，會用 A1 邏輯嘗試。如果失敗請把 CSV 給開發者。" },
+  coupang: { label: "酷澎 Coupang",  emoji: "🅒", customer: "酷澎",    kocaCustomer: "酷澎", hint: "從酷澎賣家中心匯出訂單 CSV 上傳。⚠ 解析器尚未針對酷澎客製化。" },
+  koca:    { label: "KOCA 官網",     emoji: "🌐", customer: "KOCA官網", kocaCustomer: "官網", hint: "從 KOCA 自架官網後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 KOCA 客製化。" },
 };
 // 根據通路選對應的 parser (目前都用 A1, 未來加客製化 case 即可)
 function parserFor(platform) {
@@ -2728,7 +2786,7 @@ const DEFAULT_SPEC_MAP = {
 // Koca 主賣商品預設庫 (首次開啟自動載入)
 const DEFAULT_LIBRARY = [
   { sku: "5E-5061-EV",       name: "五益包裝50*61破壞袋50入",            category: "包裝", essential: true },
-  { sku: "5E-5063-EV",       name: "三口品白色破壞袋38x52cm",             category: "包裝", essential: true },
+  { sku: "KOCA-PB",          name: "KOCA-PB破壞袋 38x52cm",              category: "包裝", essential: true },
   { sku: "CTN-A1-F",         name: "紙箱龍F箱",                          category: "包裝", essential: true },
   { sku: "CTN-A1-G",         name: "紙箱龍G箱-0101A331 12.1x7.1x3.1",   category: "包裝", essential: true },
   { sku: "CTN-A1-Z",         name: "紙箱龍Z箱-0101A331 12.1x7.1x3.1",   category: "包裝", essential: true },
@@ -2753,6 +2811,9 @@ const CATEGORY_EMOJI = {
   "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "加購品": "🎁", "其他": "📌",
 };
 const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
+// 訂單類型的標準值 (single source of truth)。程式各處以字面字串比對, 新增/改字務必對照這裡,
+// 打錯字會靜默失效 (例如漏扣庫存 / 漏推 webhook)。
+const ORDER_TYPE = { NORMAL: "normal", MANUAL: "manual", REPLACEMENT: "replacement", RETURN: "return", INBOUND: "inbound" };
 
 let state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null,
   // 房間模式
@@ -2784,14 +2845,14 @@ let _activityBurstUntil = 0;
 
 // === 房間 / 同步參數 (集中設定, 取代散落各處的寫死數字, 之後好調) ===
 const ROOM_CONFIG = {
-  QUICK_SYNC_MS: 500,         // 操作後 debounce 多久同步一次
-  MEMBER_ONLINE_MS: 240000,   // 判定同事在線門檻 (須 > Worker 150s presence 更新間隔)
-  BADGE_ONLINE_MS: 240000,    // 徽章顯示在線門檻
-  BURST_MS: 3000,             // 對方剛有動作時的快速輪詢 (只讀不寫 KV, 保留即時感)
-  BASE_MS: 10000,             // 雙人作業中的基礎輪詢
-  IDLE_MS: 30000,             // 雙人但閒置無變化時的輪詢
-  SOLO_MS: 90000,             // 獨自一人 (60→90s, 省請求)
-  SOLO_IDLE_MS: 300000,       // 獨自一人且久未操作 (120→300s, 最省)
+  QUICK_SYNC_MS: 200,         // 操作後 debounce 多久上傳 (已付費, 300→200 上傳更快)
+  MEMBER_ONLINE_MS: 150000,   // 判定同事在線門檻 (★須 > Worker PRESENCE_RATE_LIMIT_MS, 目前 60s)
+  BADGE_ONLINE_MS: 150000,    // 徽章顯示在線門檻 (同上約束)
+  BURST_MS: 800,              // 對方剛有動作時的快速輪詢 (A加速: 1.5→0.8s)
+  BASE_MS: 1500,              // 雙人作業中的基礎輪詢 (A加速: 3→1.5s, 對方進度更即時)
+  IDLE_MS: 6000,              // 雙人但閒置無變化時的輪詢 (A加速: 10→6s)
+  SOLO_MS: 30000,             // 獨自一人 (45→30s)
+  SOLO_IDLE_MS: 90000,        // 獨自一人且久未操作 (120→90s)
   IDLE_THRESHOLD_MS: 30000,   // 閒置判定門檻
   NOCHANGE_BEFORE_IDLE: 5,    // 連續無變化幾次後進入閒置頻率
 };
@@ -2835,6 +2896,7 @@ let pendingA1 = []; // [{spec, orderQty}] - 待對應的 A1 揀貨資料
 let currentTab = "menu";
 let history = []; // [{id, completedAt, platform, items: [...], summary: {totalSku, totalExpected, totalPacked, completionRate}}]
 let historyFilter = "all"; // "all" | "normal" | "replacement" | "return" - 出貨紀錄篩選 (session only)
+let _histOpenDays = null;  // 出貨紀錄「日期資料夾」展開狀態 (null=未初始化, 預設今天展開)
 let historySearchQuery = "";   // 出貨紀錄關鍵字搜尋 (session only)
 let stockMap = {}; // {sku: {qty: 數量, name: 名稱, updatedAt: ISO}} - 倉庫庫存 (獨立於 library, 不動 library 的 SKU/名稱)
 let inventoryFilter = "all"; // "all" | "in_stock" | "out_of_stock" | "low_stock" - 倉庫清冊篩選
@@ -3076,13 +3138,10 @@ function playBeep(freq, duration, vol) {
     o.stop(_audioCtx.currentTime + duration / 1000 + 0.05);
   } catch(e) { console.warn("[sound] failed", e); }
 }
-// 平台 → customer 名稱對應 (給 AI Agent 用)
-const PLATFORM_TO_CUSTOMER = {
-  a1: "蝦皮",        // 蝦皮訂單 (從蝦皮後台匯出的 CSV)
-  momo: "MOMO",
-  coupang: "酷澎",
-  koca: "KOCA官網",
-};
+// 平台 → customer 名稱對應 (給 Discord/Sheets 紀錄用) - 由 PLATFORMS 單一來源衍生
+const PLATFORM_TO_CUSTOMER = Object.fromEntries(
+  Object.entries(PLATFORMS).map(([k, v]) => [k, v.customer || v.label])
+);
 
 // 產生今日的 doc_no (YYYYMMDD + 3 位流水)
 // 修正: 用「today 既有 doc_no 的最大流水 + 1」, 避免追加合併後 history 數量回落造成重複流水
@@ -3146,20 +3205,30 @@ async function pushKocaOutbound(entry) {
   if (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound") return;
   if (!settings.syncWorkerUrl) { setTimeout(() => showToast("⚠ KOCA 推送需先設定同步 Worker URL"), 800); return; }
   // 只送真正商品 SKU: 排除包裝/零件 (essential), qty>0
+  // 追加合併: 只推「本次新增的量」= 現在 packed - 原單已推的量, 避免原始商品被重複扣
+  const prior = entry.priorKocaPushed || {};
   const items = (entry.items || [])
-    .filter(it => !it.essential && (it.packed || 0) > 0)
+    .filter(it => !it.essential)
     .map(it => {
       const libItem = library.find(p => p.sku === it.sku);
-      return { sku: it.sku, qty: it.packed, price: (libItem && libItem.price) || 0, remark: "" };
-    });
+      const delta = (it.packed || 0) - (prior[it.sku] || 0);
+      return { sku: it.sku, qty: delta, price: (libItem && libItem.price) || 0, remark: "" };
+    })
+    .filter(it => it.qty > 0);
   if (items.length === 0) return;
+  // 記錄這次推送後「累計已推」的數量 (含本次), 供下次追加算增量
+  const cumulativePushed = {};
+  for (const it of (entry.items || [])) {
+    if (it.essential) continue;
+    if ((it.packed || 0) > 0) cumulativePushed[it.sku] = it.packed;
+  }
   const doc_no = entry.doc_no || generateDocNo(entry.completedAt, entry.id);
   if (!entry.doc_no) { entry.doc_no = doc_no; try { saveHistory(); } catch (e) {} }
   const d = new Date(entry.completedAt);
   const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-  // KOCA API 專屬 customer 對應 (依阿福規格: 蝦皮 / 官網), 不動 Discord/Sheets 用的 PLATFORM_TO_CUSTOMER
-  const _kocaCustomerMap = { a1: "蝦皮", koca: "官網", momo: "MOMO", coupang: "酷澎" };
-  const customer = _kocaCustomerMap[entry.platform] || PLATFORM_TO_CUSTOMER[entry.platform] || entry.platform || "其他";
+  // KOCA API 專屬 customer (依阿福規格: 蝦皮 / 官網), 由 PLATFORMS 單一來源取 kocaCustomer
+  const _plat = PLATFORMS[entry.platform];
+  const customer = (_plat && _plat.kocaCustomer) || PLATFORM_TO_CUSTOMER[entry.platform] || entry.platform || "其他";
   try {
     const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/outbound", {
       method: "POST",
@@ -3168,7 +3237,9 @@ async function pushKocaOutbound(entry) {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) {
-      entry.kocaPushed = true; try { saveHistory(); } catch (e) {}
+      entry.kocaPushed = true;
+      entry.kocaPushedItems = cumulativePushed; // 累計已推, 追加合併時算增量用
+      try { saveHistory(); } catch (e) {}
       setTimeout(() => showToast(`✅ 已推送 KOCA 庫存 (單 ${doc_no})`), 800);
     } else {
       setTimeout(() => showToast(`⚠ KOCA 推送失敗 ${data.status || res.status || ""}`), 800);
@@ -3263,6 +3334,13 @@ function queueRoomEvent(type, data) {
   if (!state.roomMode) return;
   // 跳過 0 變動的事件 (避免噪音)
   if (type === "scan_sku" && (!data || data.deltaQty === 0)) return;
+  // scan_sku 補上 name/category: 否則 Worker 自動補建的商品名稱會永久空白 (對方畫面/紀錄出現無名商品)
+  if (type === "scan_sku" && data && data.sku && (data.name == null || data.category == null)) {
+    const _lib = library.find(p => p.sku === data.sku);
+    const _it = (state.items || []).find(i => i.sku === data.sku);
+    if (data.name == null) data.name = (_it && _it.name) || (_lib && _lib.name) || "";
+    if (data.category == null) data.category = (_it && _it.category) || (_lib && _lib.category) || "其他";
+  }
   pendingEvents.push({
     id: makeEventId(),
     type,
@@ -3330,6 +3408,7 @@ async function joinRoom(code) {
     state.inboundInfo = null;
     state.appendLevel = 1;
     state.continuationOf = null;
+    state.priorKocaPushed = null;
     state.roomMode = true;
     state.roomCode = code;
     state.roomMembers = room.members || {};
@@ -3519,11 +3598,10 @@ function flushPendingEventsBeacon() {
       myActiveParcel: state.activeParcel,
     })], { type: "application/json" });
     const ok = navigator.sendBeacon(url, body);
-    if (ok) {
-      pendingEvents = [];
-      savePendingEvents();
-      console.log("[room] beacon flushed events");
-    }
+    // 注意: sendBeacon 回 true 只代表瀏覽器已排入佇列, 不保證送達。
+    // 因此這裡「不」清空 pendingEvents / 不刪本機備份 —— 留給下次正規 syncRoom() 確認成功後才清。
+    // Worker 用 event id 去重, 重送安全, 這樣斷網時事件不會永久遺失。
+    if (ok) console.log("[room] beacon queued events (待下次 sync 確認後才清)");
   } catch(e) { console.warn("[room] beacon failed", e); }
 }
 
@@ -3688,6 +3766,19 @@ function loadLibrary() {
         migrated = true;
       }
     }
+    // 一次性遷移: 破壞袋 SKU 5E-5063-EV → KOCA-PB (商品庫 + barcode; 庫存在 loadStock 另外改)
+    // ★ 必須在「補入預設商品」之前跑, 否則預設庫的 KOCA-PB 會先被補進來, 改名後變成兩筆重複 SKU
+    const renameMigKey = "lib_rename_5e5063_kocapb_v1";
+    if (!localStorage.getItem(renameMigKey)) {
+      const it = library.find(x => x.sku === "5E-5063-EV");
+      if (it) {
+        it.sku = "KOCA-PB";
+        it.barcode = "KOCA-PB"; // 刷槍/列印條碼依此產生
+        if (!it.name || it.name === "三口品白色破壞袋38x52cm") it.name = "KOCA-PB破壞袋 38x52cm";
+        migrated = true;
+      }
+      try { localStorage.setItem(renameMigKey, "1"); } catch(e) {}
+    }
     // 補入預設商品時, 跳過使用者已主動刪除的 SKU
     let deletedSkus = [];
     try {
@@ -3773,6 +3864,31 @@ function loadLibrary() {
       }
       try { localStorage.setItem(partsMigKey, "1"); } catch(e) {}
     }
+    // 安全網: 去除重複 SKU (歷史遷移可能造成同 SKU 兩筆), 保留資訊較完整的那筆
+    const _seen = {};
+    const _deduped = [];
+    let _dupRemoved = 0;
+    for (const it of library) {
+      const k = it.sku;
+      if (!(k in _seen)) {
+        _seen[k] = _deduped.length;
+        _deduped.push(it);
+      } else {
+        // 合併: 補上缺的欄位 (barcode/price/name/category), 不新增第二筆
+        const keep = _deduped[_seen[k]];
+        if ((!keep.name || keep.name === "") && it.name) keep.name = it.name;
+        if (!keep.barcode && it.barcode) keep.barcode = it.barcode;
+        if (typeof keep.price !== "number" && typeof it.price === "number") keep.price = it.price;
+        if ((!keep.category || keep.category === "其他") && it.category) keep.category = it.category;
+        if (it.essential) keep.essential = true;
+        _dupRemoved++;
+      }
+    }
+    if (_dupRemoved > 0) {
+      library = _deduped;
+      migrated = true;
+      console.log("[migration] 去除重複 SKU", _dupRemoved, "筆");
+    }
     if (migrated) saveLibrary();
   } catch(e) {}
 }
@@ -3801,6 +3917,18 @@ function loadStock() {
       if (p && typeof p === "object") stockMap = p;
     }
   } catch(e) { console.warn("[storage] loadStock failed", e); }
+  // 一次性遷移: 庫存清冊 5E-5063-EV → KOCA-PB (保留數量)
+  try {
+    const k = "stock_rename_5e5063_kocapb_v1";
+    if (!localStorage.getItem(k)) {
+      if (stockMap && stockMap["5E-5063-EV"] && !stockMap["KOCA-PB"]) {
+        stockMap["KOCA-PB"] = stockMap["5E-5063-EV"];
+        delete stockMap["5E-5063-EV"];
+        saveStock();
+      }
+      localStorage.setItem(k, "1");
+    }
+  } catch(e) {}
 }
 function loadHistory() {
   try {
@@ -3837,7 +3965,8 @@ function appendHistory() {
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
     appendLevel: state.appendLevel || 1,
     continuationOf: state.continuationOf || null,
-    orderType: state.inboundInfo ? "inbound" : (state.returnInfo ? "return" : (state.replacementInfo ? "replacement" : (state.manualMode ? "manual" : "normal"))),
+    priorKocaPushed: state.priorKocaPushed || null, // 追加合併時, 原單已推 KOCA 的數量 (只推增量用)
+    orderType: state.inboundInfo ? ORDER_TYPE.INBOUND : (state.returnInfo ? ORDER_TYPE.RETURN : (state.replacementInfo ? ORDER_TYPE.REPLACEMENT : (state.manualMode ? ORDER_TYPE.MANUAL : ORDER_TYPE.NORMAL))),
     replacementInfo: state.replacementInfo ? { ...state.replacementInfo } : null,
     returnInfo: state.returnInfo ? { ...state.returnInfo } : null,
     inboundInfo: state.inboundInfo ? { ...state.inboundInfo } : null,
@@ -5841,8 +5970,11 @@ function renderHistory() {
   }
 
   // 列表
-  const PLATFORM_LABELS = { a1: "🛒 蝦皮", momo: "🛍 MOMO", coupang: "🅒 酷澎", koca: "🌐 KOCA官網", unknown: "—" };
-  list.innerHTML = displayed.map(e => {
+  const PLATFORM_LABELS = Object.fromEntries(
+    Object.entries(PLATFORMS).map(([k, v]) => [k, `${v.emoji || ""} ${v.customer || v.label}`.trim()])
+  );
+  PLATFORM_LABELS.unknown = "—";
+  const _histCards = displayed.map(e => {
     const date = new Date(e.completedAt);
     const dateStr = date.toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
     const isPartial = e.summary.completedSku < e.summary.totalSku;
@@ -5891,6 +6023,39 @@ function renderHistory() {
         ${detail}
       </div>
     `;
+  });
+  // 依日期分組成可摺疊資料夾 (記住展開/收起狀態; 預設今天展開, 舊的收起)
+  const _todayKey = new Date().toLocaleDateString("zh-TW");
+  if (_histOpenDays === null) _histOpenDays = new Set([_todayKey]);
+  // 先把目前 DOM 上各資料夾的展開狀態記下來 (使用者點過的, 重繪後要保留)
+  document.querySelectorAll("#history-list .hist-day").forEach(d => {
+    const day = d.getAttribute("data-day"); if (!day) return;
+    if (d.open) _histOpenDays.add(day); else _histOpenDays.delete(day);
+  });
+  const _groups = [];
+  const _gIdx = {};
+  displayed.forEach((e, i) => {
+    const dKey = new Date(e.completedAt).toLocaleDateString("zh-TW");
+    if (!(dKey in _gIdx)) { _gIdx[dKey] = _groups.length; _groups.push({ date: dKey, entries: [], cards: [] }); }
+    const g = _groups[_gIdx[dKey]];
+    g.entries.push(e); g.cards.push(_histCards[i]);
+  });
+  list.innerHTML = _groups.map(g => {
+    const n = g.entries.length;
+    const nRep = g.entries.filter(e => e.orderType === "replacement").length;
+    const nRet = g.entries.filter(e => e.orderType === "return").length;
+    const nInb = g.entries.filter(e => e.orderType === "inbound").length;
+    const nNorm = n - nRep - nRet - nInb;
+    const parts = [];
+    if (nNorm) parts.push(`📦${nNorm}`);
+    if (nRep) parts.push(`📮${nRep}`);
+    if (nRet) parts.push(`📥${nRet}`);
+    if (nInb) parts.push(`🏭${nInb}`);
+    const open = _histOpenDays.has(g.date) ? " open" : "";
+    return `<details class="hist-day" data-day="${escapeHtml(g.date)}"${open}>
+      <summary class="hist-day-sum">📅 ${g.date} · 共 ${n} 筆 <span style="color:var(--text-soft); font-weight:normal; font-size:0.8125rem;">${parts.join(" · ")}</span></summary>
+      <div class="hist-day-body">${g.cards.join("")}</div>
+    </details>`;
   }).join("");
 }
 
@@ -6396,6 +6561,17 @@ function renderActiveParcel() {
   idEl.textContent = state.activeParcel.id;
   const items = state.activeParcel.items || {};
   const skus = Object.keys(items);
+  // 精簡釘住列: 件數 + 最後刷的 SKU (捲到下方清單時也看得到)
+  const totalQty = skus.reduce((s, k) => s + (items[k] || 0), 0);
+  const countEl = document.getElementById("active-parcel-count");
+  const lastEl = document.getElementById("active-parcel-last");
+  if (countEl) countEl.textContent = totalQty + " 件";
+  if (lastEl) {
+    const last = state.activeParcel.lastSku;
+    if (last && items[last]) lastEl.textContent = "剛刷 " + last + " ×" + items[last];
+    else if (skus.length === 0) lastEl.textContent = "尚未刷碼";
+    else lastEl.textContent = skus.length + " 個 SKU";
+  }
   if (skus.length === 0) {
     itemsEl.innerHTML = '<span class="empty">▶ 從下方備貨清單點 + 加入此訂單</span>';
   } else {
@@ -6619,6 +6795,7 @@ function bumpPickItem(idx, delta, options) {
     if (!ap.items) ap.items = {};
     ap.items[it.sku] = Math.max(0, (ap.items[it.sku] || 0) + delta);
     if (ap.items[it.sku] === 0) delete ap.items[it.sku];
+    if (delta > 0) ap.lastSku = it.sku; // 釘住列顯示「最後刷的 SKU」
     renderActiveParcel();
   }
   if (delta > 0 && navigator.vibrate) navigator.vibrate(12);
@@ -7085,6 +7262,8 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         state.continuationOf = entryToRestore.id;
         state.appendLevel = (entryToRestore.appendLevel || 1) + 1;
         state.continuationDate = entryToRestore.completedAt;
+        // 追加重複扣帳修正: 帶過「原單已推送 KOCA 的數量」, 之後只推增量, 不重複扣
+        state.priorKocaPushed = entryToRestore.kocaPushedItems || null;
         state.loadedDate = new Date().toISOString().slice(0, 10);
         saveState();
         history = history.filter(h => h.id !== entryIdToMerge);
@@ -7109,6 +7288,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         }
         state.items = newItems;
         state.loadedDate = new Date().toISOString().slice(0, 10);
+        state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新清單, 清掉追加狀態
         saveState();
         SOUND.parcelStart();
         showToast(`✓ 已建立新清單, 共 ${newItems.length} 個 SKU`);
@@ -7474,6 +7654,30 @@ document.getElementById("active-parcel-items").addEventListener("click", (e) => 
     return;
   }
 });
+
+// 點精簡列 → 收合 / 展開明細 (記住偏好)
+const AP_COLLAPSE_KEY = "picking_ap_collapsed_v1";
+(function initActiveParcelToggle() {
+  const wrap = document.getElementById("active-parcel");
+  const bar = document.getElementById("active-parcel-bar");
+  if (!wrap || !bar) return;
+  if (localStorage.getItem(AP_COLLAPSE_KEY) === "1") wrap.classList.add("collapsed");
+  bar.setAttribute("aria-expanded", wrap.classList.contains("collapsed") ? "false" : "true");
+  bar.addEventListener("click", () => {
+    const collapsed = wrap.classList.toggle("collapsed");
+    bar.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    try { localStorage.setItem(AP_COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (e) {}
+  });
+})();
+
+// 量測標題列高度 → 當前訂單剛好釘在標題列正下方 (跨機型自適應, 不寫死)
+function updateHeaderHeight() {
+  const h = document.querySelector("header");
+  if (h) document.documentElement.style.setProperty("--header-h", h.offsetHeight + "px");
+}
+updateHeaderHeight();
+window.addEventListener("resize", updateHeaderHeight);
+window.addEventListener("orientationchange", () => setTimeout(updateHeaderHeight, 200));
 
 document.getElementById("mapping-cards").addEventListener("click", (e) => {
   const rm = e.target.closest("button[data-remove-map]");
@@ -9104,7 +9308,7 @@ function actuallyCompleteShipping() {
     leaveRoom(true);
     closeRoomOnServer(roomCodeAtCompletion);
   }
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
@@ -9289,7 +9493,8 @@ function renderBarcodeContent(mode) {
     // 緊湊模式: 格子排列
     wrapper.innerHTML = '<div class="barcode-dense-grid">' + library.map(p => {
       const bc = p.barcode || p.sku;
-      return `<div class="barcode-cell">
+      return `<div class="barcode-cell bc-item" data-bc-sku="${escapeHtml(p.sku)}">
+        <input type="checkbox" class="bc-check no-print" data-bc-toggle aria-label="列印">
         <div class="shortcode">${escapeHtml(bc)}</div>
         ${code39Svg(bc)}
         <div class="sku">${escapeHtml(p.sku)}</div>
@@ -9302,7 +9507,8 @@ function renderBarcodeContent(mode) {
     wrapper.innerHTML = groups.map(g => {
       const items = g.items.map(p => {
         const bc = p.barcode || p.sku;
-        return `<div class="barcode-row">
+        return `<div class="barcode-row bc-item" data-bc-sku="${escapeHtml(p.sku)}">
+          <input type="checkbox" class="bc-check no-print" data-bc-toggle aria-label="列印">
           <div class="barcode-row-left"><div class="shortcode">${escapeHtml(bc)}</div></div>
           <div class="barcode-row-mid">${code39Svg(bc)}</div>
           <div class="barcode-row-right">
@@ -9321,6 +9527,12 @@ function renderBarcodeContent(mode) {
       </div>`;
     }).join("");
   }
+  updateBarcodeSelCount();
+}
+// 更新「將列印 N 個」計數
+function updateBarcodeSelCount() {
+  const el = document.getElementById("barcode-sel-count");
+  if (el) el.textContent = document.querySelectorAll("#barcode-content .bc-item.bc-sel").length;
 }
 
 function openBarcodePrintView() {
@@ -9332,6 +9544,34 @@ function openBarcodePrintView() {
 
 document.getElementById("barcode-layout-mode").addEventListener("change", (e) => {
   renderBarcodeContent(e.target.value);
+});
+
+// 勾選要列印的 SKU (事件代理)
+document.getElementById("barcode-content").addEventListener("change", (e) => {
+  const cb = e.target.closest("input[data-bc-toggle]");
+  if (!cb) return;
+  const cell = cb.closest(".bc-item");
+  if (cell) cell.classList.toggle("bc-sel", cb.checked);
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-select-all").addEventListener("click", () => {
+  document.querySelectorAll("#barcode-content .bc-item").forEach(c => {
+    c.classList.add("bc-sel");
+    const cb = c.querySelector("input[data-bc-toggle]"); if (cb) cb.checked = true;
+  });
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-select-none").addEventListener("click", () => {
+  document.querySelectorAll("#barcode-content .bc-item").forEach(c => {
+    c.classList.remove("bc-sel");
+    const cb = c.querySelector("input[data-bc-toggle]"); if (cb) cb.checked = false;
+  });
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-print-go").addEventListener("click", () => {
+  const n = document.querySelectorAll("#barcode-content .bc-item.bc-sel").length;
+  if (n === 0) { showToast("請先勾選要列印的 SKU(或按「全選」)"); return; }
+  window.print();
 });
 
 document.getElementById("print-barcodes-btn").addEventListener("click", () => {
