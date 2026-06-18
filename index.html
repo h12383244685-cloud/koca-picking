@@ -3341,14 +3341,17 @@ function queueRoomEvent(type, data) {
     if (data.name == null) data.name = (_it && _it.name) || (_lib && _lib.name) || "";
     if (data.category == null) data.category = (_it && _it.category) || (_lib && _lib.category) || "其他";
   }
-  pendingEvents.push({
+  const ev = {
     id: makeEventId(),
     type,
     data,
     by: settings.myName || "?",
     ts: new Date().toISOString(),
-  });
+  };
+  pendingEvents.push(ev);
   savePendingEvents();
+  // 即時送出 (WebSocket); 失敗就留在 pendingEvents, 連線恢復/下次 sync 會補送 (DO 去重)
+  wsSend({ type: "events", events: [ev] });
 }
 
 async function createRoom() {
@@ -3434,65 +3437,112 @@ async function joinRoom(code) {
   }
 }
 
+// ===== WebSocket 即時同步 (取代輪詢; Durable Object 序列化處理, 不會掉數) =====
+let roomSocket = null;
+let _wsReconnectTimer = null;
+let _wsHeartbeatTimer = null;
+let _wsManualClose = false;
+let _wsBackoff = 1000;
+const WS_HEARTBEAT_MS = 25000;
+
+function roomWsUrl() {
+  const base = settings.syncWorkerUrl.replace(/\/$/, "").replace(/^http/i, "ws"); // https→wss, http→ws
+  return base + "/api/room/" + state.roomCode + "/ws";
+}
+function wsSend(obj) {
+  if (roomSocket && roomSocket.readyState === 1) {
+    try { roomSocket.send(JSON.stringify(obj)); return true; } catch (e) {}
+  }
+  return false;
+}
+function startHeartbeat() {
+  stopHeartbeat();
+  _wsHeartbeatTimer = setInterval(() => { if (!document.hidden) wsSend({ type: "ping" }); }, WS_HEARTBEAT_MS);
+}
+function stopHeartbeat() { if (_wsHeartbeatTimer) { clearInterval(_wsHeartbeatTimer); _wsHeartbeatTimer = null; } }
+function scheduleReconnect() {
+  if (_wsReconnectTimer || _wsManualClose || !state.roomMode) return;
+  _wsReconnectTimer = setTimeout(() => {
+    _wsReconnectTimer = null;
+    if (state.roomMode && !_wsManualClose) openRoomSocket();
+  }, _wsBackoff);
+  _wsBackoff = Math.min(_wsBackoff * 2, 15000); // 指數退避, 上限 15 秒
+}
+function openRoomSocket() {
+  if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
+  _wsManualClose = false;
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; } // 取消待重連, 避免重複開
+  // 已經有開著的連線就不重開 (避免 online 事件 + 重連計時器同時觸發造成churn)
+  if (roomSocket && (roomSocket.readyState === 0 || roomSocket.readyState === 1)) return;
+  // 關掉殘留的舊連線 (不觸發重連)
+  if (roomSocket) { try { roomSocket.onclose = null; roomSocket.close(); } catch (e) {} roomSocket = null; }
+  let ws;
+  try { ws = new WebSocket(roomWsUrl()); } catch (e) { scheduleReconnect(); return; }
+  roomSocket = ws;
+  ws.onopen = () => {
+    _wsBackoff = 1000;
+    _syncFailCount = 0;
+    wsSend({ type: "hello", myName: settings.myName, knownVersion: state._lastSeenRoomVer || 0 });
+    if (pendingEvents.length > 0) wsSend({ type: "events", events: pendingEvents.slice() }); // 重連補送 (DO 去重)
+    wsSend({ type: "activeParcel", activeParcel: state.activeParcel || null });
+    startHeartbeat();
+    renderRoomBadge();
+  };
+  ws.onmessage = (e) => handleWsMessage(e.data);
+  ws.onerror = () => { /* 交給 onclose 處理重連 */ };
+  ws.onclose = () => {
+    stopHeartbeat();
+    if (roomSocket === ws) roomSocket = null;
+    if (!_wsManualClose && state.roomMode) { _syncFailCount = 2; renderRoomBadge(); scheduleReconnect(); }
+  };
+}
+function closeRoomSocket() {
+  _wsManualClose = true;
+  stopHeartbeat();
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+  if (roomSocket) { try { roomSocket.onclose = null; roomSocket.close(); } catch (e) {} roomSocket = null; }
+}
+function handleWsMessage(data) {
+  let msg;
+  try { msg = JSON.parse(data); } catch (e) { return; }
+  if (msg.type === "ack") {
+    if (Array.isArray(msg.ids) && msg.ids.length) {
+      const set = new Set(msg.ids);
+      pendingEvents = pendingEvents.filter(ev => !set.has(ev.id)); // DO 已收到 → 安全清掉待送
+      savePendingEvents();
+    }
+    return;
+  }
+  if (msg.type === "snapshot" || msg.type === "sync") {
+    if (msg.room) mergeRoomState(msg.room);
+    state.roomLastSyncAt = new Date().toISOString();
+    _syncFailCount = 0;
+    return;
+  }
+  if (msg.type === "presence") {
+    // 輕量在線更新 (不含 completedParcels), 只更新成員/同事當前訂單
+    if (msg.members) state.roomMembers = msg.members;
+    if (msg.activeParcels) state.roomActiveParcels = msg.activeParcels;
+    if (typeof msg.version === "number") state._lastSeenRoomVer = msg.version;
+    renderRoomBadge();
+    return;
+  }
+  if (msg.type === "pong") { _syncFailCount = 0; return; }
+  if (msg.type === "closed") {
+    showToast("⚠ 房間已關閉, 離開房間");
+    leaveRoom(false);
+    return;
+  }
+}
+
+// 對外仍叫 syncRoom: 把目前狀態即時推出去 (相容舊呼叫點)
 async function syncRoom(opts) {
   opts = opts || {};
-  if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
-  if (syncInFlight) return; // 上一輪還沒結束, 跳過避免平行
-  syncInFlight = true;
-  const badge = document.getElementById("room-badge");
-  if (badge) badge.classList.add("syncing");
-  try {
-    const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync";
-    const eventsToSend = pendingEvents.slice();
-    const reqBody = {
-      myName: settings.myName,
-      events: eventsToSend,
-      myActiveParcel: state.activeParcel,
-      knownVersion: state._lastSeenRoomVer || 0, // 省傳輸: 告訴伺服器我目前的版本, 沒變就不用回整包
-    };
-    if (opts.pushStock) {
-      reqBody.stockMapPush = stockMap;
-    }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reqBody),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      if (data.error === "not_found") {
-        // 房間已被關閉
-        showToast("⚠ 房間已關閉, 離開房間");
-        leaveRoom(false);
-        return;
-      }
-      throw new Error(data.error);
-    }
-    // 清掉已送出的事件 (注意: 新加進來的事件不要被清掉) + 存本機 + 連線恢復
-    pendingEvents = pendingEvents.slice(eventsToSend.length);
-    savePendingEvents();
-    _syncFailCount = 0;
-    // 追蹤 server 回的 didChange (用於自適應頻率)
-    if (data.didChange === false) {
-      _consecutiveNoChange++;
-    } else {
-      _consecutiveNoChange = 0;
-      // 對方剛剛做了事 (有變化但我沒上傳事件) → 進入 30 秒快速輪詢 (catch 後續動作)
-      if ((data.applied || 0) === 0) {
-        _activityBurstUntil = Date.now() + 30000;
-      }
-    }
-    // 輕量回應 (data.room 不存在) = 伺服器確認無變化且我已是最新 → 不需合併
-    if (data.room) mergeRoomState(data.room);
-    state.roomLastSyncAt = new Date().toISOString();
-  } catch(e) {
-    console.warn("[room] sync failed", e);
-    _syncFailCount++;
-  } finally {
-    if (badge) badge.classList.remove("syncing");
-    syncInFlight = false;
-    renderRoomBadge(); // 更新連線狀態顯示
-  }
+  if (!state.roomMode) return;
+  if (!roomSocket || roomSocket.readyState !== 1) { openRoomSocket(); return; }
+  if (opts.pushStock) wsSend({ type: "stockPush", stockMap });
+  wsSend({ type: "activeParcel", activeParcel: state.activeParcel || null });
+  if (pendingEvents.length > 0) wsSend({ type: "events", events: pendingEvents.slice() });
 }
 
 function mergeRoomState(serverRoom) {
@@ -3560,19 +3610,9 @@ function mergeRoomState(serverRoom) {
 }
 
 function startSyncTimer() {
-  stopSyncTimer();
+  // WebSocket 版: 不再輪詢, 改為建立即時連線 (函式名沿用, 相容舊呼叫點)
   if (!state.roomMode) return;
-  // 立即跑一次
-  syncRoom();
-  // 自適應輪詢: 用 setTimeout 鏈, 每次都重算間隔
-  function scheduleNext() {
-    if (!state.roomMode) return; // 離房後停止
-    syncTimer = setTimeout(() => {
-      if (!document.hidden) syncRoom();
-      scheduleNext();
-    }, getAdaptiveSyncInterval());
-  }
-  scheduleNext();
+  openRoomSocket();
 }
 
 // 視窗從背景切回前景: 立刻補一次同步 (避免錯過 5 秒空窗的更新)
@@ -3630,6 +3670,7 @@ window.addEventListener("pagehide", () => {
 function stopSyncTimer() {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = null;
+  closeRoomSocket(); // WebSocket 版: 一併關閉即時連線
 }
 
 function leaveRoom(notifyServer) {
