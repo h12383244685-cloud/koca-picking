@@ -1931,6 +1931,7 @@ footer.summary-bar {
         </button>
       </div>
       <button class="btn full outline" id="close-settings">關閉</button>
+      <div id="app-version" style="text-align:center; margin-top:10px; font-size:0.7rem; color:var(--text-soft);">版本 —</div>
     </div>
 
     <!-- 子視圖: 盤點 -->
@@ -2744,6 +2745,8 @@ const COLLAPSED_KEY = "picking_collapsed_cats_v1";
 const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
+// App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
+const APP_VERSION = "v2.1 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -7801,6 +7804,8 @@ function updateHeaderHeight() {
   if (h) document.documentElement.style.setProperty("--header-h", h.offsetHeight + "px");
 }
 updateHeaderHeight();
+// 顯示版本號在設定頁
+(function showAppVersion(){ const el = document.getElementById("app-version"); if (el) el.textContent = "版本 " + APP_VERSION; })();
 window.addEventListener("resize", updateHeaderHeight);
 window.addEventListener("orientationchange", () => setTimeout(updateHeaderHeight, 200));
 
