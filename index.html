@@ -1722,6 +1722,27 @@ footer.summary-bar {
 
 <!-- PICKING VIEW: shown once a list is loaded -->
 <div id="picking-view" hidden>
+  <!-- 當前訂單: 放在 picking-view 最上面, 釘在標題列正下方, 一進畫面就在最頂、捲動不跑 -->
+  <div id="active-parcel" class="active-parcel" hidden>
+    <button type="button" class="active-parcel-bar" id="active-parcel-bar" aria-expanded="true" title="點一下收合 / 展開明細">
+      <div class="apbar-head">
+        <span class="active-parcel-label">當前訂單</span>
+        <span class="active-parcel-id" id="active-parcel-id">—</span>
+        <span class="apbar-count" id="active-parcel-count">0 件</span>
+      </div>
+      <div class="apbar-sub">
+        <span class="apbar-last" id="active-parcel-last">尚未刷碼</span>
+        <span class="apbar-caret" id="active-parcel-caret">▾</span>
+      </div>
+    </button>
+    <div class="active-parcel-body" id="active-parcel-body">
+      <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
+      <div class="row" style="gap: 6px;">
+        <button class="btn outline sm danger" id="cancel-parcel-btn" style="flex: 1;">✗ 取消此筆</button>
+        <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 再刷一次 / 手動完成此筆</button>
+      </div>
+    </div>
+  </div>
   <!-- 預估完成時間 banner -->
   <div id="time-estimate-banner" hidden style="margin: 10px 12px 0; padding: 10px 14px; background: linear-gradient(135deg, var(--primary-light), rgba(37,99,235,0.05)); border-radius: 10px; border-left: 4px solid var(--primary); font-size: 0.8125rem; display: flex; align-items: center; gap: 10px;">
     <span style="font-size: 1.125rem;">⏱</span>
@@ -1774,27 +1795,6 @@ footer.summary-bar {
         <summary>📋 查看已完成訂單明細</summary>
         <div id="completed-parcels-list" class="completed-parcels-list">尚無</div>
       </details>
-    </div>
-  </div>
-  <!-- 當前訂單: 移到掃描面板外, 直接掛在 picking-view 底下, 才能釘在頂端跨整份備貨清單捲動都看得到 -->
-  <div id="active-parcel" class="active-parcel" hidden>
-    <button type="button" class="active-parcel-bar" id="active-parcel-bar" aria-expanded="true" title="點一下收合 / 展開明細">
-      <div class="apbar-head">
-        <span class="active-parcel-label">當前訂單</span>
-        <span class="active-parcel-id" id="active-parcel-id">—</span>
-        <span class="apbar-count" id="active-parcel-count">0 件</span>
-      </div>
-      <div class="apbar-sub">
-        <span class="apbar-last" id="active-parcel-last">尚未刷碼</span>
-        <span class="apbar-caret" id="active-parcel-caret">▾</span>
-      </div>
-    </button>
-    <div class="active-parcel-body" id="active-parcel-body">
-      <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
-      <div class="row" style="gap: 6px;">
-        <button class="btn outline sm danger" id="cancel-parcel-btn" style="flex: 1;">✗ 取消此筆</button>
-        <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 再刷一次 / 手動完成此筆</button>
-      </div>
     </div>
   </div>
   <div class="filter-bar" id="filter-bar">
@@ -2781,7 +2781,20 @@ const DEFAULT_SPEC_MAP = {
   "珍珠白【半導體製冷】北極熊御用款":  [{ sku: "AF-CYK625-W", qty: 1 }],
   "海洋藍【半導體製冷】北極熊御用款":  [{ sku: "AF-CYK625-B", qty: 1 }],
   "薰衣草【半導體製冷】北極熊御用款":  [{ sku: "AF-CYK625-PR", qty: 1 }],
+  // 品線關鍵字對應 (商品名稱命中關鍵字就對到此 SKU, 不受 emoji/促銷字/顏色影響)
+  "[品線] Cloudy Lite 1": [{ sku: "KAD-13B3Y8", qty: 1 }],
+  "[品線] Dusty Lite 1 濾芯": [{ sku: "KVC-40MV46-HEPA", qty: 5 }], // 5入裝 → 一張訂單算 5 個
+  "[品線] Dusty Lite 1 主機": [{ sku: "KVC-40MV46", qty: 1 }],       // 主機(名稱不含「濾」), 不靠白色規格
 };
+// 品線辨識規則: all 陣列裡的關鍵字要「全部」出現在商品名稱才命中 (用 AND 區分同名主機/濾芯)。
+// ⚠ 順序重要(specific 放前面); 日後同品線出多 SKU(多色/多貨號) 要再加規則區分, 否則會對到同一個。
+const PRODUCT_LINE_RULES = [
+  // ★ 濾芯規則一定要在主機規則「之前」: 濾芯名稱含「Dusty Lite 1」+「濾」, 先被濾芯規則攔下;
+  //   主機名稱含「Dusty Lite 1」但不含「濾」, 落到下面主機規則。順序顛倒會把濾芯誤判成主機。
+  { all: ["Dusty Lite 1", "濾"], key: "Dusty Lite 1 濾芯" },
+  { all: ["Dusty Lite 1"],        key: "Dusty Lite 1 主機" },
+  { all: ["Cloudy Lite 1"],       key: "Cloudy Lite 1" },
+];
 
 // Koca 主賣商品預設庫 (首次開啟自動載入)
 const DEFAULT_LIBRARY = [
@@ -2806,11 +2819,12 @@ const DEFAULT_LIBRARY = [
   { sku: "AF-CYK625-PR",     name: "薰衣草【半導體製冷】北極熊御用款",         category: "加購品" },
   { sku: "RC-BT",            name: "藍牙遙控器",                         category: "零件", essential: true },
   { sku: "RC-IR",            name: "紅外線遙控器",                       category: "零件", essential: true },
+  { sku: "KAD-13B3Y8",       name: "Cloudy Lite 1 雲朵除濕機",           category: "除濕機", barcode: "KAD-13B3Y8", price: 0 },
 ];
 const CATEGORY_EMOJI = {
-  "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "加購品": "🎁", "其他": "📌",
+  "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "除濕機": "💧", "加購品": "🎁", "其他": "📌",
 };
-const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "加購品", "其他"];
+const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "除濕機", "加購品", "其他"];
 // 訂單類型的標準值 (single source of truth)。程式各處以字面字串比對, 新增/改字務必對照這裡,
 // 打錯字會靜默失效 (例如漏扣庫存 / 漏推 webhook)。
 const ORDER_TYPE = { NORMAL: "normal", MANUAL: "manual", REPLACEMENT: "replacement", RETURN: "return", INBOUND: "inbound" };
@@ -3443,7 +3457,23 @@ let _wsReconnectTimer = null;
 let _wsHeartbeatTimer = null;
 let _wsManualClose = false;
 let _wsBackoff = 1000;
+let _wsFailStreak = 0;   // 連續(從未成功 open 就 close)的次數, 用來偵測房間已關閉
 const WS_HEARTBEAT_MS = 25000;
+
+// 連續重連失敗時, 用 HTTP 確認房間是否還在; 已關閉(not_found)就停止重連並離房, 避免狂打 404
+async function probeRoomClosedThenStop() {
+  if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/room/" + state.roomCode);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || data.error === "not_found") {
+      showToast("⚠ 房間已關閉, 離開房間");
+      leaveRoom(false);   // 停止重連 + 清房間狀態 (可繼續單機)
+      return true;
+    }
+  } catch (e) { /* 網路問題, 當作仍在線, 繼續重連 */ }
+  return false;
+}
 
 function roomWsUrl() {
   const base = settings.syncWorkerUrl.replace(/\/$/, "").replace(/^http/i, "ws"); // https→wss, http→ws
@@ -3481,6 +3511,7 @@ function openRoomSocket() {
   roomSocket = ws;
   ws.onopen = () => {
     _wsBackoff = 1000;
+    _wsFailStreak = 0;
     _syncFailCount = 0;
     wsSend({ type: "hello", myName: settings.myName, knownVersion: state._lastSeenRoomVer || 0 });
     if (pendingEvents.length > 0) wsSend({ type: "events", events: pendingEvents.slice() }); // 重連補送 (DO 去重)
@@ -3493,7 +3524,16 @@ function openRoomSocket() {
   ws.onclose = () => {
     stopHeartbeat();
     if (roomSocket === ws) roomSocket = null;
-    if (!_wsManualClose && state.roomMode) { _syncFailCount = 2; renderRoomBadge(); scheduleReconnect(); }
+    if (!_wsManualClose && state.roomMode) {
+      _syncFailCount = 2; renderRoomBadge();
+      _wsFailStreak++;
+      // 連續 3 次連不上 → 先確認房間是否已被關閉, 是就停止重連 (避免狂打 404)
+      if (_wsFailStreak >= 3) {
+        probeRoomClosedThenStop().then(closed => { if (!closed) scheduleReconnect(); });
+      } else {
+        scheduleReconnect();
+      }
+    }
   };
 }
 function closeRoomSocket() {
@@ -3545,6 +3585,14 @@ async function syncRoom(opts) {
   if (pendingEvents.length > 0) wsSend({ type: "events", events: pendingEvents.slice() });
 }
 
+// 本機尚未被伺服器確認(仍在 pendingEvents)的某 SKU scan_sku 增量總和
+function pendingDeltaForSku(sku) {
+  let d = 0;
+  for (const ev of pendingEvents) {
+    if (ev && ev.type === "scan_sku" && ev.data && ev.data.sku === sku) d += (ev.data.deltaQty || 0);
+  }
+  return d;
+}
 function mergeRoomState(serverRoom) {
   if (!serverRoom) return;
   // 已離房 (使用者按了離開, 或同步進行中收到 not_found): 不再更新本機 state
@@ -3560,15 +3608,17 @@ function mergeRoomState(serverRoom) {
     renderRoomBadge();
     return;
   }
-  // items: server packed 為準, 但保留本地新增 item (尚未同步的)
+  // items: server packed 為準, 但「我本機剛刷、伺服器還沒確認(還在 pendingEvents)的增量」要加回,
+  // 否則自己的數字會被 server 舊值蓋掉 → 跳掉再跳回的閃動。
   if (Array.isArray(serverRoom.items)) {
     for (const serverIt of serverRoom.items) {
+      const pend = pendingDeltaForSku(serverIt.sku); // 本機未確認的 scan_sku 增量
       const localIt = state.items.find(it => it.sku === serverIt.sku);
       if (localIt) {
-        localIt.packed = serverIt.packed;
+        localIt.packed = Math.max(0, (serverIt.packed || 0) + pend);
         localIt.expected = serverIt.expected;
       } else {
-        state.items.push({ ...serverIt });
+        state.items.push({ ...serverIt, packed: Math.max(0, (serverIt.packed || 0) + pend) });
       }
     }
   }
@@ -4174,6 +4224,11 @@ function isAmbiguousSpec(spec) {
   return AMBIGUOUS_SPECS.includes(s);
 }
 function getLookupKey(item) {
+  // 先比對品線規則: 商品名稱命中(關鍵字全中) → 用品線鍵, 不受規格(白色)/emoji/促銷字影響
+  const pn = item.productName || "";
+  for (const rule of PRODUCT_LINE_RULES) {
+    if (rule.all.every(t => pn.includes(t))) return `[品線] ${rule.key}`;
+  }
   if (isAmbiguousSpec(item.spec)) {
     if (item.productName) return `[商品] ${item.productName}`;
     return item.spec || "(無)";
@@ -6568,6 +6623,23 @@ function renderScanPanel() {
   renderCompletedParcelsList();
 }
 
+// 依寄件單號判「配送方式」分組 (給已完成訂單明細分類用)
+function carrierGroupOf(id) {
+  const arr = detectCarriers(id);
+  if (arr.includes("blackcat") && arr.includes("hct")) return { key: "cat_hct", label: "🚚 黑貓 / 新竹 (12碼)", order: 5 };
+  const c = arr[0];
+  const MAP = {
+    seven11:      { label: "🏪 7-11 交貨便", order: 1 },
+    fami:         { label: "🏬 全家 FamiPort", order: 2 },
+    shopee:       { label: "🛒 蝦皮店到家", order: 3 },
+    shopee_order: { label: "🛒 蝦皮訂單", order: 3 },
+    blackcat:     { label: "🐱 黑貓宅急便", order: 4 },
+    hct:          { label: "🚚 新竹物流", order: 5 },
+    post:         { label: "✉️ 中華郵政 / 國際", order: 6 },
+  };
+  return MAP[c] ? { key: c, ...MAP[c] } : { key: "other", label: "📦 其他 / 手動", order: 9 };
+}
+
 function renderCompletedParcelsList() {
   const list = document.getElementById("completed-parcels-list");
   if (!list) return;
@@ -6576,7 +6648,7 @@ function renderCompletedParcelsList() {
     list.innerHTML = '<div style="color:var(--text-soft); text-align:center; padding:8px;">尚無已完成訂單</div>';
     return;
   }
-  list.innerHTML = parcels.slice().reverse().map(p => {
+  const cardHtml = (p) => {
     const t = new Date(p.completedAt);
     const timeStr = t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
     const itemsStr = Object.entries(p.items || {}).map(([sku, q]) => `${sku}×${q}`).join("、");
@@ -6586,7 +6658,19 @@ function renderCompletedParcelsList() {
       <div><span class="completed-parcel-id">✓ ${escapeHtml(p.id)}</span>${trackBtn}${byTag}<span class="completed-parcel-time">${timeStr}</span></div>
       <div class="completed-parcel-items">${escapeHtml(itemsStr)}</div>
     </div>`;
-  }).join("");
+  };
+  // 依配送方式分組
+  const groups = {};
+  for (const p of parcels) {
+    const g = carrierGroupOf(p.id);
+    if (!groups[g.key]) groups[g.key] = { label: g.label, order: g.order, items: [] };
+    groups[g.key].items.push(p);
+  }
+  const ordered = Object.values(groups).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  list.innerHTML = ordered.map(g =>
+    `<div style="font-size:0.7rem; font-weight:700; color:var(--text-soft); margin:10px 0 4px; padding-bottom:3px; border-bottom:1px solid var(--border);">${g.label} · ${g.items.length}</div>` +
+    g.items.slice().reverse().map(cardHtml).join("")
+  ).join("");
 }
 
 function renderActiveParcel() {
@@ -9739,6 +9823,15 @@ window.addEventListener("online", () => {
 window.addEventListener("offline", () => { _syncFailCount = 2; renderRoomBadge(); });
 // 每日自動備份 (3 秒後跑, 避免阻塞 init)
 setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
+// 資料安全: 此機未設定自動備份就提醒 (沒設 Discord = 資料只在本機, 換機/清快取會全沒)
+setTimeout(() => {
+  try {
+    const hasData = (typeof history !== "undefined" && history && history.length) || (state.items && state.items.length);
+    if (!settings.discordWebhook && hasData) {
+      showToast("⚠ 此機未設定自動備份,資料只存在本機!請到 ⚙ 設定 Discord 備份");
+    }
+  } catch (e) {}
+}, 4500);
 </script>
 </body>
 </html>
