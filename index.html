@@ -14,10 +14,10 @@
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4E78'/><text x='50%25' y='56%25' text-anchor='middle' dominant-baseline='middle' font-size='40'>📦</text></svg>">
 <style>
 /* 字體大小 + 戴手套模式 */
-:root { --font-base: 16px; }
-[data-font-size="small"] { --font-base: 14px; }
-[data-font-size="large"] { --font-base: 18px; }
-[data-font-size="xlarge"] { --font-base: 20px; }
+:root { --font-base: 18px; }                          /* 預設(中) 放大 16→18, 整體更好讀 */
+[data-font-size="small"] { --font-base: 16px; }       /* 小 14→16 */
+[data-font-size="large"] { --font-base: 20px; }       /* 大 18→20 */
+[data-font-size="xlarge"] { --font-base: 23px; }      /* 特大 20→23 */
 [data-glove-mode="1"] button:not(.tab-bar button):not(.filter-bar button):not(.theme-option):not([data-mpid-preset]) {
   min-height: 44px !important;
 }
@@ -408,6 +408,14 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
 .btn.full { width: 100%; }
 .btn.sm { padding: 8px 12px; font-size: 0.8125rem; min-height: 36px; }
 .row { display: flex; gap: 8px; }
+/* === UI 優化: 關鍵操作按鈕加大好按 + 現代化圓角 === */
+.btn { border-radius: 12px; }
+/* 當前訂單的「取消 / 完成此筆」: 加大、加粗、好點 (覆蓋 sm) */
+.active-parcel-body .row .btn { min-height: 52px; font-size: 1rem; font-weight: 700; border-radius: 12px; padding: 12px 14px; }
+/* 底部「完成出貨」主按鈕: 最重要的動作, 加大加醒目 */
+footer.summary-bar .btn.full { min-height: 54px; font-size: 1.05rem; font-weight: 700; border-radius: 12px; }
+/* 手動輸入 7-11/全家 編號按鈕也加大 */
+#manual-parcel-id-btn { min-height: 50px; border-radius: 12px; }
 .row.tight { gap: 4px; }
 
 details { margin: 10px 0; }
@@ -1579,34 +1587,42 @@ footer.summary-bar {
     <div class="room-entry">
       <div class="room-entry-title">👥 共同包貨 (Cloudflare 同步)</div>
       <div class="room-entry-desc">先上傳 CSV → 開房 → 拿到 4 碼邀請碼 → 分享給同事 → 兩人各刷各的。需先在「⚙ 外部整合」設定 Worker URL。</div>
-      <div class="row" style="gap: 8px;">
-        <button class="btn outline sm" id="open-create-room-btn" style="flex:1;">🏠 開新房間</button>
-        <button class="btn outline sm" id="open-join-room-btn" style="flex:1;">🚪 加入房間</button>
+      <div class="settings-grid" style="margin: 10px 0 0;">
+        <button class="settings-card" id="open-create-room-btn">
+          <div class="card-icon">🏠</div>
+          <div class="card-title">開新房間</div>
+          <div class="card-desc">建立並分享 4 碼</div>
+        </button>
+        <button class="settings-card" id="open-join-room-btn">
+          <div class="card-icon">🚪</div>
+          <div class="card-title">加入房間</div>
+          <div class="card-desc">輸入 4 碼加入</div>
+        </button>
       </div>
     </div>
 
-    <!-- 手動建單入口 -->
-    <div style="margin: 14px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
-      <button class="btn full" id="open-manual-order-btn" style="background: var(--primary);">📝 手動建單 (小單)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">少量出貨不想搞 CSV? 點此填寄件單號後, 在備貨頁直接刷商品條碼自動建立 SKU 清單。</p>
-    </div>
-
-    <!-- 補寄訂單入口 -->
-    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--warn-bg); border-radius: 8px; border-left: 4px solid var(--warn);">
-      <button class="btn full" id="open-replacement-order-btn" style="background: #92400e; color: white;">📮 補寄訂單 (售後)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">商品缺漏/瑕疵/退換等售後處理。客人手機選填。<strong>不會推送到 Discord/Sheets</strong>, 只記在本機紀錄。</p>
-    </div>
-
-    <!-- 退貨確認入口 -->
-    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--success-bg); border-radius: 8px; border-left: 4px solid var(--success);">
-      <button class="btn full" id="open-return-order-btn" style="background: #166534; color: white;">📥 退貨確認 (收貨)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">客人退貨包裹寄回來時用。刷商品條碼確認收到什麼。完成後**良品自動加回庫存**(瑕疵/破損不入庫)。<strong>不推送 Discord/Sheets</strong>。</p>
-    </div>
-
-    <!-- 入倉驗收入口 -->
-    <div style="margin: 8px 0 4px 0; padding: 12px; background: var(--primary-light); border-radius: 8px; border-left: 4px solid var(--primary);">
-      <button class="btn full" id="open-inbound-btn" style="background: var(--primary); color: white;">🏭 入倉驗收 (進貨)</button>
-      <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">廠商進貨到倉時用。填進貨單號 → 刷商品條碼清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
+    <!-- 其他出貨方式 (格子卡片) -->
+    <div class="settings-grid">
+      <button class="settings-card" id="open-manual-order-btn">
+        <div class="card-icon">📝</div>
+        <div class="card-title">手動建單</div>
+        <div class="card-desc">小單 · 不用 CSV</div>
+      </button>
+      <button class="settings-card" id="open-replacement-order-btn">
+        <div class="card-icon">📮</div>
+        <div class="card-title">補寄訂單</div>
+        <div class="card-desc">售後 · 不扣庫存</div>
+      </button>
+      <button class="settings-card" id="open-return-order-btn">
+        <div class="card-icon">📥</div>
+        <div class="card-title">退貨確認</div>
+        <div class="card-desc">收貨 · 良品回庫</div>
+      </button>
+      <button class="settings-card" id="open-inbound-btn">
+        <div class="card-icon">🏭</div>
+        <div class="card-title">入倉驗收</div>
+        <div class="card-desc">進貨 · 只記錄</div>
+      </button>
     </div>
 
     <details>
@@ -1899,6 +1915,11 @@ footer.summary-bar {
         <strong>備貨清單會永久保留</strong>, 除非「取消出貨」或「✓ 出貨完成」。
       </p>
       <div class="settings-grid">
+        <button class="settings-card wide" data-settings-view="help">
+          <div class="card-icon">📖</div>
+          <div class="card-title">新手教學 / 懶人包</div>
+          <div class="card-desc">第一次用、或忘記流程時看這個</div>
+        </button>
         <button class="settings-card" data-settings-view="stocktake">
           <div class="card-icon">🔍</div>
           <div class="card-title">盤點</div>
@@ -1932,6 +1953,76 @@ footer.summary-bar {
       </div>
       <button class="btn full outline" id="close-settings">關閉</button>
       <div id="app-version" style="text-align:center; margin-top:10px; font-size:0.7rem; color:var(--text-soft);">版本 —</div>
+    </div>
+
+    <!-- 子視圖: 新手教學 / 懶人包 -->
+    <div id="settings-view-help" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">📖 新手教學 / 懶人包</h3>
+      <p class="hint" style="margin-bottom:10px;">這個 App 是「出貨雙重確認」:刷寄件單 → 刷/點商品計數 → 出貨完成,避免漏裝、錯裝。點下面標題展開看。</p>
+
+      <details style="margin-bottom:8px;" open>
+        <summary style="font-weight:600; font-size:0.85rem;">📦 一般出貨(蝦皮 CSV)</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          1. 上方選通路(蝦皮)→ 上傳當天揀貨單 CSV。<br>
+          2. 第一次出現的規格要點一次選對應 SKU,之後自動記住。<br>
+          3. 開「📦 裝箱掃描」→ 刷寄件單號開始一張單。<br>
+          4. 刷商品 → 數字 +1;一張單裝完刷下一張單號即可。<br>
+          5. 全部包完 → 按「完成出貨」→ 存入紀錄、自動扣庫存。<br>
+          💡 倍數:輸入 <code>*5</code> 再刷,一次 +5。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">👥 共同包貨(兩人一起)</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          1. 兩台都確認 ⚙ 設定最下面是最新版本號、暱稱有設(別取一樣)。<br>
+          2. <strong>主機台</strong>:匯入 CSV 建好清單 → 開房 → 拿到 4 碼。<br>
+          3. <strong>另一台</strong>:先把自己沒完成的單收掉 → 輸入 4 碼加入。<br>
+          4. 兩台徽章顯示「2👤」→ 各刷一筆測試、確認對方看得到 → 取消測試單。<br>
+          5. 各包各的(大數字只顯示自己包的,正常)。<br>
+          6. 收工:<strong>只由一人</strong>按「完成出貨」,按前確認兩台都沒在 ⚠。<br>
+          ⚠ 徽章 ⚠ = 重連中,稍等變回房號再刷(刷的會先存著)。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">📮 補寄 / ↩️ 退貨 / 🏭 入倉</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          • <strong>補寄</strong>:售後補件。客人手機選填。<strong>不扣庫存、不推</strong>。<br>
+          • <strong>退貨確認</strong>:收回商品。良品自動加回庫存;選「瑕疵/破損」則不入庫。<br>
+          • <strong>入倉驗收</strong>:進貨。填進貨單號 → 刷商品。<strong>不扣也不加、不推</strong>,只記紀錄。<br>
+          💡 連續多位客人:刷下一位單號會跳「換下一位?」自動收上一筆。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">🖨 刷槍條碼列印</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          商品庫 → 列印 SKU 條碼。<strong>預設都不勾</strong>(避免浪費紙);要印哪幾個就勾哪幾個,或按「✅ 全選」。集中貼在包貨桌,刷槍掃 = 當前訂單該商品 +1。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">💾 資料安全(很重要)</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          • 資料存在這台手機/電腦本機。換機、清快取會不見。<br>
+          • 請到 ⚙ → 外部整合 設定 <strong>Discord 自動備份</strong>:每次出貨完成會自動存一份。<br>
+          • 換手機 / 換網址:用 ⚙ → 資料搬家/備份 匯出 JSON,在新裝置匯入。<br>
+          ⚠ 沒設備份時,開 App 會跳提醒。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">❓ 常見問題 / 紅旗</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          • <strong>某商品清單裡沒有</strong> → 用最新版重新匯入當天 CSV。<br>
+          • <strong>數字對不上</strong> → 看徽章是否 ⚠;兩台版本是否一致。<br>
+          • <strong>白畫面 / 打不開</strong> → 先用備份還原,並回報。<br>
+          • <strong>連動商品 / 倍數失效</strong> → 回報。<br>
+          找不到答案就截圖回報。
+        </div>
+      </details>
     </div>
 
     <!-- 子視圖: 盤點 -->
@@ -2746,7 +2837,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v2.1 · 2026-06-22";
+const APP_VERSION = "V2.8.4 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -2912,6 +3003,8 @@ let specMap = {}; // {spec: [{sku, qty}]} - A1 規格對應
 let pendingA1 = []; // [{spec, orderQty}] - 待對應的 A1 揀貨資料
 let currentTab = "menu";
 let history = []; // [{id, completedAt, platform, items: [...], summary: {totalSku, totalExpected, totalPacked, completionRate}}]
+let cloudHistory = [];      // 雲端共享出貨紀錄 (不存本機, 開出貨紀錄時拉回)
+let _cloudHistFetchedAt = 0; // 上次拉雲端時間 (節流)
 let historyFilter = "all"; // "all" | "normal" | "replacement" | "return" - 出貨紀錄篩選 (session only)
 let _histOpenDays = null;  // 出貨紀錄「日期資料夾」展開狀態 (null=未初始化, 預設今天展開)
 let historySearchQuery = "";   // 出貨紀錄關鍵字搜尋 (session only)
@@ -2934,7 +3027,7 @@ let settings = {
   soundVolume: 50,  // 0-100, 預設 50%
   discordWebhook: "",
   sheetsWebhook: "",
-  theme: "default", // "default" | "warm" | "dark"
+  theme: "koca", // 預設 KOCA 品牌橘; 可選 "default"(藍) | "warm" | "dark" | "koca"
   syncWorkerUrl: "", // 多人同步 Worker URL (空 = 單機模式)
   myName: "",       // 我的暱稱 (給房間其他人辨識用)
   autoDeductOnShip: true,  // 出貨完成後自動扣庫存
@@ -2951,6 +3044,14 @@ let settings = {
 };
 function loadSettings() {
   try { const s = localStorage.getItem(SETTINGS_KEY); if (s) { settings = { ...settings, ...JSON.parse(s) }; } } catch(e) {}
+  // 一次性: 把舊裝置切到 KOCA 品牌橘預設 (只跑一次, 之後使用者仍可在設定自由切回藍/米/深色)
+  try {
+    if (!localStorage.getItem("theme_koca_default_v1")) {
+      settings.theme = "koca";
+      localStorage.setItem("theme_koca_default_v1", "1");
+      saveSettings();
+    }
+  } catch(e) {}
 }
 function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) { console.warn("[settings] save failed", e); }
@@ -3388,7 +3489,13 @@ async function createRoom() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "建立失敗");
+    // 清掉殘留待送事件 + 關舊連線, 避免上一個 session 的事件灌進新房間
+    pendingEvents = [];
+    savePendingEvents();
+    _wsFailStreak = 0;
+    if (roomSocket) { try { roomSocket.onclose = null; roomSocket.close(); } catch (e) {} roomSocket = null; }
     state.roomMode = true;
+    state.isRoomHost = true; // 開房者 = 收尾(完成出貨)的人, 防兩台重複完成
     state.roomCode = data.code;
     state.roomMembers = data.room.members || {};
     state.roomActiveParcels = {};
@@ -3411,6 +3518,18 @@ async function joinRoom(code) {
   if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return false; }
   code = (code || "").toUpperCase().trim();
   if (!/^[A-Z0-9]{4}$/.test(code)) { showToast("⚠ 邀請碼格式不對 (4 碼英數)"); return false; }
+  // 防呆: 有還沒完成的本機進度 (刷到一半沒按完成) → 先提醒, 避免誤丟自己的單
+  const _apItems = (state.activeParcel && state.activeParcel.items) ? Object.keys(state.activeParcel.items).length : 0;
+  const _localProgress = !state.roomMode && Array.isArray(state.items) && state.items.some(it => (it.packed || 0) > 0);
+  if (_apItems > 0 || _localProgress) {
+    if (!confirm("你目前有還沒完成的包貨進度(刷到一半沒按完成)。\n\n加入房間會放棄目前清單、改用房間的清單。確定加入?")) return false;
+  }
+  // ★ 關鍵修正: 加入新房間前清掉「殘留待送事件」+ 關掉舊連線。
+  //   否則之前(或別的房間)沒送完的事件會在連上後被灌進這個房間, 把大家的數字弄亂。
+  pendingEvents = [];
+  savePendingEvents();
+  _wsFailStreak = 0;
+  if (roomSocket) { try { roomSocket.onclose = null; roomSocket.close(); } catch (e) {} roomSocket = null; }
   try {
     const url = settings.syncWorkerUrl + "/api/room/" + code;
     const res = await fetch(url);
@@ -3430,6 +3549,7 @@ async function joinRoom(code) {
     state.continuationOf = null;
     state.priorKocaPushed = null;
     state.roomMode = true;
+    state.isRoomHost = false; // 加入者: 不負責收尾, 完成出貨由開房者按 (防重複)
     state.roomCode = code;
     state.roomMembers = room.members || {};
     state.roomActiveParcels = room.activeParcels || {};
@@ -3627,22 +3747,25 @@ function mergeRoomState(serverRoom) {
   }
   // completedParcels: 用 ID 集合合併 - server 為主, 本地待同步的 (還沒被 server 確認的) 保留
   // 避免使用者剛刷完, sync 還沒回來時看到自己的訂單「閃掉」
-  const serverParcels = serverRoom.completedParcels || [];
-  const serverIds = new Set(serverParcels.map(p => p.id));
-  const localPending = (state.completedParcels || []).filter(p => !serverIds.has(p.id));
-  // 偵測新增的別人完成的訂單 → 加到 ticker
-  const beforeIds = new Set((state.completedParcels || []).map(p => p.id));
-  for (const p of serverParcels) {
-    if (beforeIds.has(p.id)) continue;
-    if (p.packedBy === settings.myName) continue;
-    addTickerEntry({
-      time: new Date(p.completedAt || Date.now()),
-      who: p.packedBy || "(?)",
-      action: "✓ 完成",
-      target: p.id.length > 16 ? p.id.substring(0, 14) + ".." : p.id,
-    });
+  // 效能: server 只在「包裹完成/取消」時才帶 completedParcels; 沒帶就保留本地那份 (純刷貨的 sync)
+  if (Array.isArray(serverRoom.completedParcels)) {
+    const serverParcels = serverRoom.completedParcels;
+    const serverIds = new Set(serverParcels.map(p => p.id));
+    const localPending = (state.completedParcels || []).filter(p => !serverIds.has(p.id));
+    // 偵測新增的別人完成的訂單 → 加到 ticker
+    const beforeIds = new Set((state.completedParcels || []).map(p => p.id));
+    for (const p of serverParcels) {
+      if (beforeIds.has(p.id)) continue;
+      if (p.packedBy === settings.myName) continue;
+      addTickerEntry({
+        time: new Date(p.completedAt || Date.now()),
+        who: p.packedBy || "(?)",
+        action: "✓ 完成",
+        target: p.id.length > 16 ? p.id.substring(0, 14) + ".." : p.id,
+      });
+    }
+    state.completedParcels = [...serverParcels.map(p => ({ ...p })), ...localPending];
   }
-  state.completedParcels = [...serverParcels.map(p => ({ ...p })), ...localPending];
   state.roomMembers = serverRoom.members || {};
   state.roomActiveParcels = serverRoom.activeParcels || {};
   // 庫存同步: 若 server 有 stockMap 而且比本機新 → 套用
@@ -3743,6 +3866,7 @@ function leaveRoom(notifyServer) {
     } catch(e) { console.warn("[room] leave notify failed", e); }
   }
   state.roomMode = false;
+  state.isRoomHost = false; // 離房重置, 避免殘值
   state.roomCode = null;
   state.roomMembers = {};
   state.roomActiveParcels = {};
@@ -4054,6 +4178,7 @@ function appendHistory() {
   const entry = {
     id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     completedAt: new Date().toISOString(),
+    completedBy: (settings.myName || "").trim() || "(未命名)", // 誰完成這筆 (設定的暱稱)
     platform: currentPlatform || "unknown",
     items,
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
@@ -4724,6 +4849,17 @@ function renderA1Mapping() {
 }
 
 // 把 pendingA1 + specMap 轉成 picking list
+// 清掉「決定 orderType 的模式旗標」+ 殘留的進行中單。
+// 凡是用「逐欄改 state.items」開始新清單的路徑都要呼叫, 否則上一個模式(補寄/退貨/入倉/手建)
+// 會殘留 → 新單被歸錯類 → 扣錯庫存 / 漏推 / 誤入庫 (與 joinRoom 同類 bug)。
+function clearOrderModeFlags() {
+  state.manualMode = false;
+  state.replacementInfo = null;
+  state.returnInfo = null;
+  state.inboundInfo = null;
+  state.activeParcel = null;
+}
+
 function applyA1MappingToPickingList() {
   // 累加各 SKU 的應出數量
   const totals = {}; // sku -> qty
@@ -4786,6 +4922,7 @@ function applyA1MappingToPickingList() {
 
   state.items = items;
   state.loadedDate = new Date().toISOString().slice(0, 10);
+  clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新一般出貨清單
   saveState();
   pendingA1 = [];
   showToast(`已建立今日清單，共 ${items.length} 個 SKU`);
@@ -5962,7 +6099,7 @@ function showCustomerRiskWarning(phone, hintElId) {
 function matchesHistorySearch(entry, q) {
   if (!q) return true;
   const haystack = [];
-  haystack.push(entry.id, entry.platform);
+  haystack.push(entry.id, entry.platform, entry.completedBy);
   for (const it of (entry.items || [])) {
     haystack.push(it.sku, it.name, it.category);
   }
@@ -5987,7 +6124,55 @@ function matchesHistorySearch(entry, q) {
 }
 
 // ---- 出貨紀錄 render ----
+// 雲端共享紀錄是否啟用 (有填 Worker URL + spideyKey 即視為開啟)
+function cloudHistoryEnabled() {
+  return !!(settings.syncWorkerUrl && settings.spideyKey);
+}
+// 合併「本機 + 雲端」出貨紀錄, 以 id 去重 (本機優先), 新→舊。renderHistory 用這份顯示。
+function allHistory() {
+  if (!cloudHistory || cloudHistory.length === 0) return history;
+  const byId = new Map();
+  for (const e of cloudHistory) if (e && e.id) byId.set(e.id, e);
+  for (const e of history) if (e && e.id) byId.set(e.id, e); // 本機覆蓋雲端同 id
+  const merged = Array.from(byId.values());
+  merged.sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
+  return merged;
+}
+// 出貨完成 → 推一筆到雲端 (全類型都推; 失敗不影響本機, 之後可再補)
+async function pushHistoryToCloud(entry) {
+  if (!entry || !cloudHistoryEnabled()) return;
+  try {
+    await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+      body: JSON.stringify({ entry }),
+    });
+  } catch (e) { console.warn("[cloud-history] push failed", e); }
+}
+// 開出貨紀錄時拉雲端最近 30 天 (節流 8 秒)
+async function fetchCloudHistory(force) {
+  if (!cloudHistoryEnabled()) return;
+  if (!force && Date.now() - _cloudHistFetchedAt < 8000) return;
+  _cloudHistFetchedAt = Date.now();
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/list?days=30", {
+      headers: { "X-Spidey-Key": settings.spideyKey || "" },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && Array.isArray(data.entries)) {
+      // 防呆: 雲端可能來自別台/別版本, 補上缺的欄位避免 render/刪除時 throw
+      cloudHistory = data.entries.map(e => ({
+        ...e,
+        items: Array.isArray(e.items) ? e.items : [],
+        summary: e.summary || { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 },
+      }));
+      renderHistory();
+    }
+  } catch (e) { console.warn("[cloud-history] fetch failed", e); }
+}
+
 function renderHistory() {
+  const history = allHistory(); // 顯示用: 本機 + 雲端合併 (shadow 外層, 只影響此函式的呈現)
   const list = document.getElementById("history-list");
   const stats = document.getElementById("history-stats");
   if (!list) return;
@@ -6109,6 +6294,7 @@ function renderHistory() {
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
         </div>
         <div class="history-item-summary">
+          ${e.completedBy ? `<span style="display:inline-block; background: var(--primary-light); color: var(--primary); padding: 1px 9px; border-radius: 999px; font-size: 0.6875rem; font-weight: 700; margin-bottom: 4px;">👤 ${escapeHtml(e.completedBy)}</span><br>` : ''}
           <strong>${e.summary.totalSku}</strong> SKU · 應出 <strong>${e.summary.totalExpected}</strong> · 已裝 <strong>${e.summary.totalPacked}</strong> · 完成率 <strong>${e.summary.completionRate}%</strong>
           ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
           ${isPartial ? `<br>⚠ ${e.summary.totalSku - e.summary.completedSku} 個 SKU 未完成` : ''}
@@ -6768,6 +6954,7 @@ function doMergeAppend() {
     }
   }
   state.loadedDate = new Date().toISOString().slice(0, 10);
+  clearOrderModeFlags(); // 追加合併後視為一般出貨清單, 清掉殘留的補寄/退貨/入倉/手建旗標
   saveState();
   pendingA1 = [];
   _pendingMergeItems = null;
@@ -6781,6 +6968,7 @@ function doMergeReplace() {
   const items = _pendingMergeItems;
   state.items = items;
   state.loadedDate = new Date().toISOString().slice(0, 10);
+  clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 覆蓋成全新一般清單
   saveState();
   pendingA1 = [];
   _pendingMergeItems = null;
@@ -6956,7 +7144,7 @@ function switchTab(t) {
   document.getElementById("tab-content-a1").hidden = (t !== "a1");
   document.getElementById("tab-content-history").hidden = (t !== "history");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
-  if (t === "history") renderHistory(); // 切到歷史時重新渲染最新資料
+  if (t === "history") { renderHistory(); fetchCloudHistory(); } // 切到歷史: 先畫本機, 再拉雲端合併
   if (t === "inventory") renderInventory(); // 切到倉庫清冊時重新渲染
 }
 
@@ -7298,12 +7486,22 @@ document.getElementById("history-list").addEventListener("click", (e) => {
   const del = e.target.closest("button[data-hist-delete]");
   if (del) {
     const id = del.dataset.histDelete;
-    const entry = history.find(h => h.id === id);
+    const entry = allHistory().find(h => h.id === id); // 可能是雲端來的
     if (!entry) return;
     const d = new Date(entry.completedAt);
-    if (!confirm(`刪除這筆紀錄?\n${d.toLocaleString("zh-TW")} · ${entry.summary.totalSku} SKU`)) return;
+    const sharedNote = cloudHistoryEnabled() ? "\n\n⚠ 這是共享紀錄, 刪除後所有人都看不到。" : "";
+    if (!confirm(`刪除這筆紀錄?\n${d.toLocaleString("zh-TW")} · ${entry.summary.totalSku} SKU${sharedNote}`)) return;
     history = history.filter(h => h.id !== id);
     saveHistory();
+    cloudHistory = cloudHistory.filter(h => h.id !== id);
+    // 雲端共享: 也從雲端刪 (否則重新整理會跑回來)
+    if (cloudHistoryEnabled() && entry.completedAt) {
+      fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+        body: JSON.stringify({ id, completedAt: entry.completedAt }),
+      }).catch(() => {});
+    }
     renderHistory();
     showToast("已刪除");
   }
@@ -7385,6 +7583,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
           expected: it.expected, packed: it.packed || 0, essential: !!it.essential,
         }));
         state.completedParcels = (entryToRestore.parcels || []).map(p => ({ ...p }));
+        clearOrderModeFlags(); // 清掉殘留的補寄/退貨/入倉/手建旗標 (還原的是一般出貨單)
         state.activeParcel = null;
         state.scanMode = false;
         state.continuationOf = entryToRestore.id;
@@ -7416,7 +7615,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         }
         state.items = newItems;
         state.loadedDate = new Date().toISOString().slice(0, 10);
-        state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新清單, 清掉追加狀態
+        clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新一般清單, 清掉模式+追加狀態
         saveState();
         SOUND.parcelStart();
         showToast(`✓ 已建立新清單, 共 ${newItems.length} 個 SKU`);
@@ -7437,12 +7636,13 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
 });
 
 document.getElementById("clear-history-btn").addEventListener("click", () => {
-  if (history.length === 0) { showToast("沒有紀錄"); return; }
-  if (!confirm(`⚠ 確定刪除所有 ${history.length} 筆出貨紀錄? 無法復原。`)) return;
+  if (history.length === 0) { showToast("沒有本機紀錄"); return; }
+  const note = cloudHistoryEnabled() ? "\n\n(只清這台的本機紀錄; 雲端共享紀錄不受影響, 重新整理仍會看到。要刪共享請逐筆刪)" : "";
+  if (!confirm(`⚠ 確定刪除所有 ${history.length} 筆本機出貨紀錄? 無法復原。${note}`)) return;
   history = [];
   saveHistory();
   renderHistory();
-  showToast("全部清除");
+  showToast("已清除本機紀錄");
 });
 
 document.getElementById("export-history-btn").addEventListener("click", () => {
@@ -8328,7 +8528,7 @@ const settingsModal = document.getElementById("settings-modal");
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
   // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
-  ["stocktake", "sound", "theme", "integration", "backup", "danger"].forEach(v => {
+  ["help", "stocktake", "sound", "theme", "integration", "backup", "danger"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
@@ -8640,7 +8840,7 @@ function applyGloveMode(enabled) {
   else document.documentElement.removeAttribute("data-glove-mode");
 }
 function refreshThemePicker() {
-  const current = settings.theme || "default";
+  const current = settings.theme || "koca";
   document.querySelectorAll("#theme-picker button[data-theme-choice]").forEach(b => {
     b.classList.toggle("active", b.dataset.themeChoice === current);
   });
@@ -8929,7 +9129,7 @@ document.getElementById("reset-btn").addEventListener("click", () => {
   if (!confirm(msg)) return;
   console.log("[state] manually cancelled by user");
   if (state.roomMode) leaveRoom(true); // 同步停掉, 不留下殘餘 timer
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [] };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, appendLevel: 1, continuationOf: null, priorKocaPushed: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   settingsModal.hidden = true;
@@ -9517,11 +9717,18 @@ function actuallyCompleteShipping() {
   }
   // 推送出貨到 KOCA 庫存 API (預設關閉; 補寄/退貨/入倉不推; 透過 Worker 轉發)
   pushKocaOutbound(entry);
+  // 雲端共享出貨紀錄: 全類型都推一筆上雲, 讓所有人在出貨紀錄看到同一份
+  pushHistoryToCloud(entry);
   // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
   backupSoon("出貨完成");
 }
 
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
+  // 防重複完成: 共同包貨時只讓「開房者」收尾, 避免兩台各存一筆紀錄 + 各扣一次庫存
+  if (state.roomMode && !state.isRoomHost) {
+    alert("👥 共同包貨中,請由「開房的那台」按完成出貨,避免重複扣帳。\n\n如果真的要由這台收尾,請先到房間狀態「離開房間」再完成。");
+    return;
+  }
   // 先關掉出貨報告 modal (避免兩個 modal 疊在一起)
   reportModal.hidden = true;
   // 跑健康檢查
@@ -9769,7 +9976,7 @@ document.getElementById("barcode-close-btn").addEventListener("click", () => {
 
 // ---- Init ----
 loadSettings();
-applyTheme(settings.theme || "default");
+applyTheme(settings.theme || "koca");
 applyFontSize(settings.fontSize || "medium");
 applyGloveMode(!!settings.gloveMode);
 loadState();
