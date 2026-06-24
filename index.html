@@ -584,6 +584,7 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-bottom: 1px dashed rgba(0,0,0,.12);
 }
 .ap-row:last-child { border-bottom: 0; }
+.ap-row.ap-missing { background: var(--danger-bg); border-radius: 6px; padding-left: 6px; padding-right: 6px; }
 .ap-info { flex: 1; min-width: 0; }
 .ap-row .ap-sku {
   font-family: ui-monospace, monospace;
@@ -656,6 +657,22 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border: 1px solid var(--border); background: var(--surface); color: var(--text-soft);
 }
 .missing-toggle.on { background: var(--danger); color: #fff; border-color: var(--danger); }
+/* ERP 讀單模式 */
+.erp-field { display:flex; align-items:baseline; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.erp-field .erp-label { font-size:0.8rem; color:var(--text-soft); width:64px; flex-shrink:0; }
+.erp-field .erp-value { flex:1; font-family:ui-monospace,monospace; font-size:1.15rem; font-weight:700; word-break:break-all; }
+.erp-line {
+  display:flex; align-items:center; gap:10px; padding:12px 8px; margin-top:8px;
+  border:1px solid var(--border); border-radius:10px; cursor:pointer; background:var(--surface);
+}
+.erp-line.done { opacity:0.45; background:var(--success-bg); }
+.erp-line.done .erp-line-sku, .erp-line.done .erp-line-qty { text-decoration: line-through; }
+.erp-line-check { width:28px; height:28px; flex-shrink:0; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--success); font-size:1.1rem; }
+.erp-line.done .erp-line-check { border-color:var(--success); background:var(--success); color:#fff; }
+.erp-line-main { flex:1; min-width:0; }
+.erp-line-sku { font-family:ui-monospace,monospace; font-size:1.3rem; font-weight:800; color:var(--primary); word-break:break-all; }
+.erp-line-name { font-size:0.8rem; color:var(--text-soft); }
+.erp-line-qty { font-size:1.6rem; font-weight:800; flex-shrink:0; min-width:48px; text-align:right; }
 
 .item-info { flex: 1; min-width: 0; }
 .item-sku {
@@ -1675,6 +1692,7 @@ footer.summary-bar {
     </div>
     <div class="row" style="gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
       <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 70px;">↻ 重新整理</button>
+      <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 90px; background: var(--primary);">⌨ ERP 鍵單</button>
       <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
       <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
       <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
@@ -2011,6 +2029,17 @@ footer.summary-bar {
           • <strong>退貨確認</strong>:收回商品。良品自動加回庫存;選「瑕疵/破損」則不入庫。<br>
           • <strong>入倉驗收</strong>:進貨。填進貨單號 → 刷商品。<strong>不扣也不加、不推</strong>,只記紀錄。<br>
           💡 連續多位客人:刷下一位單號會跳「換下一位?」自動收上一筆。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">⚠ 缺貨標記</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          某商品沒庫存、這批出不了時,在<strong>備貨清單</strong>該商品下面點「<strong>標記缺貨</strong>」→ 那列變紅、出現 ⚠ 缺貨。<br>
+          • 你照常刷貨,要不要標缺貨自己決定(不會自動扣庫存)。<br>
+          • 標了之後,<strong>當前訂單</strong>那項也會變紅顯示,包的時候不會誤記。<br>
+          • 出貨完成的<strong>報告</strong>和<strong>出貨紀錄</strong>都會列出缺貨清單,事後查得到。<br>
+          • 共同包貨:兩台會即時同步缺貨標記。建議由<strong>開房者(收尾那台)</strong>標,紀錄以收尾那台為準。
         </div>
       </details>
 
@@ -2784,6 +2813,26 @@ footer.summary-bar {
 </div>
 
 <!-- Final report modal -->
+<div class="modal-backdrop" id="erp-helper-modal" hidden>
+  <div class="modal" style="max-width: 540px;">
+    <h2>⌨ ERP 鍵單輔助</h2>
+    <p class="hint" style="font-size:0.72rem; margin-bottom:8px;">放旁邊照著打進正航:大字好讀,每打完一項點一下打勾(不漏不重),整筆打完按「已鍵入」追進度。</p>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+      <label style="font-size:0.8rem; display:flex; align-items:center; gap:5px;">
+        <input type="checkbox" id="erp-unkeyed-only" style="transform:scale(1.2);"> 只看未鍵入
+      </label>
+      <span id="erp-progress" style="font-size:0.8rem; color:var(--text-soft); font-weight:700;"></span>
+    </div>
+    <div id="erp-helper-body" style="min-height:120px;"></div>
+    <div class="row" style="gap:6px; margin-top:10px;">
+      <button class="btn outline" id="erp-prev" style="flex:1;">← 上一筆</button>
+      <button class="btn outline" id="erp-next" style="flex:1;">下一筆 →</button>
+    </div>
+    <button class="btn full" id="erp-mark-keyed" style="margin-top:8px; background: var(--success);">✓ 標示已鍵入 · 下一筆</button>
+    <button class="btn full outline" id="erp-close" style="margin-top:8px;">關閉</button>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="report-modal" hidden>
   <div class="modal">
     <h2>📋 備貨報告</h2>
@@ -2855,7 +2904,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.8.9 · 2026-06-22";
+const APP_VERSION = "V2.9.3 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6047,6 +6096,110 @@ document.getElementById("history-refresh-btn").addEventListener("click", () => {
   showToast("↻ 重新整理中…");
   fetchCloudHistory(true);
 });
+
+// ===== ⌨ ERP 鍵單輔助 (正航不能匯入, 只能手動 → 提供一鍵複製欄位) =====
+const ERP_KEYED_KEY = "picking_erp_keyed_v1";
+let _erpKeyedIds = (() => { try { const s = localStorage.getItem(ERP_KEYED_KEY); const a = s ? JSON.parse(s) : []; return new Set(Array.isArray(a) ? a : []); } catch (e) { return new Set(); } })();
+function saveErpKeyed() { try { localStorage.setItem(ERP_KEYED_KEY, JSON.stringify([..._erpKeyedIds])); } catch (e) {} }
+const ERP_LINE_KEY = "picking_erp_line_done_v1";
+let _erpLineDone = (() => { try { const s = localStorage.getItem(ERP_LINE_KEY); const a = s ? JSON.parse(s) : []; return new Set(Array.isArray(a) ? a : []); } catch (e) { return new Set(); } })();
+function saveErpLineDone() { try { localStorage.setItem(ERP_LINE_KEY, JSON.stringify([..._erpLineDone])); } catch (e) {} }
+let _erpList = [];
+let _erpIdx = 0;
+function erpCopy(text) {
+  const t = String(text);
+  const done = () => showToast("已複製: " + (t.length > 24 ? t.slice(0, 24) + "…" : t));
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(() => erpCopyFallback(t, done));
+  else erpCopyFallback(t, done);
+}
+function erpCopyFallback(t, done) {
+  try { const ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); }
+  catch (e) { showToast("⚠ 複製失敗, 請長按手動複製"); }
+}
+function buildErpList() {
+  const unkeyedOnly = document.getElementById("erp-unkeyed-only") && document.getElementById("erp-unkeyed-only").checked;
+  let list = allHistory().filter(e => e.orderType !== "inbound"); // 入倉不需鍵 ERP 出貨
+  if (unkeyedOnly) list = list.filter(e => !_erpKeyedIds.has(e.id));
+  _erpList = list;
+}
+function erpRow(label, value) {
+  return `<div class="erp-field"><span class="erp-label">${label}</span><span class="erp-value">${escapeHtml(String(value))}</span></div>`;
+}
+function renderErpHelper() {
+  const body = document.getElementById("erp-helper-body");
+  const prog = document.getElementById("erp-progress");
+  if (!body) return;
+  if (_erpList.length === 0) { body.innerHTML = '<div style="text-align:center; color:var(--text-soft); padding:24px;">沒有可鍵入的紀錄 🎉</div>'; if (prog) prog.textContent = ""; return; }
+  if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1;
+  if (_erpIdx < 0) _erpIdx = 0;
+  const e = _erpList[_erpIdx];
+  const keyed = _erpKeyedIds.has(e.id);
+  const d = new Date(e.completedAt);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  const customer = (PLATFORMS[e.platform] && PLATFORMS[e.platform].customer) || PLATFORM_TO_CUSTOMER[e.platform] || e.platform || "";
+  const typeLabel = e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "manual" ? "手建" : "一般"));
+  const lines = (e.items || []).filter(it => !it.essential && (it.packed || 0) > 0);
+  const parcels = (e.parcels || []);
+  let html = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+    <span style="background:${keyed ? 'var(--success-bg)' : 'var(--warn-bg)'}; color:${keyed ? 'var(--success)' : '#92400e'}; font-size:0.72rem; font-weight:700; padding:2px 10px; border-radius:999px;">${keyed ? '✓ 已鍵入' : '未鍵入'}</span>
+    <span style="font-size:0.72rem; color:var(--text-soft);">${typeLabel}${e.completedBy ? ' · ' + escapeHtml(e.completedBy) : ''}</span>
+  </div>`;
+  html += erpRow("日期", dateStr);
+  html += erpRow("客戶", customer);
+  parcels.forEach((p, i) => { html += erpRow(parcels.length > 1 ? `單號${i + 1}` : "寄件單號", p.id); });
+  const lineDoneCount = lines.filter(it => _erpLineDone.has(e.id + "::" + it.sku)).length;
+  html += `<div style="font-size:0.75rem; color:var(--text-soft); margin:12px 0 2px;">商品明細 (${lineDoneCount}/${lines.length}) — 打進正航就點一下打勾</div>`;
+  if (lines.length === 0) html += `<div style="color:var(--text-soft); font-size:0.9rem; padding:6px;">(無一般商品)</div>`;
+  lines.forEach(it => {
+    const lineKey = e.id + "::" + it.sku;
+    const ld = _erpLineDone.has(lineKey);
+    html += `<div class="erp-line${ld ? ' done' : ''}" data-erp-line="${escapeHtml(lineKey)}">
+      <span class="erp-line-check">${ld ? '✓' : ''}</span>
+      <div class="erp-line-main">
+        <div class="erp-line-sku">${escapeHtml(it.sku)}${it.missing ? ' <span class="missing-badge">⚠缺</span>' : ''}</div>
+        <div class="erp-line-name">${escapeHtml(it.name || "")}</div>
+      </div>
+      <div class="erp-line-qty">×${it.packed}</div>
+    </div>`;
+  });
+  body.innerHTML = html;
+  if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpKeyedIds.has(x.id)).length}`;
+  const markBtn = document.getElementById("erp-mark-keyed");
+  if (markBtn) { markBtn.textContent = keyed ? "↩ 取消已鍵入" : "✓ 標示已鍵入 · 下一筆"; markBtn.style.background = keyed ? "var(--text-soft)" : "var(--success)"; }
+}
+function openErpHelper() {
+  buildErpList();
+  if (_erpList.length === 0) { showToast("沒有可鍵入的紀錄"); return; }
+  _erpIdx = 0;
+  document.getElementById("erp-helper-modal").hidden = false;
+  renderErpHelper();
+}
+document.getElementById("open-erp-helper-btn").addEventListener("click", () => { fetchCloudHistory(true); openErpHelper(); });
+document.getElementById("erp-close").addEventListener("click", () => document.getElementById("erp-helper-modal").hidden = true);
+document.getElementById("erp-prev").addEventListener("click", () => { if (_erpIdx > 0) { _erpIdx--; renderErpHelper(); } });
+document.getElementById("erp-next").addEventListener("click", () => { if (_erpIdx < _erpList.length - 1) { _erpIdx++; renderErpHelper(); } });
+document.getElementById("erp-unkeyed-only").addEventListener("change", () => { buildErpList(); _erpIdx = 0; renderErpHelper(); });
+document.getElementById("erp-mark-keyed").addEventListener("click", () => {
+  const e = _erpList[_erpIdx]; if (!e) return;
+  if (_erpKeyedIds.has(e.id)) { _erpKeyedIds.delete(e.id); saveErpKeyed(); renderErpHelper(); return; }
+  _erpKeyedIds.add(e.id); saveErpKeyed();
+  const unkeyedOnly = document.getElementById("erp-unkeyed-only").checked;
+  if (unkeyedOnly) { buildErpList(); if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1; renderErpHelper(); if (_erpList.length === 0) showToast("全部鍵完了 🎉"); }
+  else { if (_erpIdx < _erpList.length - 1) _erpIdx++; renderErpHelper(); }
+});
+document.getElementById("erp-helper-body").addEventListener("click", (e) => {
+  const line = e.target.closest("[data-erp-line]");
+  if (line) {
+    const k = line.dataset.erpLine;
+    if (_erpLineDone.has(k)) _erpLineDone.delete(k); else _erpLineDone.add(k);
+    saveErpLineDone();
+    renderErpHelper();
+    return;
+  }
+  const b = e.target.closest("button[data-erp-copy]"); // 舊複製鈕(讀單模式已移除, 保留相容)
+  if (b) erpCopy(b.dataset.erpCopy);
+});
+
 document.getElementById("open-perf-stats-btn").addEventListener("click", () => {
   document.getElementById("perf-stats-modal").hidden = false;
   renderPerfStats(_perfRange);
@@ -6919,9 +7072,10 @@ function renderActiveParcel() {
     itemsEl.innerHTML = skus.map(sku => {
       const prod = state.items.find(it => it.sku === sku) || { name: "" };
       const qty = items[sku];
-      return `<div class="ap-row">
+      const missBadge = prod.missing ? ' <span class="missing-badge">⚠ 缺貨</span>' : '';
+      return `<div class="ap-row${prod.missing ? ' ap-missing' : ''}">
         <div class="ap-info">
-          <span class="ap-sku">${escapeHtml(sku)}</span>
+          <span class="ap-sku">${escapeHtml(sku)}${missBadge}</span>
           <span class="ap-name">${escapeHtml(prod.name || "")}</span>
         </div>
         <span class="ap-qty">× ${qty}</span>
