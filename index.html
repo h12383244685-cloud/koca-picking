@@ -640,11 +640,22 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   display: flex;
   align-items: center;
   gap: 12px;
+  content-visibility: auto;          /* 畫面外不渲染 → 長清單捲動/重繪更順 (外觀不變) */
+  contain-intrinsic-size: 0 72px;
 }
 .item.status-pending { border-left-color: #cbd5e1; }
 .item.status-partial { border-left-color: var(--warn); background: var(--warn-bg); }
 .item.status-done    { border-left-color: var(--success); background: var(--success-bg); }
 .item.status-over    { border-left-color: var(--danger); background: var(--danger-bg); }
+/* 缺貨手動標記 */
+.item.missing-flagged { border-left-color: var(--danger) !important; background: var(--danger-bg) !important; }
+.missing-badge { background: var(--danger); color: #fff; font-size: 0.65rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
+.missing-toggle {
+  margin-top: 6px; font-size: 0.72rem; font-weight: 600;
+  padding: 4px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-soft);
+}
+.missing-toggle.on { background: var(--danger); color: #fff; border-color: var(--danger); }
 
 .item-info { flex: 1; min-width: 0; }
 .item-sku {
@@ -1025,6 +1036,8 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   margin-bottom: 10px;
   box-shadow: var(--shadow);
   border-left: 4px solid var(--success);
+  content-visibility: auto;          /* 畫面外不渲染 → 雲端30天長清單更順 (外觀不變) */
+  contain-intrinsic-size: 0 150px;
 }
 .history-item.partial { border-left-color: var(--warn); }
 .history-item-header {
@@ -1176,10 +1189,12 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   border-radius: 12px;
   padding: 12px 14px;
   margin-bottom: 8px;
-  box-shadow: var(--shadow);
+  border: 1px solid var(--border);   /* 改用邊框取代陰影: 捲動重繪更省、更順 */
   display: flex;
   align-items: center;
   gap: 10px;
+  content-visibility: auto;          /* 畫面外的卡片暫不渲染 → 開啟與捲動更滑順 */
+  contain-intrinsic-size: 0 64px;
 }
 .menu-item.checked {
   background: var(--primary-light);
@@ -1211,6 +1226,8 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
   display: flex;
   align-items: center;
   gap: 10px;
+  content-visibility: auto;          /* 畫面外不渲染 → 商品多時更順 (外觀不變) */
+  contain-intrinsic-size: 0 60px;
 }
 .lib-item .item-info { flex: 1; }
 .lib-item .star-btn {
@@ -2838,7 +2855,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.8.5 · 2026-06-22";
+const APP_VERSION = "V2.8.9 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3741,6 +3758,7 @@ function mergeRoomState(serverRoom) {
       if (localIt) {
         localIt.packed = Math.max(0, (serverIt.packed || 0) + pend);
         localIt.expected = serverIt.expected;
+        localIt.missing = !!serverIt.missing; // 缺貨標記同步 (兩台都看得到)
       } else {
         state.items.push({ ...serverIt, packed: Math.max(0, (serverIt.packed || 0) + pend) });
       }
@@ -4168,6 +4186,7 @@ function appendHistory() {
     sku: it.sku, name: it.name || "", category: it.category || "其他",
     expected: it.expected, packed: it.packed,
     essential: !!it.essential,
+    missing: !!it.missing,   // 手動標記的缺貨商品
   }));
   const totalExpected = items.reduce((s, it) => s + it.expected, 0);
   const totalPacked = items.reduce((s, it) => s + it.packed, 0);
@@ -4727,10 +4746,11 @@ function renderPicking() {
             : `<span class="current">${currentActive}</span><span class="sep">/</span><span class="expected shipped-remaining">${remaining}</span>` + (skuShipped > 0 ? `<div class="shipped-note">已出 ${skuShipped}</div>` : '');
         }
         return `
-        <div class="item status-${s}">
+        <div class="item status-${s}${it.missing ? ' missing-flagged' : ''}">
           <div class="item-info">
-            <div class="item-sku">${escapeHtml(it.sku)}${manualBadge}</div>
+            <div class="item-sku">${escapeHtml(it.sku)}${manualBadge}${it.missing ? ' <span class="missing-badge">⚠ 缺貨</span>' : ''}</div>
             <div class="item-name">${escapeHtml(it.name || "(無名稱)")}</div>
+            <button class="missing-toggle ${it.missing ? 'on' : ''}" data-missing-toggle data-idx="${realIdx}">${it.missing ? '✓ 已標缺貨' : '標記缺貨'}</button>
           </div>
           <div class="item-counter">
             <div class="item-qty" data-qty-click data-idx="${realIdx}" role="button" tabindex="0">
@@ -6304,6 +6324,7 @@ function renderHistory() {
           <strong>${e.summary.totalSku}</strong> SKU · 應出 <strong>${e.summary.totalExpected}</strong> · 已裝 <strong>${e.summary.totalPacked}</strong> · 完成率 <strong>${e.summary.completionRate}%</strong>
           ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
           ${isPartial ? `<br>⚠ ${e.summary.totalSku - e.summary.completedSku} 個 SKU 未完成` : ''}
+          ${(() => { const miss = (e.items || []).filter(it => it.missing); return miss.length ? `<br><span style="color: var(--danger); font-weight: 700;">⚠ 缺貨 ${miss.length} 項: ${miss.map(it => escapeHtml(it.sku)).join("、")}</span>` : ''; })()}
         </div>
         <div class="history-item-actions">
           <button class="btn outline sm" data-hist-toggle="${e.id}">${expanded ? '收起' : '展開明細'}</button>
@@ -7586,7 +7607,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         }
         state.items = entryToRestore.items.map(it => ({
           sku: it.sku, name: it.name || "", category: it.category || "其他",
-          expected: it.expected, packed: it.packed || 0, essential: !!it.essential,
+          expected: it.expected, packed: it.packed || 0, essential: !!it.essential, missing: !!it.missing,
         }));
         state.completedParcels = (entryToRestore.parcels || []).map(p => ({ ...p }));
         clearOrderModeFlags(); // 清掉殘留的補寄/退貨/入倉/手建旗標 (還原的是一般出貨單)
@@ -8343,6 +8364,18 @@ document.getElementById("items").addEventListener("click", (e) => {
     collapsedCats[cat] = !collapsedCats[cat];
     saveCollapsed();
     renderPicking();
+    return;
+  }
+  // 缺貨手動標記切換
+  const miss = e.target.closest("button[data-missing-toggle]");
+  if (miss) {
+    const i = parseInt(miss.dataset.idx, 10);
+    if (state.items[i]) {
+      state.items[i].missing = !state.items[i].missing;
+      saveState();
+      if (state.roomMode) { queueRoomEvent("item_missing", { sku: state.items[i].sku, missing: !!state.items[i].missing }); markUserActivity(); }
+      renderPicking();
+    }
     return;
   }
   // 點數字打開 modal
@@ -9603,6 +9636,15 @@ document.getElementById("finish-btn").addEventListener("click", () => {
     <div class="report-line">應出貨 ${state.items.length} 個 SKU，共 ${state.items.reduce((s,it)=>s+it.expected,0)} 件</div>
     <div class="report-line">實際裝箱 ${state.items.reduce((s,it)=>s+it.packed,0)} 件 (${dones.length} 個 SKU 完成)</div>
     </div>`;
+
+  const missingItems = state.items.filter(it => it.missing);
+  if (missingItems.length > 0) {
+    html += `<div class="report-section"><h3 style="color:var(--danger)">⚠ 缺貨 (${missingItems.length})</h3>`;
+    missingItems.forEach(it => {
+      html += `<div class="report-line miss">${escapeHtml(it.sku)} ${escapeHtml(it.name)} — 已標記缺貨${it.packed > 0 ? ` (仍裝了 ${it.packed})` : ""}</div>`;
+    });
+    html += `</div>`;
+  }
 
   if (misses.length > 0) {
     html += `<div class="report-section"><h3 style="color:var(--danger)">❌ 未完成 (${misses.length})</h3>`;
