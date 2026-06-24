@@ -1657,6 +1657,7 @@ footer.summary-bar {
       尚無紀錄
     </div>
     <div class="row" style="gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+      <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 70px;">↻ 重新整理</button>
       <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
       <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
       <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
@@ -2837,7 +2838,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.8.4 · 2026-06-22";
+const APP_VERSION = "V2.8.5 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6021,6 +6022,11 @@ function renderTopSKUs(range) {
 let _perfRange = "today";
 let _tskuRange = "month";
 
+document.getElementById("history-refresh-btn").addEventListener("click", () => {
+  if (!cloudHistoryEnabled()) { showToast("未設定雲端共享 (需填 Spidey Key)"); return; }
+  showToast("↻ 重新整理中…");
+  fetchCloudHistory(true);
+});
 document.getElementById("open-perf-stats-btn").addEventListener("click", () => {
   document.getElementById("perf-stats-modal").hidden = false;
   renderPerfStats(_perfRange);
@@ -7144,7 +7150,7 @@ function switchTab(t) {
   document.getElementById("tab-content-a1").hidden = (t !== "a1");
   document.getElementById("tab-content-history").hidden = (t !== "history");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
-  if (t === "history") { renderHistory(); fetchCloudHistory(); } // 切到歷史: 先畫本機, 再拉雲端合併
+  if (t === "history") { renderHistory(); fetchCloudHistory(true); } // 切到歷史: 先畫本機, 再強制拉雲端最新 (看得到別人剛刪的)
   if (t === "inventory") renderInventory(); // 切到倉庫清冊時重新渲染
 }
 
@@ -7420,13 +7426,13 @@ document.getElementById("history-list").addEventListener("click", (e) => {
   const tog = e.target.closest("button[data-hist-toggle]");
   if (tog) {
     const id = tog.dataset.histToggle;
-    const entry = history.find(h => h.id === id);
+    const entry = allHistory().find(h => h.id === id); // 含雲端(同事)那筆
     if (entry) { entry._expanded = !entry._expanded; renderHistory(); }
     return;
   }
   const exportBtn = e.target.closest("button[data-hist-export]");
   if (exportBtn) {
-    const entry = history.find(h => h.id === exportBtn.dataset.histExport);
+    const entry = allHistory().find(h => h.id === exportBtn.dataset.histExport); // 含雲端那筆
     if (!entry) return;
     // 單筆明細 CSV
     const rows = [["出貨日期", "通路", "寄件單號", "寄件時間", "商品編號", "商品名稱", "分類", "數量"]];
@@ -7520,7 +7526,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
   if (_pendingMergeEntryId) {
     entryIdToMerge = _pendingMergeEntryId;
     _pendingMergeEntryId = null;
-    entryToRestore = history.find(h => h.id === entryIdToMerge);
+    entryToRestore = allHistory().find(h => h.id === entryIdToMerge); // 含雲端那筆
     if (!entryToRestore) { showToast("⚠ 找不到該紀錄"); e.target.value = ""; return; }
   }
 
@@ -7595,6 +7601,15 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         saveState();
         history = history.filter(h => h.id !== entryIdToMerge);
         saveHistory();
+        // 雲端共享: 追加的是雲端那筆時, 也把雲端原始那筆移除 (避免之後完成後雲端同時有舊+新)
+        cloudHistory = cloudHistory.filter(h => h.id !== entryIdToMerge);
+        if (cloudHistoryEnabled() && entryToRestore.completedAt) {
+          fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+            body: JSON.stringify({ id: entryIdToMerge, completedAt: entryToRestore.completedAt }),
+          }).catch(() => {});
+        }
         console.log("[history-merge] restored entry", entryIdToMerge, "appendLevel=", state.appendLevel);
       }
 
