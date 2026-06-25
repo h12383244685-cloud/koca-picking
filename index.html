@@ -88,7 +88,7 @@
   --primary: #E84A02;       /* 品牌主橘 PANTONE 1665C */
   --primary-light: #FDE7DA; /* 主橘淡底 (選取/高亮) */
   --text: #2B2926;          /* 接近品牌深灰 #3E3A39, 對比足 */
-  --text-soft: #8D7F74;     /* 品牌暖灰 */
+  --text-soft: #645749;     /* 品牌暖灰 (加深, 改善淡字可讀性) */
   --border: #E3DED8;
   --success: #1F9E8E;       /* 品牌薄荷綠深版 (可讀) */
   --success-bg: #E4F4F1;    /* 薄荷綠 #9BD8D1 淡底 */
@@ -2904,7 +2904,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.9.3 · 2026-06-22";
+const APP_VERSION = "V2.9.5 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -7656,7 +7656,7 @@ document.getElementById("history-list").addEventListener("click", (e) => {
   const merge = e.target.closest("button[data-hist-merge]");
   if (merge) {
     const entryId = merge.dataset.histMerge;
-    const entry = history.find(h => h.id === entryId);
+    const entry = allHistory().find(h => h.id === entryId); // 含雲端(同事)那筆
     if (!entry) return;
     // iOS Safari 限制: 必須在使用者點擊事件「同一個 call stack」開啟檔案選擇器
     // 因此把 entryId 暫存, 直接觸發 file input, 確認與還原延後到 change 事件
@@ -9031,7 +9031,7 @@ function applyTheme(theme) {
   // 手機狀態列 / PWA 主題色跟著主題走
   const _themeColors = { default: "#1F4E78", warm: "#5c4a2f", dark: "#0a0e14", koca: "#E84A02" };
   const _meta = document.querySelector('meta[name="theme-color"]');
-  if (_meta) _meta.content = _themeColors[theme] || "#1F4E78";
+  if (_meta) _meta.content = _themeColors[theme] || _themeColors.koca;
 }
 function applyFontSize(size) {
   if (!size || size === "medium") document.documentElement.removeAttribute("data-font-size");
