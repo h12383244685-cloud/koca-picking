@@ -8,10 +8,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="出貨確認">
-<meta name="theme-color" content="#1F4E78">
-<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%231F4E78'/><text x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='110'>📦</text></svg>">
-<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4E78'/><text x='50%25' y='56%25' text-anchor='middle' dominant-baseline='middle' font-size='40'>📦</text></svg>">
+<meta name="apple-mobile-web-app-title" content="KOCA 出貨">
+<meta name="theme-color" content="#E84A02">
+<!-- iOS 主畫面圖示必須是 PNG (不吃 SVG); 檔案放 repo 根目錄一起部署 -->
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 /* 字體大小 + 戴手套模式 */
 :root { --font-base: 18px; }                          /* 預設(中) 放大 16→18, 整體更好讀 */
@@ -2904,7 +2906,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.9.5 · 2026-06-22";
+const APP_VERSION = "V2.9.6 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
