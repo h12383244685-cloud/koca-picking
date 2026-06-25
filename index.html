@@ -9145,7 +9145,7 @@ document.getElementById("sync-test-btn").addEventListener("click", async () => {
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     if (data && data.ok) {
-      alert(`✓ Worker 連線成功\n\n版本: ${data.version}\n伺服器時間: ${data.time}\n\n下一步: 等下我會做「🏠 開新房間 / 🚪 加入房間」UI。`);
+      alert(`✓ Worker 連線成功\n\n版本: ${data.version}\n伺服器時間: ${data.time}`);
     } else {
       alert("⚠ 回應格式不對:\n" + JSON.stringify(data).substring(0, 200));
     }
