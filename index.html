@@ -2907,7 +2907,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.9.8 · 2026-06-22";
+const APP_VERSION = "V3.0.2 · 2026-06-25";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3430,7 +3430,9 @@ async function pushKocaOutbound(entry) {
       try { saveHistory(); } catch (e) {}
       setTimeout(() => showToast(`✅ 已推送 KOCA 庫存 (單 ${doc_no})`), 800);
     } else {
-      setTimeout(() => showToast(`⚠ KOCA 推送失敗 ${data.status || res.status || ""}`), 800);
+      // 「尚未設定好」類錯誤(金鑰/網址沒設)不跳惱人提示, 只記 log; 真正轉發失敗才提醒
+      const _cfgIssue = ["spidey_key_not_set", "unauthorized", "koca_api_key_not_set", "outbound_url_not_set"].includes(data.error || "");
+      if (!_cfgIssue) setTimeout(() => showToast(`⚠ KOCA 推送失敗 ${data.status || res.status || ""}`), 800);
       console.warn("[koca] outbound failed", data);
     }
   } catch (e) {
@@ -3540,6 +3542,20 @@ function queueRoomEvent(type, data) {
   savePendingEvents();
   // 即時送出 (WebSocket); 失敗就留在 pendingEvents, 連線恢復/下次 sync 會補送 (DO 去重)
   wsSend({ type: "events", events: [ev] });
+}
+
+// 補寄/退貨/入倉「換下一位客人」: 把房間共用清單整批換成本機目前的新清單, 並同步給同仁那台。
+// 只由開房者呼叫 (避免兩台搶著換); 設 _pendingListReset 讓自己的回廣播不要把本機清單再洗一次。
+function pushRoomListReset() {
+  if (!state.roomMode) return;
+  state._pendingListReset = true;
+  queueRoomEvent("reset_list", {
+    items: (state.items || []).map(it => ({
+      sku: it.sku, name: it.name, category: it.category,
+      expected: it.expected || 0, packed: it.packed || 0,
+      essential: !!it.essential, missing: !!it.missing,
+    })),
+  });
 }
 
 async function createRoom() {
@@ -3762,8 +3778,17 @@ function handleWsMessage(data) {
   }
   if (msg.type === "pong") { _syncFailCount = 0; return; }
   if (msg.type === "closed") {
-    showToast("⚠ 房間已關閉, 離開房間");
+    // 對方(開房者)已完成出貨並歸檔本批 → 把這台也清空、踢回首頁, 避免停在已出貨的舊清單上重複作業
     leaveRoom(false);
+    state.items = []; state.completedParcels = []; state.activeParcel = null;
+    state.scanMode = false; state.manualMode = false;
+    state.replacementInfo = null; state.returnInfo = null; state.inboundInfo = null;
+    state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
+    state.loadedDate = null;
+    saveState();
+    try { localStorage.removeItem(STATE_BACKUP_KEY); } catch (e) {}
+    render();
+    setTimeout(() => alert("✓ 對方已完成出貨,本批結束\n\n這台已自動結束並回到首頁。出貨紀錄可在「出貨紀錄」查看。"), 100);
     return;
   }
 }
@@ -3800,6 +3825,38 @@ function mergeRoomState(serverRoom) {
     state.roomActiveParcels = serverRoom.activeParcels || {};
     renderRoomBadge();
     return;
+  }
+  // 整批換清單 (補寄/退貨/入倉 換下一位客人): server listVersion 變了 → 整份取代本機清單,
+  // 而非平常的增量合併 (增量合併不會刪掉舊清單的品項, 換客人會殘留)。
+  const _srvLV = serverRoom.listVersion || 0;
+  // 開房者剛在本機換好新客人清單、reset_list 還沒被伺服器套用前: 先別讓「舊清單的廣播」覆蓋本機,
+  // 只更新在線狀態, 等自己的換清單回廣播 (listVersion 變大) 再正常合併。
+  if (state._pendingListReset && _srvLV === (state._lastListVersion || 0)) {
+    state.roomMembers = serverRoom.members || {};
+    state.roomActiveParcels = serverRoom.activeParcels || {};
+    renderRoomBadge();
+    return;
+  }
+  if (_srvLV !== (state._lastListVersion || 0)) {
+    const _iInitiated = state._pendingListReset;
+    state._lastListVersion = _srvLV;
+    state._pendingListReset = false;
+    if (_srvLV > 0 && !_iInitiated) {
+      // 同仁那台: 整份換成新客人的清單, 清掉上一位的進行中/待送增量
+      state.items = (Array.isArray(serverRoom.items) ? serverRoom.items : []).map(it => ({ ...it }));
+      state.completedParcels = (Array.isArray(serverRoom.completedParcels) ? serverRoom.completedParcels : []).map(p => ({ ...p }));
+      state.activeParcel = null;
+      state.scanMode = true;
+      state._lastSeenRoomVer = serverRoom.version;
+      state.roomMembers = serverRoom.members || {};
+      state.roomActiveParcels = serverRoom.activeParcels || {};
+      pendingEvents = []; savePendingEvents(); // 舊清單的待送增量作廢, 避免把舊 SKU 帶進新清單
+      saveState();
+      renderRoomBadge(); renderPicking(); renderScanPanel();
+      setTimeout(() => showToast("🔄 已換下一筆,清單已更新"), 50);
+      return;
+    }
+    // 發起方 (開房者): 本機清單已是新的, 不要被自己的回廣播洗掉 → 只記版本, 繼續走下面增量合併
   }
   // items: server packed 為準, 但「我本機剛刷、伺服器還沒確認(還在 pendingEvents)的增量」要加回,
   // 否則自己的數字會被 server 舊值蓋掉 → 跳掉再跳回的閃動。
@@ -6165,6 +6222,24 @@ function renderErpHelper() {
       <div class="erp-line-qty">×${it.packed}</div>
     </div>`;
   });
+  // 包裝材料 (essential): 另開一區, 跟出售商品分開。正航有在管包裝庫存時可逐項打勾。
+  const packLines = (e.items || []).filter(it => it.essential && (it.packed || 0) > 0);
+  if (packLines.length > 0) {
+    const packDone = packLines.filter(it => _erpLineDone.has(e.id + "::" + it.sku)).length;
+    html += `<div style="font-size:0.75rem; color:var(--text-soft); margin:12px 0 2px;">📦 包裝材料 (${packDone}/${packLines.length}) — 打進正航就點一下打勾</div>`;
+    packLines.forEach(it => {
+      const lineKey = e.id + "::" + it.sku;
+      const ld = _erpLineDone.has(lineKey);
+      html += `<div class="erp-line${ld ? ' done' : ''}" data-erp-line="${escapeHtml(lineKey)}">
+        <span class="erp-line-check">${ld ? '✓' : ''}</span>
+        <div class="erp-line-main">
+          <div class="erp-line-sku">${escapeHtml(it.sku)}</div>
+          <div class="erp-line-name">${escapeHtml(it.name || "")}</div>
+        </div>
+        <div class="erp-line-qty">×${it.packed}</div>
+      </div>`;
+    });
+  }
   body.innerHTML = html;
   if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpKeyedIds.has(x.id)).length}`;
   const markBtn = document.getElementById("erp-mark-keyed");
@@ -6887,7 +6962,9 @@ function processScan(code) {
       const _next = _mode === "inbound" ? "下一張進貨單" : "下一位";
       if (!confirm(`要結束目前這筆${_label}並存檔, 換${_next} (${code}) 嗎?`)) return;
       if (state.activeParcel) finalizeActiveParcel(false);
-      actuallyCompleteShipping(); // 存檔目前這筆, 並清空 state
+      // 共同包貨(開房者): 存檔上一位但「不關房」, 待會建立下一位時會把房間清單整批換掉同步給同仁。
+      const _keepRoom = state.roomMode && state.isRoomHost;
+      actuallyCompleteShipping(_keepRoom ? { keepRoom: true } : undefined); // 存檔目前這筆, 並清空 state
       if (_mode === "inbound") openInboundModal(code);
       else if (_mode === "replacement") openReplacementModal(code);
       else openReturnModal(code);
@@ -9570,7 +9647,13 @@ document.getElementById("repl-create").addEventListener("click", () => {
   const rawId = document.getElementById("repl-parcel-id").value.trim();
   const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("repl-customer-phone").value.trim();
-  if (state.roomMode) {
+  // 開房者: 維持房間, 待會把補寄清單整批同步給同仁一起包 (商品多需兩人); 加入方: 維持原行為離房改單機。
+  const _keepRoom = (state.roomMode && state.isRoomHost) ? {
+    roomMode: true, roomCode: state.roomCode, isRoomHost: true,
+    roomMembers: state.roomMembers || {}, roomActiveParcels: state.roomActiveParcels || {},
+    _lastSeenRoomVer: state._lastSeenRoomVer || 0, _lastListVersion: state._lastListVersion || 0,
+  } : null;
+  if (state.roomMode && !_keepRoom) {
     if (!checkRoomBeforeReset("建立補寄單")) return;
     leaveRoom(true);
   }
@@ -9615,6 +9698,7 @@ document.getElementById("repl-create").addEventListener("click", () => {
       customerName, customerPhone, reason, note,
       createdAt: new Date().toISOString(),
     },
+    ...(_keepRoom || {}),
   };
 
   // 必要商品自動帶入 (補寄一樣會用到包裝材料)
@@ -9632,6 +9716,7 @@ document.getElementById("repl-create").addEventListener("click", () => {
   SOUND.parcelStart();
   showToast(`📮 補寄單 ${parcelId}${customerPhone ? ` (${customerPhone})` : ""} 已建立`);
   if (window.__homeOverride) window.__homeOverride = false;
+  if (_keepRoom) pushRoomListReset(); // 同步補寄清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -9682,7 +9767,12 @@ document.getElementById("ret-create").addEventListener("click", () => {
     }
   }
 
-  if (state.roomMode) {
+  const _keepRoom = (state.roomMode && state.isRoomHost) ? {
+    roomMode: true, roomCode: state.roomCode, isRoomHost: true,
+    roomMembers: state.roomMembers || {}, roomActiveParcels: state.roomActiveParcels || {},
+    _lastSeenRoomVer: state._lastSeenRoomVer || 0, _lastListVersion: state._lastListVersion || 0,
+  } : null;
+  if (state.roomMode && !_keepRoom) {
     if (!checkRoomBeforeReset("建立退貨確認單")) return;
     leaveRoom(true);
   }
@@ -9716,6 +9806,7 @@ document.getElementById("ret-create").addEventListener("click", () => {
       customerName, customerPhone, reason, originalOrderNo, note,
       createdAt: new Date().toISOString(),
     },
+    ...(_keepRoom || {}),
   };
 
   // 必要商品不自動帶 (退貨用不到包裝材料)
@@ -9725,6 +9816,7 @@ document.getElementById("ret-create").addEventListener("click", () => {
   SOUND.parcelStart();
   showToast(`📥 退貨確認 ${parcelId}${customerPhone ? ` (${customerPhone})` : ""} 已開始`);
   if (window.__homeOverride) window.__homeOverride = false;
+  if (_keepRoom) pushRoomListReset(); // 同步退貨清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -9750,7 +9842,12 @@ document.getElementById("inb-create").addEventListener("click", () => {
   const rawId = document.getElementById("inb-order-id").value.trim();
   const note = document.getElementById("inb-note").value.trim();
   if (!rawId) { showToast("⚠ 進貨單號必填"); document.getElementById("inb-order-id").focus(); return; }
-  if (state.roomMode) {
+  const _keepRoom = (state.roomMode && state.isRoomHost) ? {
+    roomMode: true, roomCode: state.roomCode, isRoomHost: true,
+    roomMembers: state.roomMembers || {}, roomActiveParcels: state.roomActiveParcels || {},
+    _lastSeenRoomVer: state._lastSeenRoomVer || 0, _lastListVersion: state._lastListVersion || 0,
+  } : null;
+  if (state.roomMode && !_keepRoom) {
     if (!checkRoomBeforeReset("建立入倉驗收單")) return;
     leaveRoom(true);
   }
@@ -9771,12 +9868,14 @@ document.getElementById("inb-create").addEventListener("click", () => {
     replacementInfo: null,
     returnInfo: null,
     inboundInfo: { orderNo: orderId, note, createdAt: new Date().toISOString() },
+    ...(_keepRoom || {}),
   };
   saveState();
   document.getElementById("inbound-modal").hidden = true;
   SOUND.parcelStart();
   showToast(`🏭 入倉驗收 ${orderId} 已開始`);
   if (window.__homeOverride) window.__homeOverride = false;
+  if (_keepRoom) pushRoomListReset(); // 同步入倉清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -9850,7 +9949,8 @@ async function closeRoomOnServer(code) {
   } catch(e) { console.warn("[room] close failed", e); }
 }
 
-function actuallyCompleteShipping() {
+function actuallyCompleteShipping(opts) {
+  opts = opts || {};
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   // 資料安全: 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失
@@ -9862,11 +9962,18 @@ function actuallyCompleteShipping() {
   // 房間模式: 通知 server 歸檔房間 + 本機停止同步
   const roomCodeAtCompletion = state.roomCode;
   const wasInRoom = state.roomMode;
-  if (wasInRoom) {
+  // keepRoom: 補寄/退貨/入倉「換下一位客人」存檔時用 — 不關房, 讓兩台繼續留在同一房接著包下一位。
+  const _keepRoom = opts.keepRoom && wasInRoom;
+  const _roomKeep = _keepRoom ? {
+    roomMode: true, roomCode: state.roomCode, isRoomHost: state.isRoomHost,
+    roomMembers: state.roomMembers || {}, roomActiveParcels: state.roomActiveParcels || {},
+    _lastSeenRoomVer: state._lastSeenRoomVer || 0, _lastListVersion: state._lastListVersion || 0,
+  } : {};
+  if (wasInRoom && !_keepRoom) {
     leaveRoom(true);
     closeRoomOnServer(roomCodeAtCompletion);
   }
-  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null };
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, ..._roomKeep };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   reportModal.hidden = true;
