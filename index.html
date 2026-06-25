@@ -181,7 +181,8 @@ body {
 header {
   background: var(--primary);
   color: white;
-  padding: 16px 16px 14px;
+  /* 加到主畫面(全螢幕)時, 內容會延伸到狀態列下方; 上方多留 safe-area 高度, 標題/⚙設定才不會被狀態列蓋住、按不到 */
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2906,7 +2907,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V2.9.6 · 2026-06-22";
+const APP_VERSION = "V2.9.8 · 2026-06-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6743,7 +6744,15 @@ function processScan(code) {
 
   const original = code;
   window._lastScanWasInternalQr = null;
-  code = extractParcelId(code);
+  // ★ 先判斷是不是「已知商品條碼/SKU」: 是的話絕不送進 extractParcelId,
+  //   否則含特定數字樣式的 SKU 會被拆成子字串 → 比對不到商品 → 被誤當寄件單號 / 沒反應。
+  const _rawForSku = (code || "").trim();
+  const _rawUpper = _rawForSku.toUpperCase();
+  const _isKnownProduct = !!_rawForSku && (
+    library.some(p => (p.barcode || "").toUpperCase() === _rawUpper || (p.sku || "").toUpperCase() === _rawUpper) ||
+    (state.items || []).some(it => (it.sku || "").toUpperCase() === _rawUpper) // 今日清單裡的 SKU 也算商品
+  );
+  code = _isKnownProduct ? _rawForSku : extractParcelId(code);
   if (!code) {
     _scanMultiplier = 1; renderMultiplierBadge();
     return;
@@ -6771,8 +6780,9 @@ function processScan(code) {
 
   // 新增: 檢查是否為商品條碼 (先比 barcode, 再比 sku)
   // 雙重比對: 支援自訂 barcode + fallback SKU
-  let matchedProd = library.find(p => p.barcode === code);
-  if (!matchedProd) matchedProd = library.find(p => p.sku === code);
+  let matchedProd = library.find(p => p.barcode === code) || library.find(p => p.sku === code);
+  if (!matchedProd) { const _cu = String(code).toUpperCase(); matchedProd = library.find(p => (p.barcode || "").toUpperCase() === _cu || (p.sku || "").toUpperCase() === _cu); }
+  if (!matchedProd) { const _cu = String(code).toUpperCase(); const _it = (state.items || []).find(x => (x.sku || "").toUpperCase() === _cu); if (_it) matchedProd = { sku: _it.sku, name: _it.name, category: _it.category }; } // 今日清單 SKU
   if (matchedProd) {
     if (!state.activeParcel) {
       showToast("⚠ 請先刷寄件單再加 SKU");
@@ -8562,6 +8572,7 @@ document.getElementById("scan-toggle-btn").addEventListener("click", toggleScanM
 // (例如用戶點 +/- 時 scan-input 失焦, 此時刷槍仍能繼續送 key)
 let _scanBuffer = "";
 let _scanBufferTimer = null;
+let _scanLastKeyAt = 0;
 document.addEventListener("keydown", (e) => {
   if (!state.scanMode) return;
   // 排除 Ctrl/Cmd/Alt 組合鍵 (避免吞掉重整、貼上等快捷鍵)
@@ -8593,6 +8604,10 @@ document.addEventListener("keydown", (e) => {
   }
   // 只捕捉可印字元 (英數字、符號)
   if (e.key.length === 1) {
+    // 防殘留亂碼: 距離上一個字 >400ms 視為「新的一次刷碼」, 先清掉上次沒送出的殘留再開始
+    const _now = Date.now();
+    if (_now - _scanLastKeyAt > 400) _scanBuffer = "";
+    _scanLastKeyAt = _now;
     _scanBuffer += e.key;
     // 視覺反饋: 同步顯示在 scan-input
     const inp = document.getElementById("scan-input");
