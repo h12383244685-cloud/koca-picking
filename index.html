@@ -1610,6 +1610,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
     <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
+      <option value="">— 請先選擇通路 —</option>
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎 (Coupang)</option>
@@ -2468,6 +2469,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">通路</label>
     <select id="manual-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="">— 請先選擇通路 —</option>
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
@@ -2623,6 +2625,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原通路</label>
     <select id="repl-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="">— 請先選擇通路 —</option>
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
@@ -2682,6 +2685,7 @@ footer.summary-bar {
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 10px 0 4px;">原訂單通路</label>
     <select id="ret-platform-select" style="width:100%; padding:10px; font-size:0.875rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white;">
+      <option value="">— 請先選擇通路 —</option>
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
@@ -2820,11 +2824,15 @@ footer.summary-bar {
   <div class="modal" style="max-width: 540px;">
     <h2>⌨ ERP 鍵單輔助</h2>
     <p class="hint" style="font-size:0.72rem; margin-bottom:8px;">放旁邊照著打進正航:大字好讀,每打完一項點一下打勾(不漏不重),整筆打完按「已鍵入」追進度。</p>
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+      <label style="font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+        📅 <input type="date" id="erp-date" style="font-size:0.85rem; padding:3px 6px; border:1px solid var(--border,#ccc); border-radius:6px;">
+      </label>
+      <button class="btn outline" id="erp-date-all" style="font-size:0.72rem; padding:3px 10px;">全部日期</button>
       <label style="font-size:0.8rem; display:flex; align-items:center; gap:5px;">
         <input type="checkbox" id="erp-unkeyed-only" style="transform:scale(1.2);"> 只看未鍵入
       </label>
-      <span id="erp-progress" style="font-size:0.8rem; color:var(--text-soft); font-weight:700;"></span>
+      <span id="erp-progress" style="font-size:0.8rem; color:var(--text-soft); font-weight:700; margin-left:auto;"></span>
     </div>
     <div id="erp-helper-body" style="min-height:120px;"></div>
     <div class="row" style="gap:6px; margin-top:10px;">
@@ -2833,6 +2841,25 @@ footer.summary-bar {
     </div>
     <button class="btn full" id="erp-mark-keyed" style="margin-top:8px; background: var(--success);">✓ 標示已鍵入 · 下一筆</button>
     <button class="btn full outline" id="erp-close" style="margin-top:8px;">關閉</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="hist-edit-modal" hidden>
+  <div class="modal" style="max-width: 420px;">
+    <h2>✏️ 修改紀錄</h2>
+    <p class="hint" style="font-size:0.72rem; margin-bottom:10px;">修正打錯的通路或訂單類型。<strong>只更正紀錄上的標示</strong>,不會回頭調整已扣的庫存。</p>
+    <label style="display:block; font-size:0.85rem; font-weight:700; margin:8px 0 4px;">通路</label>
+    <select id="hist-edit-platform" style="width:100%; padding:9px; font-size:1rem; border:1px solid var(--border,#ccc); border-radius:8px;"></select>
+    <label style="display:block; font-size:0.85rem; font-weight:700; margin:14px 0 4px;">訂單類型</label>
+    <select id="hist-edit-type" style="width:100%; padding:9px; font-size:1rem; border:1px solid var(--border,#ccc); border-radius:8px;">
+      <option value="normal">一般出貨</option>
+      <option value="manual">📝 手建</option>
+      <option value="replacement">📮 補寄</option>
+      <option value="return">📥 退貨</option>
+      <option value="inbound">🏭 進貨</option>
+    </select>
+    <button class="btn full" id="hist-edit-save" style="margin-top:16px; background: var(--success);">儲存修改</button>
+    <button class="btn full outline" id="hist-edit-cancel" style="margin-top:8px;">取消</button>
   </div>
 </div>
 
@@ -2896,6 +2923,39 @@ footer.summary-bar {
 </button>
 
 <script>
+/* ============================================================================
+ * 🔒🔒🔒 資料安全規範 (DATA INTEGRITY CONTRACT) — 修改前必讀,違反即為嚴重事故 🔒🔒🔒
+ * ----------------------------------------------------------------------------
+ * 本 App 的「出貨紀錄」是買賣雙方的出貨憑證 / 對帳依據 / 爭議時的證據,
+ * 屬於「絕對不可遺失、不可被覆蓋、不可被竄改」等級的資料。以下規範視為合約,
+ * 任何改動都不得削弱這些保證 (只能加強)。標有 🔒 的函式 = 資料安全命脈,改動前要想清楚。
+ *
+ * 一、出貨紀錄 (history / cloudHistory) — 最高優先
+ *   1. appendHistory() 存檔失敗時 (_lastHistorySaveOk=false),【絕對不可】清空 state.items /
+ *      不可刪 STATE_BACKUP_KEY。本批資料寧可留著重存,也不能消失。actuallyCompleteShipping()
+ *      已依此實作,維護時不可拿掉這個 rollback 判斷。
+ *   2. saveHistory() 必須誠實回傳成功/失敗;呼叫端必須尊重它的回傳值。
+ *   3. 每筆 entry 的欄位 (id, completedAt, completedBy, platform, orderType,
+ *      items[sku/expected/packed/essential/missing], parcels[id/items/completedAt/packedBy],
+ *      summary) 是憑證內容,【不可】為了省事而省略或改寫既有欄位的語意。
+ *   4. 刪除紀錄一律要二次確認 (且共享紀錄會連雲端一起刪);不可做「自動清除」舊紀錄。
+ *   5. 修改紀錄 (✏️) 只允許更正「通路 / orderType」標示,【不可】回頭竄改數量/單號/時間。
+ *
+ * 二、庫存 (stockMap)
+ *   6. 只在「一般/手建」出貨完成時扣帳;補寄/退貨/入倉/必要商品(包裝)【不可】扣帳。
+ *   7. 追加 (append) 只扣增量 (priorKocaPushed),【不可】整筆重扣造成雙重扣帳。
+ *
+ * 三、共同包貨同步 (Cloudflare Durable Object,見 picking_sync_worker.js)
+ *   8. 事件以 id 去重 (MAX_EVENT_IDS),重送安全;【嚴禁】退回舊版「KV 讀-改-寫」做法
+ *      (無鎖 → 兩台同時包會互相覆蓋 → 掉數,這是已修掉的重大事故)。
+ *   9. pendingEvents 在伺服器 ack 前【不可】清空;斷網/重整要能補送,不可遺失刷貨數。
+ *  10. listVersion 換清單採「整份取代」;發起方收到自己回廣播時不可把本機新清單洗掉。
+ *
+ * 四、本機持久化 (localStorage)
+ *  11. saveState / STATE_BACKUP_KEY 是當機/重整的救命備份;清備份前必須先確認正式存檔成功。
+ *
+ * 修改本檔請同步更新「版本紀錄.md」與「資料安全規範.md」。
+ * ========================================================================== */
 const STATE_KEY = "picking_state_v2";
 const PENDING_KEY = "picking_pending_events_v1"; // 房間模式待送事件 (存本機, 防重整/當機掉刷)
 const LIB_KEY = "picking_library_v1";
@@ -2907,7 +2967,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.0.2 · 2026-06-25";
+const APP_VERSION = "V3.1.1 · 2026-06-25";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -4247,6 +4307,7 @@ function loadCollapsed() {
   try { const s = localStorage.getItem(COLLAPSED_KEY); if (s) collapsedCats = JSON.parse(s); } catch(e) {}
 }
 function saveSpecMap() { try { localStorage.setItem(SPEC_MAP_KEY, JSON.stringify(specMap)); } catch(e) { console.warn("[storage] saveSpecMap", e); } }
+// 🔒 資料安全命脈: 必須誠實回傳成功/失敗 (見規範一-2)。呼叫端要尊重回傳值, 失敗時不可清資料。
 function saveHistory() {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); return true; }
   catch(e) { notifyStorageFull("saveHistory"); return false; }
@@ -4285,6 +4346,7 @@ function loadHistory() {
     }
   } catch(e) { console.warn("[storage] loadHistory failed", e); }
 }
+// 🔒 資料安全命脈: 產生出貨憑證並存檔。存檔失敗必須 rollback (見規範一-1/一-2), 不可讓本批資料消失。
 function appendHistory() {
   _lastHistorySaveOk = true; // 每次開頭重置, 避免殘留上一次的結果
   // 從當前 state.items 建一筆紀錄
@@ -6178,12 +6240,21 @@ function erpCopyFallback(t, done) {
 }
 function buildErpList() {
   const unkeyedOnly = document.getElementById("erp-unkeyed-only") && document.getElementById("erp-unkeyed-only").checked;
+  const dateEl = document.getElementById("erp-date");
+  const dateVal = dateEl && dateEl.value ? dateEl.value : ""; // YYYY-MM-DD (本地日期), 空=全部
   let list = allHistory().filter(e => e.orderType !== "inbound"); // 入倉不需鍵 ERP 出貨
+  if (dateVal) {
+    list = list.filter(e => {
+      const d = new Date(e.completedAt);
+      const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return local === dateVal;
+    });
+  }
   if (unkeyedOnly) list = list.filter(e => !_erpKeyedIds.has(e.id));
   _erpList = list;
 }
-function erpRow(label, value) {
-  return `<div class="erp-field"><span class="erp-label">${label}</span><span class="erp-value">${escapeHtml(String(value))}</span></div>`;
+function erpRow(label, value, suffixHtml) {
+  return `<div class="erp-field"><span class="erp-label">${label}</span><span class="erp-value">${escapeHtml(String(value))}${suffixHtml || ""}</span></div>`;
 }
 function renderErpHelper() {
   const body = document.getElementById("erp-helper-body");
@@ -6206,7 +6277,17 @@ function renderErpHelper() {
   </div>`;
   html += erpRow("日期", dateStr);
   html += erpRow("客戶", customer);
-  parcels.forEach((p, i) => { html += erpRow(parcels.length > 1 ? `單號${i + 1}` : "寄件單號", p.id); });
+  // 缺貨標記: 缺貨是「整筆」記在 SKU 上。能對到某張單號(該單號有刷到該缺貨 SKU)就標在那張單號;
+  // 沒被刷進任何單號的缺貨(整個缺、沒裝)則用下方整筆橫幅提醒。
+  const _missSkus = new Set((e.items || []).filter(it => it.missing).map(it => it.sku));
+  if (_missSkus.size) {
+    const _missList = (e.items || []).filter(it => it.missing).map(it => escapeHtml(it.sku)).join("、");
+    html += `<div style="background:var(--danger-bg); color:var(--danger); font-weight:700; font-size:0.82rem; padding:8px 10px; border-radius:8px; margin:8px 0;">⚠ 此筆含缺貨 ${_missSkus.size} 項:${_missList}<br><span style="font-weight:500; font-size:0.72rem;">鍵進正航時請依實際出貨數量調整</span></div>`;
+  }
+  parcels.forEach((p, i) => {
+    const _pMiss = _missSkus.size && p.items && Object.keys(p.items).some(sku => _missSkus.has(sku));
+    html += erpRow(parcels.length > 1 ? `單號${i + 1}` : "寄件單號", p.id, _pMiss ? ' <span class="missing-badge">⚠缺</span>' : "");
+  });
   const lineDoneCount = lines.filter(it => _erpLineDone.has(e.id + "::" + it.sku)).length;
   html += `<div style="font-size:0.75rem; color:var(--text-soft); margin:12px 0 2px;">商品明細 (${lineDoneCount}/${lines.length}) — 打進正航就點一下打勾</div>`;
   if (lines.length === 0) html += `<div style="color:var(--text-soft); font-size:0.9rem; padding:6px;">(無一般商品)</div>`;
@@ -6244,12 +6325,43 @@ function renderErpHelper() {
   if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpKeyedIds.has(x.id)).length}`;
   const markBtn = document.getElementById("erp-mark-keyed");
   if (markBtn) { markBtn.textContent = keyed ? "↩ 取消已鍵入" : "✓ 標示已鍵入 · 下一筆"; markBtn.style.background = keyed ? "var(--text-soft)" : "var(--success)"; }
+  // 上一筆/下一筆 顯示「是哪張訂單」(通路·時間·單數·已鍵勾), 末端則灰掉提示
+  const _erpBrief = (en) => {
+    if (!en) return "";
+    const _d = new Date(en.completedAt);
+    const _hm = `${String(_d.getHours()).padStart(2, "0")}:${String(_d.getMinutes()).padStart(2, "0")}`;
+    const _md = `${String(_d.getMonth() + 1).padStart(2, "0")}/${String(_d.getDate()).padStart(2, "0")}`;
+    const _cust = (PLATFORMS[en.platform] && PLATFORMS[en.platform].customer) || PLATFORM_TO_CUSTOMER[en.platform] || en.platform || "";
+    const _pc = (en.parcels || []).length;
+    const _firstId = (en.parcels && en.parcels[0] && en.parcels[0].id) ? String(en.parcels[0].id).slice(0, 10) : "";
+    const _key = _erpKeyedIds.has(en.id) ? " ✓已鍵" : "";
+    return `${_md} ${_hm} · ${_cust}${_pc ? " · " + _pc + "單" : ""}${_firstId ? " · " + _firstId + "…" : ""}${_key}`;
+  };
+  const _prevBtn = document.getElementById("erp-prev");
+  const _nextBtn = document.getElementById("erp-next");
+  const _prevE = _erpIdx > 0 ? _erpList[_erpIdx - 1] : null;
+  const _nextE = _erpIdx < _erpList.length - 1 ? _erpList[_erpIdx + 1] : null;
+  if (_prevBtn) {
+    _prevBtn.disabled = !_prevE;
+    _prevBtn.style.opacity = _prevE ? "1" : "0.45";
+    _prevBtn.innerHTML = `← 上一筆<br><span style="font-size:0.64rem; font-weight:500; opacity:0.85;">${_prevE ? escapeHtml(_erpBrief(_prevE)) : "(已是第一筆)"}</span>`;
+  }
+  if (_nextBtn) {
+    _nextBtn.disabled = !_nextE;
+    _nextBtn.style.opacity = _nextE ? "1" : "0.45";
+    _nextBtn.innerHTML = `下一筆 →<br><span style="font-size:0.64rem; font-weight:500; opacity:0.85;">${_nextE ? escapeHtml(_erpBrief(_nextE)) : "(已是最後一筆)"}</span>`;
+  }
 }
 function openErpHelper() {
+  // 每次開啟預設「今天」, 避免翻上一筆/下一筆時誤點到昨天的訂單; 可用日曆改日期或按「全部日期」
+  const dateEl = document.getElementById("erp-date");
+  if (dateEl) {
+    const t = new Date();
+    dateEl.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  }
   buildErpList();
-  if (_erpList.length === 0) { showToast("沒有可鍵入的紀錄"); return; }
   _erpIdx = 0;
-  document.getElementById("erp-helper-modal").hidden = false;
+  document.getElementById("erp-helper-modal").hidden = false; // 一律開啟 (即使當天沒紀錄), 讓使用者能改日期
   renderErpHelper();
 }
 document.getElementById("open-erp-helper-btn").addEventListener("click", () => { fetchCloudHistory(true); openErpHelper(); });
@@ -6257,6 +6369,8 @@ document.getElementById("erp-close").addEventListener("click", () => document.ge
 document.getElementById("erp-prev").addEventListener("click", () => { if (_erpIdx > 0) { _erpIdx--; renderErpHelper(); } });
 document.getElementById("erp-next").addEventListener("click", () => { if (_erpIdx < _erpList.length - 1) { _erpIdx++; renderErpHelper(); } });
 document.getElementById("erp-unkeyed-only").addEventListener("change", () => { buildErpList(); _erpIdx = 0; renderErpHelper(); });
+document.getElementById("erp-date").addEventListener("change", () => { buildErpList(); _erpIdx = 0; renderErpHelper(); });
+document.getElementById("erp-date-all").addEventListener("click", () => { document.getElementById("erp-date").value = ""; buildErpList(); _erpIdx = 0; renderErpHelper(); });
 document.getElementById("erp-mark-keyed").addEventListener("click", () => {
   const e = _erpList[_erpIdx]; if (!e) return;
   if (_erpKeyedIds.has(e.id)) { _erpKeyedIds.delete(e.id); saveErpKeyed(); renderErpHelper(); return; }
@@ -6523,24 +6637,88 @@ function renderHistory() {
     let detail = "";
     if (expanded) {
       detail = `<div class="history-detail">`;
-      // 先列寄件單號 (含 🔗 追蹤按鈕)
+      // 出貨憑證後設資料 (完整時間 / 完成者 / 通路 / 類型) — 保障雙方權益, 一筆自成完整紀錄
+      const _ad = new Date(e.completedAt);
+      const _pad = n => String(n).padStart(2, "0");
+      const _fullTime = `${_ad.getFullYear()}/${_pad(_ad.getMonth() + 1)}/${_pad(_ad.getDate())} ${_pad(_ad.getHours())}:${_pad(_ad.getMinutes())}:${_pad(_ad.getSeconds())}`;
+      const _typeLabel = e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
+      detail += `<div style="font-size: 0.72rem; color: var(--text-soft); margin-bottom: 8px; line-height: 1.8;">
+        🕒 完成時間 <strong style="color: var(--text);">${_fullTime}</strong><br>
+        👤 完成者 <strong style="color: var(--text);">${escapeHtml(e.completedBy || "(未命名)")}</strong> · 通路 <strong style="color: var(--text);">${escapeHtml(PLATFORM_LABELS[e.platform] || e.platform || "—")}</strong> · 類型 <strong style="color: var(--text);">${_typeLabel}</strong>${e.appendLevel && e.appendLevel > 1 ? ` · 追加第 ${e.appendLevel} 次` : ''}
+      </div>`;
+      // 商品跟著單號一起列: 每張寄件單號下面直接顯示它裝了哪些商品 (多客人時才看得出是誰的)
       const parcels = e.parcels || [];
+      const _meta = {};
+      for (const it of (e.items || [])) _meta[it.sku] = it;
+      const _missSet = new Set((e.items || []).filter(it => it.missing).map(it => it.sku));
       if (parcels.length > 0) {
-        detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 6px;">📦 寄件單號 (${parcels.length} 筆)</div>`;
+        detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 6px;">📦 寄件單號 + 商品 (${parcels.length} 筆)</div>`;
+        const _assigned = {};
         for (const p of parcels) {
-          const byTag = p.packedBy ? ` <span style="color: var(--text-soft); font-size: 0.625rem;">(${escapeHtml(p.packedBy)})</span>` : '';
-          detail += `<div class="row-line" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 4px 0;">
-            <span style="font-family: ui-monospace, monospace; font-size: 0.75rem;">${escapeHtml(p.id)}${byTag}</span>
+          const _pTime = p.completedAt ? `${_pad(new Date(p.completedAt).getHours())}:${_pad(new Date(p.completedAt).getMinutes())}` : "";
+          const _pInfo = [p.packedBy ? escapeHtml(p.packedBy) : "", _pTime].filter(Boolean).join(" · ");
+          const byTag = _pInfo ? ` <span style="color: var(--text-soft); font-size: 0.625rem;">(${_pInfo})</span>` : '';
+          // 物流標籤: TW = 蝦皮店到家 (可靠); 其餘顯示偵測到的物流商, 不亂猜通路
+          const _car = detectCarrier(p.id);
+          const _isShopee = _car === "shopee" || _car === "shopee_order";
+          const _carLabel = _isShopee ? "🛒 蝦皮" : (_car ? (CARRIER_LABELS[_car] || "其他物流") : "其他物流");
+          const _carTag = `<span style="background:${_isShopee ? 'var(--warn-bg)' : 'var(--primary-light)'}; color:${_isShopee ? '#92400e' : 'var(--text-soft)'}; font-size: 0.6rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; white-space: nowrap;">${_carLabel}</span>`;
+          detail += `<div class="row-line" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 5px 0 3px; border-top: 1px solid var(--border, #e5e0d8);">
+            <span style="font-family: ui-monospace, monospace; font-size: 0.75rem; font-weight: 700;">${escapeHtml(p.id)}${_carTag}${byTag}</span>
             <span style="display:flex; gap: 2px;">${makeTrackingButtonsHtml(p.id, { size: "normal" })}</span>
           </div>`;
+          const entries = Object.entries(p.items || {});
+          if (entries.length === 0) {
+            detail += `<div class="row-line" style="color: var(--text-soft); font-size: 0.72rem; padding: 2px 0 2px 14px;">(無商品明細)</div>`;
+          } else {
+            for (const [sku, qty] of entries) {
+              _assigned[sku] = (_assigned[sku] || 0) + qty;
+              const nm = (_meta[sku] && _meta[sku].name) || "";
+              const missBadge = _missSet.has(sku) ? ' <span class="missing-badge">⚠缺</span>' : '';
+              detail += `<div class="row-line" style="padding: 2px 0 2px 14px;"><span style="font-size: 0.78rem;">${escapeHtml(sku)} · ${escapeHtml(nm)}${missBadge}</span><span>×${qty}</span></div>`;
+            }
+          }
         }
-        detail += `<div style="height: 8px"></div>`;
-      }
-      // 接著列商品
-      detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
-      for (const it of e.items) {
-        const cls = it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "");
-        detail += `<div class="row-line ${cls}"><span>${escapeHtml(it.sku)} · ${escapeHtml(it.name)}</span><span>${it.packed}/${it.expected}</span></div>`;
+        // 沒被掃進任何單號的商品 (例如缺貨整批沒裝) → 另列, 避免漏看
+        let _extra = "";
+        for (const it of (e.items || [])) {
+          const rem = (it.packed || 0) - (_assigned[it.sku] || 0);
+          if (rem > 0) {
+            const missBadge = _missSet.has(it.sku) ? ' <span class="missing-badge">⚠缺</span>' : '';
+            _extra += `<div class="row-line" style="padding: 2px 0 2px 14px;"><span style="font-size: 0.78rem;">${escapeHtml(it.sku)} · ${escapeHtml(it.name)}${missBadge}</span><span>×${rem}</span></div>`;
+          }
+        }
+        if (_extra) detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin: 8px 0 2px;">📋 其他(未綁定單號)</div>` + _extra;
+        // 商品總表: 商品(已裝/應出) 與 包裝材料(已用) 分組, 兩行式排版較清楚 (對帳/爭議用)
+        const _totRow = (it, showExp) => {
+          const cls = showExp ? (it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "")) : "";
+          const miss = it.missing ? ' <span class="missing-badge">⚠缺</span>' : '';
+          const right = showExp
+            ? `<span style="font-weight:700; ${it.packed < it.expected ? 'color:var(--danger);' : (it.packed > it.expected ? 'color:var(--warn);' : '')}">${it.packed}<span style="color:var(--text-soft); font-weight:500;"> / ${it.expected}</span></span>`
+            : `<span style="font-weight:700; color:var(--text-soft);">×${it.packed}</span>`;
+          return `<div class="row-line ${cls}" style="align-items:flex-start; padding:4px 0;">
+            <span style="line-height:1.4;"><span style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem;">${escapeHtml(it.sku)}</span>${miss}<br><span style="color:var(--text-soft); font-size:0.72rem;">${escapeHtml(it.name)}</span></span>
+            <span style="white-space:nowrap; font-size:0.85rem; padding-left:8px;">${right}</span>
+          </div>`;
+        };
+        const _normItems = (e.items || []).filter(it => !it.essential);
+        const _packItems = (e.items || []).filter(it => it.essential);
+        if (_normItems.length) {
+          detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin: 12px 0 2px; font-weight:700;">📋 商品總表(已裝 / 應出)</div>`;
+          _normItems.forEach(it => { detail += _totRow(it, true); });
+        }
+        if (_packItems.length) {
+          detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin: 10px 0 2px; font-weight:700;">📦 包裝材料(已用)</div>`;
+          _packItems.forEach(it => { detail += _totRow(it, false); });
+        }
+      } else {
+        // 無寄件單號 (例如進貨/退貨單筆) → 照舊列整筆商品明細
+        detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
+        for (const it of e.items) {
+          const cls = it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "");
+          const missBadge = _missSet.has(it.sku) ? ' <span class="missing-badge">⚠缺</span>' : '';
+          detail += `<div class="row-line ${cls}"><span>${escapeHtml(it.sku)} · ${escapeHtml(it.name)}${missBadge}</span><span>${it.packed}/${it.expected}</span></div>`;
+        }
       }
       detail += `</div>`;
     }
@@ -6561,6 +6739,7 @@ function renderHistory() {
           <button class="btn outline sm" data-hist-toggle="${e.id}">${expanded ? '收起' : '展開明細'}</button>
           <button class="btn outline sm" data-hist-export="${e.id}">📦 明細</button>
           <button class="btn outline sm" data-hist-merge="${e.id}" style="color: var(--success); border-color: var(--success);">📥 追加</button>
+          <button class="btn outline sm" data-hist-edit="${e.id}">✏️ 修改</button>
           <button class="btn outline sm danger" data-hist-delete="${e.id}">🗑</button>
         </div>
         ${detail}
@@ -6697,13 +6876,19 @@ function extractParcelId(raw) {
 // 從寄件單號格式偵測可能的物流商 (回傳陣列, 因為 12 位數可能是黑貓或新竹)
 function detectCarriers(parcelId) {
   if (!parcelId) return [];
-  const s = String(parcelId).trim();
-  if (/^TW\d{12}[A-Z]$/.test(s)) return ["shopee"];     // 蝦皮店到家
-  if (/^C\d{10,15}$/.test(s)) return ["seven11"];       // 7-11 交貨便
-  if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];  // 國際 / 中華郵政
-  if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];      // 全家 FamiPort
-  if (/^\d{12}$/.test(s)) return ["blackcat", "hct"];   // 12 位數: 黑貓或新竹 (使用者點對的)
+  const s = String(parcelId).trim().toUpperCase().replace(/\s+/g, ""); // 去空白+轉大寫, 兼容條碼帶空格
+  if (/^TW\d{12}[A-Z]$/.test(s)) return ["shopee"];          // 蝦皮店到家 (TW…)
+  if (/^7[A-Z0-9]{2}001C\d{6,}$/.test(s)) return ["seven11"]; // 7-11 交貨便 物流條碼 (7BE001C… / 7X2001C…)
+  if (/^C\d{10,15}$/.test(s)) return ["seven11"];            // 7-11 交貨便服務代碼 (C92826941076)
+  if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];       // 中華郵政 / 國際
+  if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];           // 全家 FamiPort 取貨號
+  if (/^4297\d{12}$/.test(s)) return ["fami"];               // 全家 物流條碼 16 位 (4297661510258048)
+  if (/^\d{2}[A-Z]{2}\d{9}$/.test(s)) return ["hilife"];     // 萊爾富 寄件代碼 (26KN825151502)
+  if (/^0015\d{12}$/.test(s)) return ["hilife"];             // 萊爾富 物流條碼 16 位 (0015359310000018)
+  if (/^339\d{7}$/.test(s)) return ["hct"];                  // 新竹物流 10 位 (3392361033)
+  if (/^4964\d{6}$/.test(s)) return ["momo"];                // momo (黑貓配送) 10 位 (4964595134)
   if (/^\d{6}[A-Z0-9]{8}$/.test(s)) return ["shopee_order"]; // 蝦皮訂單編號
+  if (/^\d{12}$/.test(s)) return ["blackcat", "hct"];        // 12 位純數字: 黑貓或新竹 (使用者點對的)
   return [];
 }
 
@@ -6732,6 +6917,8 @@ const CARRIER_LABELS = {
   blackcat:     "黑貓宅急便",
   hct:          "新竹物流",
   post:         "中華郵政 / 國際",
+  hilife:       "萊爾富 Hi-Life",
+  momo:         "MOMO 物流",
 };
 
 // 物流商縮圖 icon (12 位數雙選用)
@@ -6743,6 +6930,8 @@ const CARRIER_ICONS = {
   blackcat:     "🐈",
   hct:          "🚚",
   post:         "✉️",
+  hilife:       "🏪",
+  momo:         "🛍",
 };
 
 async function openTracking(parcelId, forceCarrier) {
@@ -7450,6 +7639,10 @@ function processA1Items(items, sourceLabel) {
 // 通路下拉變更
 document.getElementById("platform-select").addEventListener("change", (e) => {
   currentPlatform = e.target.value;
+  if (!currentPlatform || !PLATFORMS[currentPlatform]) {
+    document.getElementById("platform-hint").textContent = "請先選擇通路, 再上傳對應的 CSV。";
+    return;
+  }
   document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
   try { localStorage.setItem(PLATFORM_KEY, currentPlatform); } catch(err) {}
   console.log("[platform] 切換到", PLATFORMS[currentPlatform].label);
@@ -7460,6 +7653,7 @@ document.getElementById("a1-csv-file").addEventListener("change", (e) => {
   const f = e.target.files[0];
   console.log("[A1] 選擇了檔案:", f && f.name, f && f.size);
   if (!f) return;
+  if (!currentPlatform || !PLATFORMS[currentPlatform]) { showToast("⚠ 請先選擇通路, 再上傳 CSV"); e.target.value = ""; return; }
   if (state.roomMode) {
     if (!checkRoomBeforeReset("匯入新 CSV")) { e.target.value = ""; return; }
     leaveRoom(true);
@@ -7484,6 +7678,7 @@ document.getElementById("a1-csv-file").addEventListener("change", (e) => {
 
 // A1 CSV 貼上
 document.getElementById("a1-parse-paste-btn").addEventListener("click", () => {
+  if (!currentPlatform || !PLATFORMS[currentPlatform]) { showToast("⚠ 請先選擇通路, 再貼上"); return; }
   const txt = document.getElementById("a1-paste-area").value;
   console.log("[A1] 貼上內容長度:", txt.length);
   try {
@@ -7750,9 +7945,12 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     // iOS Safari 限制: 必須在使用者點擊事件「同一個 call stack」開啟檔案選擇器
     // 因此把 entryId 暫存, 直接觸發 file input, 確認與還原延後到 change 事件
     _pendingMergeEntryId = entryId;
+    if (entry.platform && PLATFORMS[entry.platform]) currentPlatform = entry.platform; // 追加沿用原單通路 (避免空通路造成解析失敗)
     document.getElementById("history-merge-file").click();
     return;
   }
+  const editBtn = e.target.closest("button[data-hist-edit]");
+  if (editBtn) { openHistEdit(editBtn.dataset.histEdit); return; }
   const del = e.target.closest("button[data-hist-delete]");
   if (del) {
     const id = del.dataset.histDelete;
@@ -7775,6 +7973,38 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     renderHistory();
     showToast("已刪除");
   }
+});
+
+// ✏️ 修改紀錄: 更正打錯的「通路 / 訂單類型」(只改標示, 不動已扣庫存)
+let _histEditId = null;
+function openHistEdit(id) {
+  const entry = allHistory().find(h => h.id === id);
+  if (!entry) { showToast("⚠ 找不到該紀錄"); return; }
+  _histEditId = id;
+  const sel = document.getElementById("hist-edit-platform");
+  sel.innerHTML = Object.entries(PLATFORMS).map(([k, v]) => `<option value="${k}">${(v.emoji || "")} ${escapeHtml(v.customer || v.label || k)}</option>`).join("") + `<option value="unknown">— 未指定</option>`;
+  sel.value = entry.platform || "unknown";
+  document.getElementById("hist-edit-type").value = entry.orderType || "normal";
+  document.getElementById("hist-edit-modal").hidden = false;
+}
+document.getElementById("hist-edit-cancel").addEventListener("click", () => { document.getElementById("hist-edit-modal").hidden = true; _histEditId = null; });
+document.getElementById("hist-edit-modal").addEventListener("click", (ev) => { if (ev.target.id === "hist-edit-modal") { document.getElementById("hist-edit-modal").hidden = true; _histEditId = null; } });
+document.getElementById("hist-edit-save").addEventListener("click", () => {
+  if (!_histEditId) return;
+  const entry = allHistory().find(h => h.id === _histEditId);
+  if (!entry) { showToast("⚠ 找不到該紀錄"); return; }
+  const newPlatform = document.getElementById("hist-edit-platform").value;
+  const newType = document.getElementById("hist-edit-type").value;
+  entry.platform = newPlatform; entry.orderType = newType;
+  const inLocal = history.find(h => h.id === _histEditId);
+  if (inLocal) { inLocal.platform = newPlatform; inLocal.orderType = newType; saveHistory(); }
+  const inCloud = cloudHistory.find(h => h.id === _histEditId);
+  if (inCloud) { inCloud.platform = newPlatform; inCloud.orderType = newType; }
+  pushHistoryToCloud(entry); // 推回雲端共享 (覆蓋同一筆)
+  document.getElementById("hist-edit-modal").hidden = true;
+  _histEditId = null;
+  renderHistory();
+  showToast("✓ 已修改 (通路 / 類型)");
 });
 
 document.getElementById("history-merge-file").addEventListener("change", (e) => {
@@ -9539,7 +9769,7 @@ function showHealthCheck(issues, onForce) {
 
 // 手動建單 modal 事件
 document.getElementById("open-manual-order-btn").addEventListener("click", () => {
-  document.getElementById("manual-platform-select").value = currentPlatform || "a1";
+  document.getElementById("manual-platform-select").value = currentPlatform || "";
   document.getElementById("manual-parcel-id").value = "";
   document.getElementById("manual-order-modal").hidden = false;
   setTimeout(() => {
@@ -9561,6 +9791,7 @@ document.getElementById("manual-order-modal").addEventListener("click", (e) => {
 });
 document.getElementById("manual-create").addEventListener("click", () => {
   const platform = document.getElementById("manual-platform-select").value;
+  if (!platform || !PLATFORMS[platform]) { showToast("⚠ 請先選擇通路"); document.getElementById("manual-platform-select").focus(); return; }
   const rawId = document.getElementById("manual-parcel-id").value.trim();
   if (!rawId) {
     showToast("⚠ 寄件單號必填");
@@ -9623,7 +9854,7 @@ document.getElementById("manual-create").addEventListener("click", () => {
 
 // 補寄訂單 modal 事件
 function openReplacementModal(prefillId) {
-  document.getElementById("repl-platform-select").value = currentPlatform || "a1";
+  document.getElementById("repl-platform-select").value = currentPlatform || "";
   document.getElementById("repl-parcel-id").value = prefillId || "";
   document.getElementById("repl-customer-phone").value = "";
   document.getElementById("repl-reason").value = "商品缺漏";
@@ -9644,6 +9875,7 @@ document.getElementById("replacement-order-modal").addEventListener("click", (e)
 });
 document.getElementById("repl-create").addEventListener("click", () => {
   const platform = document.getElementById("repl-platform-select").value;
+  if (!platform || !PLATFORMS[platform]) { showToast("⚠ 請先選擇通路"); document.getElementById("repl-platform-select").focus(); return; }
   const rawId = document.getElementById("repl-parcel-id").value.trim();
   const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("repl-customer-phone").value.trim();
@@ -9730,7 +9962,7 @@ document.getElementById("repl-customer-phone").addEventListener("input", (e) => 
 
 // 退貨確認 modal 事件
 function openReturnModal(prefillId) {
-  document.getElementById("ret-platform-select").value = currentPlatform || "a1";
+  document.getElementById("ret-platform-select").value = currentPlatform || "";
   document.getElementById("ret-parcel-id").value = prefillId || "";
   document.getElementById("ret-customer-phone").value = "";
   document.getElementById("ret-reason").value = "不喜歡/不適合";
@@ -9751,6 +9983,7 @@ document.getElementById("return-order-modal").addEventListener("click", (e) => {
 });
 document.getElementById("ret-create").addEventListener("click", () => {
   const platform = document.getElementById("ret-platform-select").value;
+  if (!platform || !PLATFORMS[platform]) { showToast("⚠ 請先選擇通路"); document.getElementById("ret-platform-select").focus(); return; }
   const rawId = document.getElementById("ret-parcel-id").value.trim();
   const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("ret-customer-phone").value.trim();
@@ -9953,7 +10186,7 @@ function actuallyCompleteShipping(opts) {
   opts = opts || {};
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
-  // 資料安全: 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失
+  // 🔒 資料安全命脈 (規範一-1): 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失。此判斷不可移除。
   if (entry && !_lastHistorySaveOk) {
     alert("⚠ 出貨紀錄存檔失敗（可能儲存空間已滿）。\n\n為避免資料遺失，本次清單不會被清空。\n請先到 ⚙ → 資料搬家/備份 匯出備份、或清掉舊出貨紀錄，再按一次「出貨完成」。");
     return;
@@ -9976,6 +10209,12 @@ function actuallyCompleteShipping(opts) {
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, ..._roomKeep };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
+  // 通路防呆: 真正收尾(非換下一位客人)後把通路重設為「請先選擇通路」, 下一批要重新明確選, 避免沿用上一批通路而記錯
+  if (!_keepRoom) {
+    currentPlatform = "";
+    const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+    const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+  }
   reportModal.hidden = true;
   render();
   SOUND.shipDone();
@@ -10345,15 +10584,10 @@ if (stockTake) {
     setTimeout(() => showToast("↻ 上次的盤點還沒完成, 已自動繼續"), 800);
   }, 300);
 }
-// 載入上次選的通路
-try {
-  const p = localStorage.getItem(PLATFORM_KEY);
-  if (p && PLATFORMS[p]) currentPlatform = p;
-} catch(e) {}
-// 最後保險: 若 currentPlatform 不存在於 PLATFORMS, 退回 a1
-if (!PLATFORMS[currentPlatform]) currentPlatform = "a1";
-document.getElementById("platform-select").value = currentPlatform;
-document.getElementById("platform-hint").textContent = PLATFORMS[currentPlatform].hint;
+// 通路: 初始一律「請先選擇通路」(不自動沿用上次), 強迫每次明確選, 避免記錯通路 / 誤上傳到錯的 CSV
+currentPlatform = "";
+document.getElementById("platform-select").value = "";
+document.getElementById("platform-hint").textContent = "請先選擇通路, 再上傳對應的 CSV。";
 render();
 // 若上次離線前在房間模
 // 若上次離線前在房間模式, 自動恢復同步
