@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>宅配寄件紀錄</title>
+<style>
+  :root{
+    --primary:#E84A02; --primary-light:#fdebe0; --bg:#faf7f3; --card:#ffffff;
+    --text:#2b2520; --text-soft:#8a7e72; --border:#e8e1d8; --border2:#d8cfc4;
+    --success:#1f9d55; --success-bg:#e6f5ec; --warn:#b8860b; --warn-bg:#fbf3df; --danger:#d23b3b; --danger-bg:#fbe8e8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC",sans-serif;background:var(--bg);color:var(--text);
+       padding:calc(12px + env(safe-area-inset-top,0px)) 12px 40px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  header h1{font-size:1.25rem;margin:0;color:var(--primary);flex:1}
+  header a{font-size:.8rem;color:var(--text-soft);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+  label{display:block;font-size:.82rem;font-weight:700;margin:10px 0 4px}
+  label .req{color:var(--danger)}
+  input,select,textarea{width:100%;padding:10px;font-size:1rem;border:1px solid var(--border2);border-radius:9px;background:#fff;font-family:inherit}
+  textarea{min-height:54px;resize:vertical}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .btn{border:0;border-radius:10px;padding:12px 14px;font-size:1rem;font-weight:700;cursor:pointer}
+  .btn.full{width:100%}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.ok{background:var(--success);color:#fff}
+  .btn.outline{background:#fff;border:1px solid var(--border2);color:var(--text)}
+  .btn.sm{padding:7px 11px;font-size:.82rem;border-radius:8px}
+  .btn.danger{background:#fff;border:1px solid var(--danger);color:var(--danger)}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;font-size:.85rem;margin:4px 0 10px}
+  .stat{background:var(--primary-light);color:var(--primary);font-weight:700;padding:6px 12px;border-radius:999px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;padding:9px;border:1px solid var(--border2);background:#fff;border-radius:9px;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--text-soft)}
+  .tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .rec{border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:9px;background:#fff}
+  .rec.shipped{opacity:.72}
+  .rec-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .badge{font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:999px}
+  .b-type{background:var(--primary-light);color:var(--primary)}
+  .b-pending{background:var(--warn-bg);color:var(--warn)}
+  .b-shipped{background:var(--success-bg);color:var(--success)}
+  .b-reason{background:var(--danger-bg);color:var(--danger)}
+  .rec-main{font-weight:700}
+  .rec-sub{font-size:.78rem;color:var(--text-soft);margin-top:2px;line-height:1.5}
+  .rec-act{display:flex;gap:6px;margin-top:8px}
+  .empty{text-align:center;color:var(--text-soft);padding:26px}
+  .kv{font-size:.75rem;color:var(--text-soft)}
+  details summary{cursor:pointer;font-weight:700;font-size:.85rem;color:var(--text-soft)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2b2520;color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span style="font-size:1.6rem">🚚</span>
+    <h1>宅配寄件紀錄</h1>
+    <a href="index.html">← 回出貨 App</a>
+  </header>
+
+  <!-- 新增 -->
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>寄件類型 <span class="req">*</span></label>
+        <select id="f-type"></select>
+      </div>
+      <div>
+        <label>包裹大小</label>
+        <select id="f-size"></select>
+      </div>
+    </div>
+    <div id="reason-wrap" hidden>
+      <label>補寄 / 寄件原因</label>
+      <select id="f-reason"></select>
+    </div>
+    <div class="row">
+      <div><label>收件人</label><input id="f-recipient" placeholder="收件人姓名"></div>
+      <div><label>單號 / 物流單號</label><input id="f-order" placeholder="訂單號或物流單號"></div>
+    </div>
+    <div class="row">
+      <div><label>寄件人(誰負責寄)</label><input id="f-shipper" placeholder="你的暱稱"></div>
+    </div>
+    <label>備註</label>
+    <input id="f-note" placeholder="選填">
+    <button class="btn primary full" id="add-btn" style="margin-top:12px">＋ 新增一筆(待寄)</button>
+  </div>
+
+  <!-- 清單 -->
+  <div class="card">
+    <div class="stats" id="stats"></div>
+    <div class="tabs">
+      <button data-tab="pending" class="active">待寄 <span id="c-pending">0</span></button>
+      <button data-tab="shipped">已寄 <span id="c-shipped">0</span></button>
+      <button data-tab="all">全部 <span id="c-all">0</span></button>
+    </div>
+    <input id="search" placeholder="🔍 搜尋 收件人 / 單號 / 寄件人" style="margin-bottom:10px">
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button class="btn outline sm" id="exp-csv">📤 匯出 CSV</button>
+      <button class="btn outline sm" id="exp-json">💾 匯出備份</button>
+      <button class="btn outline sm" id="imp-json">📥 匯入備份</button>
+    </div>
+    <input type="file" id="imp-file" accept=".json" hidden>
+    <details style="margin-top:12px">
+      <summary>☁ 雲端同步設定(選配)</summary>
+      <label>同步 Worker URL</label>
+      <input id="sync-url" placeholder="https://...workers.dev (留空=只存本機)">
+      <p class="kv" style="margin-top:6px">填了之後新增/標記/刪除會同步到雲端,多台共享。需先部署 shipping_sync_worker.js(見「宅配寄件紀錄_說明.md」)。</p>
+      <button class="btn outline sm" id="sync-now" style="margin-top:8px">↻ 立即同步</button>
+    </details>
+    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.1.0</span> · 宅配寄件紀錄</p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const APP_VERSION="1.1.0";
+const KEY="koca_shipping_records_v1", NAME_KEY="koca_shipping_shipper", URL_KEY="koca_shipping_sync_url";
+const TYPES={reship:{label:"補寄",emoji:"📮"},normal:{label:"一般宅配",emoji:"🚚"},exchange:{label:"換貨寄出",emoji:"🔁"},returnIn:{label:"退貨收回",emoji:"↩️"}};
+const REASONS={missing:"漏寄 / 缺件補寄",damage:"破損補寄",wrong:"出錯貨重寄",lost:"包裹遺失重寄",exchange:"換貨",returnIn:"退貨收回",other:"其他"};
+const SIZES={small:"小",medium:"中",large:"大",xlarge:"特大"};
+
+let records=[], tab="pending", q="";
+const $=id=>document.getElementById(id);
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1800);}
+function load(){try{records=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){records=[]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(records))}catch(e){toast("⚠ 儲存失敗,空間可能已滿")}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function todayKey(){const d=new Date();return d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate()}
+function fmt(ts){if(!ts)return"";const d=new Date(ts);const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`}
+
+// 下拉
+function fillSelect(el,obj,withEmoji){el.innerHTML=Object.entries(obj).map(([k,v])=>{const lab=withEmoji?`${v.emoji} ${v.label}`:(v.label||v);return `<option value="${k}">${lab}</option>`}).join("")}
+fillSelect($("f-type"),TYPES,true); fillSelect($("f-size"),SIZES,false); fillSelect($("f-reason"),REASONS,false);
+$("f-size").value="medium";
+function syncReason(){$("reason-wrap").hidden = $("f-type").value!=="reship";}
+$("f-type").addEventListener("change",syncReason); syncReason();
+
+// 記住寄件人/URL
+$("f-shipper").value=localStorage.getItem(NAME_KEY)||"";
+$("sync-url").value=localStorage.getItem(URL_KEY)||"";
+$("sync-url").addEventListener("change",e=>localStorage.setItem(URL_KEY,e.target.value.trim()));
+
+// 新增
+$("add-btn").addEventListener("click",()=>{
+  const type=$("f-type").value;
+  const rec={
+    id:Date.now()+"_"+Math.random().toString(36).slice(2,7),
+    createdAt:new Date().toISOString(),
+    type, reason: type==="reship"?$("f-reason").value:"",
+    recipient:$("f-recipient").value.trim(), orderNo:$("f-order").value.trim(),
+    size:$("f-size").value, shipper:$("f-shipper").value.trim(),
+    note:$("f-note").value.trim(), status:"pending", shippedAt:null
+  };
+  if(!rec.recipient && !rec.orderNo){toast("⚠ 至少填收件人或單號");return;}
+  localStorage.setItem(NAME_KEY,rec.shipper);
+  records.unshift(rec); save(); pushCloud(rec);
+  $("f-recipient").value="";$("f-order").value="";$("f-note").value="";
+  toast("✓ 已新增(待寄)"); render();
+});
+
+// 清單操作
+$("list").addEventListener("click",e=>{
+  const ship=e.target.closest("[data-ship]"); const del=e.target.closest("[data-del]");
+  if(ship){const r=records.find(x=>x.id===ship.dataset.ship);if(r){r.status="shipped";r.shippedAt=new Date().toISOString();if(!r.shipper)r.shipper=localStorage.getItem(NAME_KEY)||"";save();pushCloud(r);render();toast("✓ 已標記寄出")}}
+  if(del){const r=records.find(x=>x.id===del.dataset.del);if(r&&confirm("刪除這筆寄件紀錄?")){records=records.filter(x=>x.id!==r.id);save();delCloud(r.id);render();toast("已刪除")}}
+});
+$("search").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render()});
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("active",x===b));render()}));
+
+function render(){
+  const pend=records.filter(r=>r.status==="pending");
+  const ship=records.filter(r=>r.status==="shipped");
+  $("c-pending").textContent=pend.length;$("c-shipped").textContent=ship.length;$("c-all").textContent=records.length;
+  // 今日各人已寄
+  const tk=todayKey(),byWho={};
+  ship.forEach(r=>{if(r.shippedAt&&new Date(r.shippedAt).getFullYear()+"/"+(new Date(r.shippedAt).getMonth()+1)+"/"+new Date(r.shippedAt).getDate()===tk){const w=r.shipper||"(未填)";byWho[w]=(byWho[w]||0)+1}});
+  let stats=`<span class="stat">待寄 ${pend.length}</span>`;
+  Object.entries(byWho).forEach(([w,n])=>stats+=`<span class="stat" style="background:var(--success-bg);color:var(--success)">今日 ${esc(w)} 已寄 ${n}</span>`);
+  $("stats").innerHTML=stats;
+
+  let arr = tab==="pending"?pend : tab==="shipped"?ship : records.slice();
+  if(q) arr=arr.filter(r=>[r.recipient,r.orderNo,r.shipper,r.note].join(" ").toLowerCase().includes(q));
+  if(arr.length===0){$("list").innerHTML='<div class="empty">📭 沒有紀錄</div>';return;}
+  $("list").innerHTML=arr.map(r=>{
+    const t=TYPES[r.type]||{label:r.type,emoji:"📦"};
+    const reason=r.reason?`<span class="badge b-reason">${esc(REASONS[r.reason]||r.reason)}</span>`:"";
+    const st=r.status==="shipped"?`<span class="badge b-shipped">✓ 已寄 ${fmt(r.shippedAt)}</span>`:`<span class="badge b-pending">待寄</span>`;
+    return `<div class="rec ${r.status==="shipped"?"shipped":""}">
+      <div class="rec-top"><span class="badge b-type">${t.emoji} ${t.label}</span>${reason}${st}</div>
+      <div class="rec-main">${esc(r.recipient||"(未填收件人)")}${r.orderNo?` · ${esc(r.orderNo)}`:""}</div>
+      <div class="rec-sub">包裹:${esc(SIZES[r.size]||r.size||"-")} · 寄件人:${esc(r.shipper||"-")} · 建立 ${fmt(r.createdAt)}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
+      <div class="rec-act">
+        ${r.status==="pending"?`<button class="btn ok sm" data-ship="${r.id}">✓ 標記已寄</button>`:""}
+        <button class="btn danger sm" data-del="${r.id}">🗑 刪除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// 匯出 / 匯入
+$("exp-csv").addEventListener("click",()=>{
+  if(!records.length){toast("沒有資料");return;}
+  const head=["建立時間","寄件類型","原因","收件人","單號","包裹大小","寄件人","狀態","寄出時間","備註"];
+  const rows=[head].concat(records.map(r=>[fmtFull(r.createdAt),(TYPES[r.type]||{}).label||r.type,REASONS[r.reason]||r.reason||"",r.recipient,r.orderNo,SIZES[r.size]||r.size,r.shipper,r.status==="shipped"?"已寄":"待寄",fmtFull(r.shippedAt),r.note]));
+  const csv="﻿"+rows.map(rw=>rw.map(c=>{let s=String(c==null?"":c);if(/^[=+\-@]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(",")).join("\r\n");
+  dl(new Blob([csv],{type:"text/csv;charset=utf-8;"}),`宅配寄件紀錄_${new Date().toISOString().slice(0,10)}.csv`);
+});
+function fmtFull(ts){if(!ts)return"";const d=new Date(ts);const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+$("exp-json").addEventListener("click",()=>{dl(new Blob([JSON.stringify({_meta:{app:"宅配寄件紀錄",version:APP_VERSION,exportedAt:new Date().toISOString()},records},null,2)],{type:"application/json"}),`宅配寄件紀錄_備份_${new Date().toISOString().slice(0,10)}.json`)});
+$("imp-json").addEventListener("click",()=>$("imp-file").click());
+$("imp-file").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);const inc=Array.isArray(d)?d:(d.records||[]);const ids=new Set(records.map(r=>r.id));let n=0;inc.forEach(r=>{if(r&&r.id&&!ids.has(r.id)){records.push(r);n++}});records.sort((a,b)=>a.createdAt<b.createdAt?1:-1);save();render();toast(`✓ 匯入 ${n} 筆`)}catch(err){toast("⚠ 檔案格式錯誤")}};rd.readAsText(f,"UTF-8");e.target.value="";});
+function dl(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+
+// 雲端同步(選配;需 shipping_sync_worker.js)
+function syncUrl(){return (localStorage.getItem(URL_KEY)||"").replace(/\/$/,"")}
+async function pushCloud(r){const u=syncUrl();if(!u)return;try{await fetch(u+"/api/shipping/upsert",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({record:r})})}catch(e){}}
+async function delCloud(id){const u=syncUrl();if(!u)return;try{await fetch(u+"/api/shipping/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})})}catch(e){}}
+async function pullCloud(){const u=syncUrl();if(!u){toast("未設定 Worker URL");return;}try{const res=await fetch(u+"/api/shipping/list");const d=await res.json();const inc=(d&&d.records)||(Array.isArray(d)?d:[]);const map={};records.forEach(r=>map[r.id]=r);inc.forEach(r=>{if(r&&r.id)map[r.id]=r});records=Object.values(map).sort((a,b)=>a.createdAt<b.createdAt?1:-1);save();render();toast("✓ 已同步")}catch(e){toast("⚠ 同步失敗,檢查 Worker URL")}}
+$("sync-now").addEventListener("click",pullCloud);
+
+$("ver").textContent=APP_VERSION;
+load(); render();
+if(syncUrl()) pullCloud();
+</script>
+</body>
+</html>
