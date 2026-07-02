@@ -80,10 +80,12 @@
     <div class="row">
       <div><label>平台 / 通路</label><select id="f-plat"></select></div>
     </div>
-    <div class="row">
-      <div><label>收件人</label><input id="f-recipient" placeholder="收件人姓名"></div>
-      <div><label>單號 / 物流單號</label><input id="f-order" placeholder="訂單號或物流單號"></div>
-    </div>
+    <label>收件人</label>
+    <input id="f-recipient" placeholder="收件人姓名">
+    <label>收件人電話(選填)</label>
+    <input id="f-phone" inputmode="tel" placeholder="選填">
+    <label>收件人地址(選填)</label>
+    <input id="f-addr" placeholder="選填">
     <div class="row">
       <div><label>寄件人(誰負責寄)</label><input id="f-shipper" placeholder="你的暱稱"></div>
     </div>
@@ -100,7 +102,7 @@
       <button data-tab="shipped">已寄 <span id="c-shipped">0</span></button>
       <button data-tab="all">全部 <span id="c-all">0</span></button>
     </div>
-    <input id="search" placeholder="🔍 搜尋 收件人 / 單號 / 寄件人" style="margin-bottom:10px">
+    <input id="search" placeholder="🔍 搜尋 收件人 / 電話 / 地址 / 寄件人" style="margin-bottom:10px">
     <div id="list"></div>
   </div>
 
@@ -118,13 +120,13 @@
       <p class="kv" style="margin-top:6px">填了之後新增/標記/刪除會同步到雲端,多台共享。需先部署 shipping_sync_worker.js(見「宅配寄件紀錄_說明.md」)。</p>
       <button class="btn outline sm" id="sync-now" style="margin-top:8px">↻ 立即同步</button>
     </details>
-    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.2.0</span> · 宅配寄件紀錄</p>
+    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.3.0</span> · 宅配寄件紀錄</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION="1.2.0";
+const APP_VERSION="1.3.0";
 const KEY="koca_shipping_records_v1", NAME_KEY="koca_shipping_shipper", URL_KEY="koca_shipping_sync_url";
 const TYPES={reship:{label:"補寄",emoji:"📮"},normal:{label:"一般宅配",emoji:"🚚"},exchange:{label:"換貨寄出",emoji:"🔁"},returnIn:{label:"退貨收回",emoji:"↩️"}};
 const REASONS={missing:"漏寄 / 缺件補寄",damage:"破損補寄",wrong:"出錯貨重寄",lost:"包裹遺失重寄",exchange:"換貨",returnIn:"退貨收回",other:"其他"};
@@ -159,14 +161,14 @@ $("add-btn").addEventListener("click",()=>{
     id:Date.now()+"_"+Math.random().toString(36).slice(2,7),
     createdAt:new Date().toISOString(),
     type, reason: type==="reship"?$("f-reason").value:"",
-    recipient:$("f-recipient").value.trim(), orderNo:$("f-order").value.trim(),
+    recipient:$("f-recipient").value.trim(), phone:$("f-phone").value.trim(), addr:$("f-addr").value.trim(),
     size:$("f-size").value, platform:$("f-plat").value, shipper:$("f-shipper").value.trim(),
     note:$("f-note").value.trim(), status:"pending", shippedAt:null
   };
-  if(!rec.recipient && !rec.orderNo){toast("⚠ 至少填收件人或單號");return;}
+  if(!rec.recipient && !rec.phone && !rec.addr){toast("⚠ 至少填收件人 / 電話 / 地址其中一項");return;}
   localStorage.setItem(NAME_KEY,rec.shipper);
   records.unshift(rec); save(); pushCloud(rec);
-  $("f-recipient").value="";$("f-order").value="";$("f-note").value="";
+  $("f-recipient").value="";$("f-phone").value="";$("f-addr").value="";$("f-note").value="";
   toast("✓ 已新增(待寄)"); render();
 });
 
@@ -191,7 +193,7 @@ function render(){
   $("stats").innerHTML=stats;
 
   let arr = tab==="pending"?pend : tab==="shipped"?ship : records.slice();
-  if(q) arr=arr.filter(r=>[r.recipient,r.orderNo,r.shipper,r.note].join(" ").toLowerCase().includes(q));
+  if(q) arr=arr.filter(r=>[r.recipient,r.phone,r.addr,r.shipper,r.note].join(" ").toLowerCase().includes(q));
   if(arr.length===0){$("list").innerHTML='<div class="empty">📭 沒有紀錄</div>';return;}
   $("list").innerHTML=arr.map(r=>{
     const t=TYPES[r.type]||{label:r.type,emoji:"📦"};
@@ -199,8 +201,8 @@ function render(){
     const st=r.status==="shipped"?`<span class="badge b-shipped">✓ 已寄 ${fmt(r.shippedAt)}</span>`:`<span class="badge b-pending">待寄</span>`;
     return `<div class="rec ${r.status==="shipped"?"shipped":""}">
       <div class="rec-top"><span class="badge b-type">${t.emoji} ${t.label}</span>${reason}${st}</div>
-      <div class="rec-main">${esc(r.recipient||"(未填收件人)")}${r.orderNo?` · ${esc(r.orderNo)}`:""}</div>
-      <div class="rec-sub">${r.platform&&r.platform!=="unknown"?`平台:${esc(PLATS[r.platform]||r.platform)} · `:""}包裹:${esc(SIZES[r.size]||r.size||"-")} · 寄件人:${esc(r.shipper||"-")} · 建立 ${fmt(r.createdAt)}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
+      <div class="rec-main">${esc(r.recipient||"(未填收件人)")}</div>
+      <div class="rec-sub">${r.platform&&r.platform!=="unknown"?`平台:${esc(PLATS[r.platform]||r.platform)} · `:""}包裹:${esc(SIZES[r.size]||r.size||"-")} · 寄件人:${esc(r.shipper||"-")} · 建立 ${fmt(r.createdAt)}${r.phone?`<br>📱 ${esc(r.phone)}`:""}${r.addr?`<br>🏠 ${esc(r.addr)}`:""}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
       <div class="rec-act">
         ${r.status==="pending"?`<button class="btn ok sm" data-ship="${r.id}">✓ 標記已寄</button>`:""}
         <button class="btn danger sm" data-del="${r.id}">🗑 刪除</button>
@@ -213,8 +215,8 @@ function render(){
 $("exp-csv").addEventListener("click",()=>{
   if(!records.length){toast("沒有資料");return;}
   const PLAT_PLAIN={unknown:"",shopee:"蝦皮",momo:"MOMO",coupang:"酷澎",koca:"KOCA官網",seven:"7-11",family:"全家",hilife:"萊爾富",hsinchu:"新竹物流",other:"其他"};
-  const head=["建立時間","寄件類型","平台","原因","收件人","單號","包裹大小","寄件人","狀態","寄出時間","備註"];
-  const rows=[head].concat(records.map(r=>[fmtFull(r.createdAt),(TYPES[r.type]||{}).label||r.type,PLAT_PLAIN[r.platform]||r.platform||"",REASONS[r.reason]||r.reason||"",r.recipient,r.orderNo,SIZES[r.size]||r.size,r.shipper,r.status==="shipped"?"已寄":"待寄",fmtFull(r.shippedAt),r.note]));
+  const head=["建立時間","寄件類型","平台","原因","收件人","電話","地址","包裹大小","寄件人","狀態","寄出時間","備註"];
+  const rows=[head].concat(records.map(r=>[fmtFull(r.createdAt),(TYPES[r.type]||{}).label||r.type,PLAT_PLAIN[r.platform]||r.platform||"",REASONS[r.reason]||r.reason||"",r.recipient,r.phone||"",r.addr||"",SIZES[r.size]||r.size,r.shipper,r.status==="shipped"?"已寄":"待寄",fmtFull(r.shippedAt),r.note]));
   const csv="﻿"+rows.map(rw=>rw.map(c=>{let s=String(c==null?"":c);if(/^[=+\-@]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(",")).join("\r\n");
   dl(new Blob([csv],{type:"text/csv;charset=utf-8;"}),`宅配寄件紀錄_${new Date().toISOString().slice(0,10)}.csv`);
 });
