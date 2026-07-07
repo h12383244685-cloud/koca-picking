@@ -1615,11 +1615,9 @@ footer.summary-bar {
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎 (Coupang)</option>
-      <option value="koca">🌐 KOCA 官網</option>
-      <option value="seven">🏪 7-11</option>
-      <option value="family">🏬 全家</option>
-      <option value="hilife">🏪 萊爾富</option>
-      <option value="hsinchu">🚚 新竹物流</option>
+      <option value="koca">🌐 官方</option>
+      <option value="kol">📣 KOL</option>
+      <option value="meet">🤝 面交</option>
     </select>
 
     <p class="hint" id="platform-hint">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
@@ -1732,11 +1730,9 @@ footer.summary-bar {
           <option value="a1">🛒 蝦皮</option>
           <option value="momo">🛍 MOMO</option>
           <option value="coupang">🅒 酷澎</option>
-          <option value="koca">🌐 KOCA官網</option>
-          <option value="seven">🏪 7-11</option>
-          <option value="family">🏬 全家</option>
-          <option value="hilife">🏪 萊爾富</option>
-          <option value="hsinchu">🚚 新竹物流</option>
+          <option value="koca">🌐 官方</option>
+          <option value="kol">📣 KOL</option>
+          <option value="meet">🤝 面交</option>
           <option value="unknown">未指定</option>
         </select>
       </label>
@@ -1950,6 +1946,8 @@ footer.summary-bar {
         <button class="btn sm" id="quick-add-all" style="white-space: nowrap;">▶ 全部加入</button>
       </div>
 
+      <input type="text" id="unmapped-search" placeholder="🔍 搜尋 SKU / 名稱" style="width:100%; padding:7px 9px; font-size:0.8125rem; border:1px solid var(--border); border-radius:6px; margin-bottom:6px;">
+
       <div id="unmapped-list" style="max-height: 360px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;"></div>
     </details>
 
@@ -2067,6 +2065,20 @@ footer.summary-bar {
       </details>
 
       <details style="margin-bottom:8px;">
+        <summary style="font-weight:600; font-size:0.85rem;">☁ 看到彼此的出貨紀錄(Spidey Key)</summary>
+        <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
+          <strong>兩件事要分清楚:</strong><br>
+          • <strong>共同包貨(一起刷商品)</strong>=房間,<strong>不用金鑰</strong>,填 Worker URL + 暱稱、輸 4 碼就能一起刷。<br>
+          • <strong>共享出貨紀錄(看彼此完成的單)</strong>=雲端,<strong>一定要 Spidey Key</strong>。<br>
+          <strong>要看到同仁的出貨紀錄:</strong>兩台都要在 ⚙ 外部整合 →「X-Spidey-Key」欄位填<strong>同一組</strong>(跟 Worker 設定的一樣),完成的單才會上雲共享。<br>
+          • 只有一台有填 → 你看得到自己的、看不到對方的(對方沒上雲)。<br>
+          • 填好後回出貨紀錄按「重新整理」拉一次。<br>
+          <strong>測試跳「連線失敗 HTTP 401」</strong> = 金鑰沒填或填錯(<strong>不是 URL 錯</strong>);把兩台 Spidey Key 對成一模一樣即可。<br>
+          💡 只想一起刷商品、不需要共享紀錄的話,401 可以不理,刷商品照常運作。
+        </div>
+      </details>
+
+      <details style="margin-bottom:8px;">
         <summary style="font-weight:600; font-size:0.85rem;">📮 補寄 / ↩️ 退貨 / 🏭 入倉</summary>
         <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
           • <strong>補寄</strong>:售後補件。客人手機選填。<strong>不扣庫存、不推</strong>。<br>
@@ -2108,6 +2120,8 @@ footer.summary-bar {
         <summary style="font-weight:600; font-size:0.85rem;">❓ 常見問題 / 紅旗</summary>
         <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
           • <strong>某商品清單裡沒有</strong> → 用最新版重新匯入當天 CSV。<br>
+          • <strong>看不到同仁的出貨紀錄</strong> → 兩台的 Spidey Key 要填同一組(見上面「☁ 看到彼此的出貨紀錄」)。<br>
+          • <strong>連線失敗 HTTP 401</strong> → 是金鑰沒填/填錯,不是 URL 錯;共同包貨刷商品不受影響。<br>
           • <strong>數字對不上</strong> → 看徽章是否 ⚠;兩台版本是否一致。<br>
           • <strong>白畫面 / 打不開</strong> → 先用備份還原,並回報。<br>
           • <strong>連動商品 / 倍數失效</strong> → 回報。<br>
@@ -2172,6 +2186,7 @@ footer.summary-bar {
       </div>
 
       <button class="btn full outline" id="sound-test-btn">🔉 測試出貨完成音 (3 連音)</button>
+      <button class="btn full settings-save-btn" style="margin-top:12px; background: var(--success);">💾 儲存設定</button>
     </div>
 
     <!-- 子視圖: 外觀主題 -->
@@ -2233,6 +2248,7 @@ footer.summary-bar {
           <div class="theme-check">✓</div>
         </button>
       </div>
+      <button class="btn full settings-save-btn" style="margin-top:14px; background: var(--success);">💾 儲存設定</button>
     </div>
 
     <!-- 子視圖: 外部整合 -->
@@ -2318,6 +2334,7 @@ footer.summary-bar {
           6. 複製 Web App 網址 → 貼上方
         </p>
       </details>
+      <button class="btn full settings-save-btn" style="margin-top:14px; background: var(--success);">💾 儲存設定</button>
     </div>
 
     <!-- 子視圖: 資料搬家 / 備份 -->
@@ -2513,11 +2530,9 @@ footer.summary-bar {
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
-      <option value="koca">🌐 KOCA官網</option>
-          <option value="seven">🏪 7-11</option>
-          <option value="family">🏬 全家</option>
-          <option value="hilife">🏪 萊爾富</option>
-          <option value="hsinchu">🚚 新竹物流</option>
+      <option value="koca">🌐 官方</option>
+      <option value="kol">📣 KOL</option>
+      <option value="meet">🤝 面交</option>
     </select>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 / 訂單編號 <span style="color: var(--danger);">*</span></label>
@@ -2673,11 +2688,9 @@ footer.summary-bar {
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
-      <option value="koca">🌐 KOCA官網</option>
-          <option value="seven">🏪 7-11</option>
-          <option value="family">🏬 全家</option>
-          <option value="hilife">🏪 萊爾富</option>
-          <option value="hsinchu">🚚 新竹物流</option>
+      <option value="koca">🌐 官方</option>
+      <option value="kol">📣 KOL</option>
+      <option value="meet">🤝 面交</option>
     </select>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">寄件單號 <span style="color: var(--danger);">*</span></label>
@@ -2737,11 +2750,9 @@ footer.summary-bar {
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
       <option value="coupang">🅒 酷澎</option>
-      <option value="koca">🌐 KOCA官網</option>
-          <option value="seven">🏪 7-11</option>
-          <option value="family">🏬 全家</option>
-          <option value="hilife">🏪 萊爾富</option>
-          <option value="hsinchu">🚚 新竹物流</option>
+      <option value="koca">🌐 官方</option>
+      <option value="kol">📣 KOL</option>
+      <option value="meet">🤝 面交</option>
     </select>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">退貨回件寄件單號 <span style="color: var(--danger);">*</span></label>
@@ -3019,7 +3030,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.1.7 · 2026-06-26";
+const APP_VERSION = "V3.2.1 · 2026-07-07";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3028,12 +3039,15 @@ const APP_VERSION = "V3.1.7 · 2026-06-26";
 const PLATFORMS = {
   a1:      { label: "蝦皮",       emoji: "🛒", customer: "蝦皮",    kocaCustomer: "蝦皮", hint: "把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。" },
   momo:    { label: "MOMO",          emoji: "🛍", customer: "MOMO",    kocaCustomer: "MOMO", hint: "從 MOMO 後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 MOMO 客製化，會用 A1 邏輯嘗試。如果失敗請把 CSV 給開發者。" },
+  koca:    { label: "官方",          emoji: "🌐", customer: "官方",    kocaCustomer: "官方", hint: "官方通路(原 KOCA 官網)。從官網後台匯出訂單 CSV 上傳,或用「手動建單」逐筆刷單號。" },
   coupang: { label: "酷澎 Coupang",  emoji: "🅒", customer: "酷澎",    kocaCustomer: "酷澎", hint: "從酷澎賣家中心匯出訂單 CSV 上傳。⚠ 解析器尚未針對酷澎客製化。" },
-  koca:    { label: "KOCA 官網",     emoji: "🌐", customer: "KOCA官網", kocaCustomer: "官網", hint: "從 KOCA 自架官網後台匯出訂單 CSV 上傳。⚠ 解析器尚未針對 KOCA 客製化。" },
-  seven:   { label: "7-11",          emoji: "🏪", customer: "7-11",    kocaCustomer: "7-11",    hint: "7-11 店取訂單。通常用「手動建單」逐筆刷單號;若有 CSV 可上傳(會用 A1 邏輯嘗試)。" },
-  family:  { label: "全家",          emoji: "🏬", customer: "全家",    kocaCustomer: "全家",    hint: "全家店取訂單。通常用「手動建單」逐筆刷單號;若有 CSV 可上傳(會用 A1 邏輯嘗試)。" },
-  hilife:  { label: "萊爾富",        emoji: "🏪", customer: "萊爾富",  kocaCustomer: "萊爾富",  hint: "萊爾富店取訂單。通常用「手動建單」逐筆刷單號;若有 CSV 可上傳(會用 A1 邏輯嘗試)。" },
-  hsinchu: { label: "新竹物流",      emoji: "🚚", customer: "新竹物流", kocaCustomer: "新竹物流", hint: "新竹物流宅配訂單。通常用「手動建單」逐筆刷單號;若有 CSV 可上傳(會用 A1 邏輯嘗試)。" },
+  kol:     { label: "KOL",           emoji: "📣", customer: "KOL",     kocaCustomer: "KOL",  hint: "KOL / 團購通路。通常用「手動建單」逐筆刷單號。" },
+  meet:    { label: "面交",          emoji: "🤝", customer: "面交",    kocaCustomer: "面交", hint: "面交 / 自取。通常用「手動建單」逐筆刷單號。" },
+  // ── 已停用的舊通路 (legacy): 不出現在新的通路下拉, 但保留讓「舊出貨紀錄」仍能正常顯示標籤 ──
+  seven:   { legacy: true, label: "7-11",     emoji: "🏪", customer: "7-11",    kocaCustomer: "7-11" },
+  family:  { legacy: true, label: "全家",     emoji: "🏬", customer: "全家",    kocaCustomer: "全家" },
+  hilife:  { legacy: true, label: "萊爾富",   emoji: "🏪", customer: "萊爾富",  kocaCustomer: "萊爾富" },
+  hsinchu: { legacy: true, label: "新竹物流", emoji: "🚚", customer: "新竹物流", kocaCustomer: "新竹物流" },
 };
 // 根據通路選對應的 parser (目前都用 A1, 未來加客製化 case 即可)
 function parserFor(platform) {
@@ -4840,17 +4854,27 @@ function renderMenu() {
 }
 
 // ---- Render: Library management modal ----
+let _unmappedSearch = ""; // 「從倉庫清冊新增」清單的搜尋字
 function renderUnmappedSkus() {
   const listEl = document.getElementById("unmapped-list");
   const cntEl = document.getElementById("unmapped-count");
   if (!listEl) return;
   // 取所有 stockMap 內、但不在 library 的 SKU
-  const unmapped = Object.keys(stockMap)
+  const allUnmapped = Object.keys(stockMap)
     .filter(sku => !library.find(p => p.sku === sku))
     .sort();
-  if (cntEl) cntEl.textContent = unmapped.length;
-  if (unmapped.length === 0) {
+  if (cntEl) cntEl.textContent = allUnmapped.length; // 標題維持總數
+  if (allUnmapped.length === 0) {
     listEl.innerHTML = '<div class="hint" style="text-align:center; padding:14px; color: var(--success);">✓ 所有有庫存的 SKU 都已在商品庫</div>';
+    return;
+  }
+  // 搜尋過濾 (依 SKU / 名稱)
+  const q = (_unmappedSearch || "").trim().toLowerCase();
+  const unmapped = q
+    ? allUnmapped.filter(sku => (sku + " " + ((stockMap[sku] || {}).name || "")).toLowerCase().includes(q))
+    : allUnmapped;
+  if (unmapped.length === 0) {
+    listEl.innerHTML = `<div class="hint" style="text-align:center; padding:14px; color: var(--text-soft);">查無符合「${escapeHtml(_unmappedSearch)}」的 SKU</div>`;
     return;
   }
   const catOptions = ["包裝", "吹風機", "投影機", "吸塵器", "加購品", "其他"]
@@ -8086,7 +8110,7 @@ function openHistEdit(id) {
   if (!entry) { showToast("⚠ 找不到該紀錄"); return; }
   _histEditId = id;
   const sel = document.getElementById("hist-edit-platform");
-  sel.innerHTML = Object.entries(PLATFORMS).map(([k, v]) => `<option value="${k}">${(v.emoji || "")} ${escapeHtml(v.customer || v.label || k)}</option>`).join("") + `<option value="unknown">— 未指定</option>`;
+  sel.innerHTML = Object.entries(PLATFORMS).filter(([k, v]) => !v.legacy || k === entry.platform).map(([k, v]) => `<option value="${k}">${(v.emoji || "")} ${escapeHtml(v.customer || v.label || k)}</option>`).join("") + `<option value="unknown">— 未指定</option>`;
   sel.value = entry.platform || "unknown";
   document.getElementById("hist-edit-type").value = entry.orderType || "normal";
   document.getElementById("hist-edit-modal").hidden = false;
@@ -8695,6 +8719,8 @@ document.getElementById("close-lib").addEventListener("click", () => {
   renderMenu();
 });
 
+// 從倉庫清冊新增 - 搜尋過濾
+document.getElementById("unmapped-search").addEventListener("input", (e) => { _unmappedSearch = e.target.value; renderUnmappedSkus(); });
 // 從倉庫清冊新增 - 單筆 (使用該列下拉的分類)
 document.getElementById("unmapped-list").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-unmapped-add]");
@@ -8719,9 +8745,12 @@ document.getElementById("unmapped-list").addEventListener("click", (e) => {
 // 從倉庫清冊新增 - 全部加入 (使用上方下拉的分類)
 document.getElementById("quick-add-all").addEventListener("click", () => {
   const cat = document.getElementById("quick-add-cat").value;
-  const unmapped = Object.keys(stockMap).filter(sku => !library.find(p => p.sku === sku));
+  let unmapped = Object.keys(stockMap).filter(sku => !library.find(p => p.sku === sku));
+  // 有搜尋時, 只加入目前搜尋結果 (避免誤加全部)
+  const q = (_unmappedSearch || "").trim().toLowerCase();
+  if (q) unmapped = unmapped.filter(sku => (sku + " " + ((stockMap[sku] || {}).name || "")).toLowerCase().includes(q));
   if (unmapped.length === 0) { showToast("沒有待加入的 SKU"); return; }
-  if (!confirm(`一次把 ${unmapped.length} 個 SKU 全部加入「${cat}」分類?\n\n(之後可在商品庫個別調整分類)`)) return;
+  if (!confirm(`一次把${q ? "搜尋到的 " : ""}${unmapped.length} 個 SKU 全部加入「${cat}」分類?\n\n(之後可在商品庫個別調整分類)`)) return;
   let added = 0;
   for (const sku of unmapped) {
     const st = stockMap[sku];
@@ -9443,6 +9472,14 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
   }
   const back = e.target.closest("button[data-settings-back]");
   if (back) {
+    showSettingsView("menu");
+    return;
+  }
+  // 💾 儲存設定: 設定其實每改一項就自動存了, 這顆給明確回饋 + 存一次 + 回設定首頁
+  const saveBtn = e.target.closest(".settings-save-btn");
+  if (saveBtn) {
+    saveSettings();
+    showToast("✓ 設定已儲存");
     showSettingsView("menu");
     return;
   }
