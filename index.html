@@ -1223,6 +1223,18 @@ details[open] > *:not(summary) { animation: fadeIn .2s ease; }
 .menu-item-info { flex: 1; min-width: 0; }
 .menu-item .item-sku { font-size: 0.75rem; font-weight: 700; }
 .menu-item .item-name { font-size: 0.875rem; font-weight: 600; }
+.menu-item-stock {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  white-space: nowrap;
+}
+.menu-item-stock.zero { background: #fde8e8; color: #c0392b; }
+.menu-item-stock.none { background: var(--border); color: var(--text-muted, #888); font-weight: 600; }
 .menu-qty {
   display: flex; align-items: center; gap: 4px;
 }
@@ -1583,7 +1595,7 @@ footer.summary-bar {
     </button>
     <button data-tab="a1" id="tab-a1">
       <span class="tab-icon">📥</span>
-      <span class="tab-label">通路匯入</span>
+      <span class="tab-label">開始出貨</span>
     </button>
     <button data-tab="history" id="tab-history">
       <span class="tab-icon">📜</span>
@@ -1598,7 +1610,12 @@ footer.summary-bar {
   <!-- Tab 1: 我的商品庫 (純瀏覽模式) -->
   <div class="panel" id="tab-content-menu">
     <h2>我的商品庫</h2>
-    <p class="hint">這是你所有商品依分類分組顯示。想開始備貨，請切到上方的 <strong>📥 通路匯入</strong> 上傳蝦皮 CSV 檔。</p>
+    <p class="hint">這是你所有商品依分類分組顯示。想開始備貨，請切到上方的 <strong>📥 開始出貨</strong> 上傳揀貨單 CSV。</p>
+    <div class="menu-toolbar" style="display:flex; gap:8px; align-items:center; margin:8px 0;">
+      <input type="search" id="menu-search" placeholder="🔍 搜尋 SKU 或品名" autocomplete="off" style="flex:1; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.875rem; background:var(--surface); color:var(--text);">
+      <button class="btn outline sm" id="menu-expand-toggle" type="button" style="white-space:nowrap;">全部展開</button>
+    </div>
+    <div id="menu-summary" class="hint" style="margin:0 0 8px;"></div>
     <div id="menu-items"></div>
     <div class="section-actions">
       <button class="btn outline sm" id="manage-lib-btn">📚 管理商品庫</button>
@@ -1609,8 +1626,10 @@ footer.summary-bar {
   <div class="panel" id="tab-content-a1" hidden>
     <h2>從通路後台匯入揀貨單</h2>
 
-    <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
-    <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
+    <div style="background: var(--primary-light); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:8px;">📥 上傳揀貨單 CSV(主要出貨流程)</div>
+      <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
+      <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
       <option value="">— 請先選擇通路 —</option>
       <option value="a1">🛒 蝦皮</option>
       <option value="momo">🛍 MOMO</option>
@@ -1620,14 +1639,14 @@ footer.summary-bar {
       <option value="meet">🤝 面交</option>
     </select>
 
-    <p class="hint" id="platform-hint">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
-
-    <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 8px 0;">
+      <p class="hint" id="platform-hint" style="margin-bottom:8px;">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
+      <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 4px 0 0;">
+    </div>
 
     <!-- 多人協作入口 -->
     <div class="room-entry">
       <div class="room-entry-title">👥 共同包貨 (Cloudflare 同步)</div>
-      <div class="room-entry-desc">先上傳 CSV → 開房 → 拿到 4 碼邀請碼 → 分享給同事 → 兩人各刷各的。需先在「⚙ 外部整合」設定 Worker URL。</div>
+      <div class="room-entry-desc">建好清單會<strong>自動開房</strong>(需先在 ⚙ 外部整合 設定 Worker URL + 暱稱)。把 4 碼給同事,他按「🚪 加入房間」即可。開房卡片仍可手動補開。</div>
       <div class="settings-grid" style="margin: 10px 0 0;">
         <button class="settings-card" id="open-create-room-btn">
           <div class="card-icon">🏠</div>
@@ -1642,8 +1661,10 @@ footer.summary-bar {
       </div>
     </div>
 
-    <!-- 其他出貨方式 (格子卡片) -->
-    <div class="settings-grid">
+    <!-- 其他建單方式 (收合) -->
+    <details style="margin-top:6px;">
+      <summary style="cursor:pointer; font-weight:600; font-size:0.85rem; color:var(--text-soft); padding:8px 2px;">＋ 其他建單方式(手動 / 補寄 / 退貨 / 入倉)</summary>
+      <div class="settings-grid" style="margin-top:6px;">
       <button class="settings-card" id="open-manual-order-btn">
         <div class="card-icon">📝</div>
         <div class="card-title">手動建單</div>
@@ -1664,7 +1685,8 @@ footer.summary-bar {
         <div class="card-title">入倉驗收</div>
         <div class="card-desc">進貨 · 只記錄</div>
       </button>
-    </div>
+      </div>
+    </details>
 
     <details>
       <summary>或直接貼上 CSV 內容</summary>
@@ -1697,14 +1719,19 @@ footer.summary-bar {
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
       尚無紀錄
     </div>
-    <div class="row" style="gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
-      <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 70px;">↻ 重新整理</button>
-      <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 90px; background: var(--primary);">⌨ ERP 鍵單</button>
-      <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
-      <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
-      <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
-      <button class="btn outline sm" id="open-return-analysis-btn" style="flex:1; min-width: 70px;">🔁 退貨</button>
+    <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+      <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 100px;">↻ 重新整理</button>
+      <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);">⌨ ERP 鍵單</button>
     </div>
+    <details style="margin-bottom: 10px;">
+      <summary style="cursor:pointer; font-size:0.8rem; font-weight:600; color:var(--text-soft); padding:6px 2px;">📊 統計分析(績效 · 客戶 · 熱銷 · 退貨)</summary>
+      <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+        <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
+        <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
+        <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
+        <button class="btn outline sm" id="open-return-analysis-btn" style="flex:1; min-width: 70px;">🔁 退貨</button>
+      </div>
+    </details>
     <div class="history-search-row" style="position: relative; margin-bottom: 10px;">
       <input type="text" id="history-search" placeholder="🔍 搜尋寄件單號 / 客人姓名 / 手機 / SKU / 商品名 / 原因 / 備註..."
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
@@ -1990,36 +2017,41 @@ footer.summary-bar {
         <strong>備貨清單會永久保留</strong>, 除非「取消出貨」或「✓ 出貨完成」。
       </p>
       <div class="settings-grid">
+        <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:2px 0 -2px; letter-spacing:1px;">常用</div>
         <button class="settings-card wide" data-settings-view="help">
           <div class="card-icon">📖</div>
           <div class="card-title">新手教學 / 懶人包</div>
           <div class="card-desc">第一次用、或忘記流程時看這個</div>
-        </button>
-        <a href="shipping.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
-          <div class="card-icon">🚚</div>
-          <div class="card-title">宅配寄件紀錄</div>
-          <div class="card-desc">補寄 / 宅配寄件登記 · 誰寄了、誰還沒寄</div>
-        </a>
-        <button class="settings-card" data-settings-view="stocktake">
-          <div class="card-icon">🔍</div>
-          <div class="card-title">盤點</div>
-          <div class="card-desc">掃描比對實際庫存</div>
-        </button>
-        <button class="settings-card" data-settings-view="sound">
-          <div class="card-icon">🔊</div>
-          <div class="card-title">聲音提示</div>
-          <div class="card-desc">刷槍 / 完成提示音</div>
         </button>
         <button class="settings-card" data-settings-view="theme">
           <div class="card-icon">🎨</div>
           <div class="card-title">外觀</div>
           <div class="card-desc">主題顏色 · 護眼</div>
         </button>
+        <button class="settings-card" data-settings-view="sound">
+          <div class="card-icon">🔊</div>
+          <div class="card-title">聲音提示</div>
+          <div class="card-desc">刷槍 / 完成提示音</div>
+        </button>
+
+        <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">進階</div>
         <button class="settings-card" data-settings-view="integration">
           <div class="card-icon">🌐</div>
           <div class="card-title">外部整合</div>
-          <div class="card-desc">Discord · Sheets</div>
+          <div class="card-desc">Worker · Discord · 金鑰</div>
         </button>
+        <button class="settings-card" data-settings-view="stocktake">
+          <div class="card-icon">🔍</div>
+          <div class="card-title">盤點</div>
+          <div class="card-desc">掃描比對實際庫存</div>
+        </button>
+
+        <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">資料 / 其他</div>
+        <a href="shipping.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
+          <div class="card-icon">🚚</div>
+          <div class="card-title">宅配寄件紀錄</div>
+          <div class="card-desc">補寄 / 宅配寄件登記 · 誰寄了、誰還沒寄</div>
+        </a>
         <button class="settings-card wide" data-settings-view="backup">
           <div class="card-icon">💾</div>
           <div class="card-title">資料搬家 / 備份</div>
@@ -2482,13 +2514,20 @@ footer.summary-bar {
            autocapitalize="characters" spellcheck="false" enterkeyhint="done"
            placeholder="刷 SKU 條碼或輸入 + Enter (每刷 +1)"
            class="scan-input" style="background: white;">
-    <div class="hint" style="font-size: 0.6875rem; margin-top: 4px;">💡 每刷一個 SKU = +1 實盤數。可在下方手動 ±。</div>
+    <div class="hint" style="font-size: 0.6875rem; margin-top: 4px;">💡 兩種盤法都行:①刷條碼每次 +1;②下方每個商品直接<strong>點數字打實盤數</strong>(不用一直點 +)。建議切「未盤」分頁,打完一個就從清單消失,由上往下盤最快。</div>
     <div class="row" style="gap: 6px; margin-top: 10px;">
       <button class="btn outline sm" id="stocktake-pause-btn" style="flex:1;">⏸ 暫離 (回主畫面)</button>
       <button class="btn sm" id="stocktake-finish-btn" style="flex:2; background: var(--success);">▶ 完成 + 出差異報告</button>
     </div>
     <div style="height: 4px"></div>
     <button class="btn full outline sm danger" id="stocktake-cancel-btn">✗ 取消盤點 (此次不保存)</button>
+    <div style="height: 8px"></div>
+    <input type="file" id="st-import-file" accept=".csv,.txt" style="display:none;">
+    <div class="row" style="gap: 6px;">
+      <button class="btn outline sm" id="st-import-stock-btn" style="flex:1;">📥 載入目前庫存 CSV</button>
+      <button class="btn outline sm" id="st-export-diff-btn" style="flex:1;">📊 匯出差異 CSV</button>
+    </div>
+    <div class="hint" style="font-size: 0.6875rem; margin-top: 4px;">載入 ERP 現有庫存後，所有 SKU 會出現在下方「全部」，逐一輸入實盤數即可比對；盤完可匯出差異表(用 Excel 開)。</div>
   </div>
 
   <div class="panel standalone">
@@ -2500,6 +2539,7 @@ footer.summary-bar {
       <button data-st-filter="diff_plus">＋多 <span id="st-cnt-plus">0</span></button>
       <button data-st-filter="diff_minus">−少 <span id="st-cnt-minus">0</span></button>
       <button data-st-filter="not_counted">未盤 <span id="st-cnt-none">0</span></button>
+      <button data-st-filter="skipped">略過 <span id="st-cnt-skip">0</span></button>
     </div>
 
     <div id="stocktake-list"></div>
@@ -2517,9 +2557,31 @@ footer.summary-bar {
     <div id="stocktake-diff-content" style="max-height: 50vh; overflow-y: auto;"></div>
 
     <div style="height: 12px"></div>
+    <div class="row" style="margin-bottom: 8px; gap: 6px;">
+      <button class="btn outline sm" id="stocktake-diff-erp" style="flex:1;">⌨ ERP 鍵單清單</button>
+      <button class="btn outline sm" id="stocktake-diff-export" style="flex:1;">📊 匯出差異 CSV (Excel)</button>
+    </div>
     <div class="row">
       <button class="btn outline" id="stocktake-diff-back" style="flex:1;">回去再盤</button>
       <button class="btn" id="stocktake-diff-apply" style="flex:2; background: var(--success);">✓ 套用實盤數</button>
+    </div>
+  </div>
+</div>
+
+<!-- 盤點 ERP 鍵單清單 modal (鍵入 ERP 時逐一打勾, 避免錯亂) -->
+<div class="modal-backdrop" id="stocktake-erp-modal" hidden>
+  <div class="modal" style="max-width: 600px;">
+    <h2>⌨ 盤點 ERP 鍵單</h2>
+    <p class="hint" style="font-size: 0.75rem;">照這份把每個「實盤數」鍵進 ERP。每鍵完一個就點一下打勾，避免重複或漏鍵。</p>
+    <div id="stocktake-erp-progress" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin: 8px 0; font-size: 0.8125rem;">—</div>
+    <div class="filter-bar" style="margin-bottom: 8px;">
+      <button id="stocktake-erp-hide-done" class="btn outline sm" style="flex:1;">只看未鍵</button>
+      <button id="stocktake-erp-export" class="btn outline sm" style="flex:1;">📊 匯出鍵單 CSV</button>
+    </div>
+    <div id="stocktake-erp-list" style="max-height: 52vh; overflow-y: auto;"></div>
+    <div style="height: 10px"></div>
+    <div class="row">
+      <button class="btn" id="stocktake-erp-close" style="flex:1;">關閉</button>
     </div>
   </div>
 </div>
@@ -3036,7 +3098,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.2.4 · 2026-07-07";
+const APP_VERSION = "V3.3.0 · 2026-07-08";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -4835,10 +4897,14 @@ function showToast(msg) {
 }
 
 // ---- Render: Import (Menu tab) ----
+let _menuSearch = ""; // 商品庫首頁跨分類搜尋字
 function renderMenu() {
   const _scrollY = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
   const container = document.getElementById("menu-items");
+  const summaryEl = document.getElementById("menu-summary");
+  const q = (_menuSearch || "").trim().toLowerCase();
   if (library.length === 0) {
+    if (summaryEl) summaryEl.textContent = "";
     container.innerHTML = `
       <div class="empty-state">
         <div class="icon">⭐</div>
@@ -4846,32 +4912,71 @@ function renderMenu() {
         <div style="font-size:0.8125rem; margin-top:8px;">點下方「📚 管理商品庫」加入主賣商品</div>
       </div>`;
   } else {
-    const groups = groupByCategory(library);
-    container.innerHTML = groups.map(g => {
-      const selectedInCat = g.items.filter(p => (menuQty[p.sku] || 0) > 0).length;
-      const collapsed = !!collapsedCats[g.name];
-      const itemsHtml = g.items.map(p => {
-        return `
+    const allGroups = groupByCategory(library);
+    // 套用搜尋 (跨分類過濾 SKU / 品名)
+    let groups = allGroups;
+    if (q) {
+      groups = allGroups.map(g => ({
+        name: g.name,
+        items: g.items.filter(p => ((p.sku || "") + " " + (p.name || "")).toLowerCase().includes(q))
+      })).filter(g => g.items.length > 0);
+    }
+    // 總覽數字
+    if (summaryEl) {
+      if (q) {
+        const shown = groups.reduce((n, g) => n + g.items.length, 0);
+        summaryEl.textContent = `找到 ${shown} 個商品 · 共 ${library.length} 個 · ${allGroups.length} 分類`;
+      } else {
+        summaryEl.textContent = `共 ${library.length} 個商品 · ${allGroups.length} 分類`;
+      }
+    }
+    if (groups.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <div>找不到符合「${escapeHtml(_menuSearch)}」的商品</div>
+        </div>`;
+    } else {
+      container.innerHTML = groups.map(g => {
+        const collapsed = q ? false : !!collapsedCats[g.name]; // 搜尋時一律展開以顯示結果
+        const itemsHtml = g.items.map(p => {
+          const st = stockMap[p.sku];
+          const stockHtml = (st && typeof st.qty === "number")
+            ? `<span class="menu-item-stock ${st.qty <= 0 ? "zero" : ""}">庫存 ${st.qty}</span>`
+            : `<span class="menu-item-stock none">未設</span>`;
+          return `
         <div class="menu-item" data-sku="${escapeHtml(p.sku)}">
           <div class="menu-item-info">
             <div class="item-sku">${escapeHtml(p.sku)}</div>
             <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
           </div>
+          ${stockHtml}
         </div>`;
-      }).join("");
-      return `
+        }).join("");
+        return `
         <div class="cat-group">
-          <button class="cat-header ${selectedInCat > 0 ? "has-selected" : ""}" data-cat-toggle="${escapeHtml(g.name)}">
+          <button class="cat-header" data-cat-toggle="${escapeHtml(g.name)}">
             <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
             <span class="cat-name">${escapeHtml(g.name)}</span>
-            <span class="cat-count">${selectedInCat > 0 ? selectedInCat + " / " : ""}${g.items.length}</span>
+            <span class="cat-count">${g.items.length}</span>
             <span class="cat-arrow">${collapsed ? "▶" : "▼"}</span>
           </button>
           <div class="cat-items" ${collapsed ? "hidden" : ""}>${itemsHtml}</div>
         </div>`;
-    }).join("");
+      }).join("");
+    }
   }
-  // (純瀏覽模式 - 不再追蹤選中數量)
+  // 全部展開/收合鈕文字: 只要還有收合的分類就顯示「全部展開」
+  const _et = document.getElementById("menu-expand-toggle");
+  if (_et) {
+    if (library.length === 0 || q) {
+      _et.style.display = "none";
+    } else {
+      _et.style.display = "";
+      const anyCollapsed = groupByCategory(library).some(g => !!collapsedCats[g.name]);
+      _et.textContent = anyCollapsed ? "全部展開" : "全部收合";
+    }
+  }
   requestAnimationFrame(() => {
     if (document.scrollingElement) document.scrollingElement.scrollTop = _scrollY;
     else window.scrollTo(0, _scrollY);
@@ -5503,6 +5608,7 @@ function startStockTake() {
   stockTake = {
     startedAt: new Date().toISOString(),
     counts: {},
+    skipped: {},   // 暫不盤點 (滯銷品等): {sku: true}
   };
   saveStockTake();
   showStockTakeView();
@@ -5547,6 +5653,32 @@ function bumpStockTakeCount(sku, delta) {
   renderStockTake();
 }
 
+// 直接把某 SKU 的實盤數設為指定值 (不用一直點 +)
+function setStockTakeCount(sku, qty) {
+  if (!stockTake) return;
+  if (!stockTake.counts) stockTake.counts = {};
+  qty = Math.max(0, Math.floor(Number(qty) || 0));
+  if (qty === 0) delete stockTake.counts[sku];
+  else stockTake.counts[sku] = qty;
+  // 有輸入實盤數就自動取消略過
+  if (qty > 0 && stockTake.skipped) delete stockTake.skipped[sku];
+  saveStockTake();
+  renderStockTake();
+}
+
+// 暫不盤點 (略過): 滯銷品等不會被刷到的, 標略過就不算「未盤」
+function toggleStockTakeSkip(sku) {
+  if (!stockTake) return;
+  if (!stockTake.skipped) stockTake.skipped = {};
+  if (stockTake.skipped[sku]) delete stockTake.skipped[sku];
+  else {
+    stockTake.skipped[sku] = true;
+    if (stockTake.counts) delete stockTake.counts[sku]; // 略過就清掉已輸入的數
+  }
+  saveStockTake();
+  renderStockTake();
+}
+
 function processStockTakeScan(code) {
   if (!stockTake) return;
   // 商品條碼: 比對 barcode 再比對 sku
@@ -5575,21 +5707,24 @@ function processStockTakeScan(code) {
 
 function computeStockTakeDiff() {
   const counts = (stockTake && stockTake.counts) || {};
-  const allSkus = new Set([...Object.keys(counts), ...Object.keys(stockMap || {})]);
+  const skipped = (stockTake && stockTake.skipped) || {};
+  const allSkus = new Set([...Object.keys(counts), ...Object.keys(skipped), ...Object.keys(stockMap || {})]);
   const results = [];
   for (const sku of allSkus) {
     const actual = counts[sku] || 0;
     const system = (stockMap[sku] && stockMap[sku].qty) || 0;
     const inStockTake = sku in counts;
+    const isSkipped = !inStockTake && !!skipped[sku];
     const diff = inStockTake ? (actual - system) : 0;
     const libItem = library.find(p => p.sku === sku);
     let status;
-    if (!inStockTake) status = "not_counted";
+    if (isSkipped) status = "skipped";
+    else if (!inStockTake) status = "not_counted";
     else if (diff === 0) status = "equal";
     else if (diff > 0) status = "diff_plus";
     else status = "diff_minus";
     results.push({
-      sku, actual, system, diff, status, inStockTake,
+      sku, actual, system, diff, status, inStockTake, isSkipped,
       name: (libItem && libItem.name) || (stockMap[sku] && stockMap[sku].name) || "(無名稱)",
       category: libItem ? (libItem.category || "其他") : "未分類",
     });
@@ -5633,6 +5768,46 @@ function applyStockTake() {
   showToast(`✓ 盤點完成, 更新 ${updated} SKU 庫存`);
 }
 
+// 通用: 一組 rows → 下載成 Excel 可開的 CSV (含 BOM, 防公式注入)
+function downloadCsvRows(rows, filename) {
+  const csv = "﻿" + rows.map(r => r.map(cell => {
+    let s = String(cell == null ? "" : cell);
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    if (/[,"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 匯出盤點差異 (系統庫存 vs 實盤數) 成 CSV
+function exportStockTakeDiffCsv() {
+  if (!stockTake) { showToast("目前沒有進行中的盤點"); return; }
+  const results = computeStockTakeDiff();
+  if (results.length === 0) { showToast("沒有資料可匯出 (先載入目前庫存 CSV)"); return; }
+  results.sort((a, b) => {
+    if (a.inStockTake !== b.inStockTake) return a.inStockTake ? -1 : 1;
+    return Math.abs(b.diff) - Math.abs(a.diff);
+  });
+  const statusText = { diff_plus: "實盤多", diff_minus: "實盤少", equal: "相符", not_counted: "未盤", skipped: "略過(暫不盤點)" };
+  const rows = [["分類", "SKU", "商品名稱", "系統庫存", "實盤數", "差異", "狀態"]];
+  for (const r of results) {
+    rows.push([
+      r.category, r.sku, (r.name || "").replace(/[\r\n]+/g, " "),
+      r.system,
+      r.inStockTake ? r.actual : "",
+      r.inStockTake ? (r.diff > 0 ? "+" + r.diff : r.diff) : "",
+      statusText[r.status] || r.status,
+    ]);
+  }
+  downloadCsvRows(rows, `盤點差異_${new Date().toISOString().slice(0,10)}.csv`);
+  showToast(`✓ 已匯出 ${results.length} SKU 差異`);
+}
+
 let _stockTakeFilter = "all";
 
 function renderStockTake() {
@@ -5649,27 +5824,32 @@ function renderStockTake() {
   const plus = diffResults.filter(r => r.status === "diff_plus").length;
   const minus = diffResults.filter(r => r.status === "diff_minus").length;
   const notCounted = diffResults.filter(r => r.status === "not_counted").length;
+  const skippedCnt = diffResults.filter(r => r.status === "skipped").length;
   const $ = id => document.getElementById(id);
   if ($("st-cnt-all")) $("st-cnt-all").textContent = total;
   if ($("st-cnt-counted")) $("st-cnt-counted").textContent = counted;
   if ($("st-cnt-plus")) $("st-cnt-plus").textContent = plus;
   if ($("st-cnt-minus")) $("st-cnt-minus").textContent = minus;
   if ($("st-cnt-none")) $("st-cnt-none").textContent = notCounted;
+  if ($("st-cnt-skip")) $("st-cnt-skip").textContent = skippedCnt;
   document.querySelectorAll("#stocktake-filter-bar button").forEach(b => {
     b.classList.toggle("active", b.dataset.stFilter === _stockTakeFilter);
   });
   // stats
   const statsEl = document.getElementById("stocktake-stats");
-  if (statsEl) statsEl.innerHTML = `<strong>已盤</strong> ${counted}/${total} SKU · ＋多 ${plus} · −少 ${minus} · 未盤 ${notCounted}`;
+  if (statsEl) statsEl.innerHTML = `<strong>已盤</strong> ${counted}/${total} SKU · ＋多 ${plus} · −少 ${minus} · 未盤 ${notCounted}${skippedCnt ? ` · 略過 ${skippedCnt}` : ""}`;
   // filter
   let displayed = diffResults;
   if (_stockTakeFilter === "counted") displayed = diffResults.filter(r => r.inStockTake);
   else if (_stockTakeFilter === "diff_plus") displayed = diffResults.filter(r => r.status === "diff_plus");
   else if (_stockTakeFilter === "diff_minus") displayed = diffResults.filter(r => r.status === "diff_minus");
-  else if (_stockTakeFilter === "not_counted") displayed = diffResults.filter(r => !r.inStockTake);
-  // 排序: 差異絕對值大 → 已盤 → 未盤
+  else if (_stockTakeFilter === "not_counted") displayed = diffResults.filter(r => r.status === "not_counted");
+  else if (_stockTakeFilter === "skipped") displayed = diffResults.filter(r => r.status === "skipped");
+  // 排序: 已盤(差異大優先) → 未盤 → 略過(最後)
   displayed.sort((a, b) => {
-    if (a.inStockTake !== b.inStockTake) return a.inStockTake ? -1 : 1;
+    const rank = x => x.isSkipped ? 2 : (x.inStockTake ? 0 : 1);
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
     return Math.abs(b.diff) - Math.abs(a.diff);
   });
   const list = document.getElementById("stocktake-list");
@@ -5679,22 +5859,40 @@ function renderStockTake() {
     return;
   }
   list.innerHTML = displayed.slice(0, 200).map(r => {
+    // 略過 (暫不盤點) 的列: 灰底 + 恢復鈕
+    if (r.isSkipped) {
+      return `
+      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light); background: var(--bg); opacity: .75;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 600; font-size: 0.75rem; text-decoration: line-through;">${escapeHtml(r.sku)}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+        </div>
+        <span style="font-size: 0.6875rem; color: var(--text-soft); background: var(--border); padding: 3px 7px; border-radius: 6px; white-space: nowrap;">🚫 暫不盤點</span>
+        <button data-st-restore="${escapeHtml(r.sku)}" style="background: var(--bg); color: var(--primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 0.75rem; font-weight: 600; white-space: nowrap;">恢復</button>
+      </div>`;
+    }
     const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
     const diffText = r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤";
+    const rowBg = r.status === "diff_plus" ? "rgba(34,197,94,0.10)" : (r.status === "diff_minus" ? "rgba(239,68,68,0.10)" : "transparent");
+    const skipBtn = !r.inStockTake
+      ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
+      : "";
     return `
-      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light);">
+      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light); background: ${rowBg};">
         <div style="flex: 1; min-width: 0;">
           <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}</div>
           <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+          ${skipBtn}
         </div>
-        <div style="text-align: right;">
+        <div style="text-align: right; min-width: 46px;">
           <div style="font-size: 0.6875rem; color: var(--text-soft);">系統 ${r.system}</div>
-          <div style="font-size: 0.8125rem; font-weight: 700;">實盤 ${r.actual}</div>
           <div style="font-size: 0.6875rem; color: ${diffColor}; font-weight: 600;">${diffText}</div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 28px; height: 24px; cursor: pointer; font-weight: 700;">+</button>
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 24px; cursor: pointer; font-weight: 700;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 30px; height: 34px; cursor: pointer; font-weight: 700; font-size: 1.125rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+          <input type="number" inputmode="numeric" min="0" step="1" data-st-set="${escapeHtml(r.sku)}" value="${r.actual}"
+                 style="width: 52px; height: 34px; text-align: center; padding: 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9375rem; font-weight: 700; background: var(--surface); color: var(--text);">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 30px; height: 34px; cursor: pointer; font-weight: 700; font-size: 1.125rem;">+</button>
         </div>
       </div>
     `;
@@ -5774,14 +5972,73 @@ document.getElementById("stocktake-filter-bar").addEventListener("click", (e) =>
   renderStockTake();
 });
 
-// 列表上的 +/- 按鈕
+// 列表上的 +/- 按鈕 / 暫不盤點 / 恢復
 document.getElementById("stocktake-list").addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-st-bump]");
-  if (!btn) return;
-  const sku = btn.dataset.stBump;
-  const delta = parseInt(btn.dataset.stDelta, 10);
-  if (sku && !isNaN(delta)) bumpStockTakeCount(sku, delta);
+  const bumpBtn = e.target.closest("button[data-st-bump]");
+  if (bumpBtn) {
+    const sku = bumpBtn.dataset.stBump;
+    const delta = parseInt(bumpBtn.dataset.stDelta, 10);
+    if (sku && !isNaN(delta)) bumpStockTakeCount(sku, delta);
+    return;
+  }
+  const skipBtn = e.target.closest("button[data-st-skip]");
+  if (skipBtn) { toggleStockTakeSkip(skipBtn.dataset.stSkip); return; }
+  const restoreBtn = e.target.closest("button[data-st-restore]");
+  if (restoreBtn) { toggleStockTakeSkip(restoreBtn.dataset.stRestore); return; }
 });
+
+// 列表上直接輸入實盤數量 (不用一直點 +)
+document.getElementById("stocktake-list").addEventListener("change", (e) => {
+  const inp = e.target.closest("input[data-st-set]");
+  if (!inp) return;
+  const sku = inp.dataset.stSet;
+  if (sku) setStockTakeCount(sku, inp.value);
+});
+// 點進數字欄位時自動選取, 直接打新數字覆蓋
+document.getElementById("stocktake-list").addEventListener("focusin", (e) => {
+  const inp = e.target.closest("input[data-st-set]");
+  if (inp) setTimeout(() => { try { inp.select(); } catch(_){} }, 0);
+});
+
+// 盤點: 載入目前庫存 CSV (讓所有 SKU 出現在「全部」以便比對)
+document.getElementById("st-import-stock-btn").addEventListener("click", () => {
+  document.getElementById("st-import-file").click();
+});
+document.getElementById("st-import-file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  showToast("📂 讀取中...");
+  const reader = new FileReader();
+  reader.onerror = () => showToast("⚠ 檔案讀取失敗");
+  reader.onload = () => {
+    try {
+      const items = parseStockCsv(reader.result);
+      if (!items || items.length === 0) {
+        alert("⚠ 解析不到資料\n\n預期格式 (庫存 CSV):\n  產品編號, 品名規格, 現有數量\n\n請確認 CSV 內容後再試一次。");
+        return;
+      }
+      let updated = 0, added = 0;
+      const now = new Date().toISOString();
+      for (const it of items) { if (stockMap[it.sku]) updated++; else added++; }
+      if (!confirm(`📥 載入目前庫存作為盤點對照\n\n總共 ${items.length} 個 SKU (新增 ${added}, 更新 ${updated})\n\n載入後這些商品會出現在「全部」清單, 你就能逐一輸入實盤數比對。\n不會動到你已輸入的實盤數。\n\n要繼續嗎?`)) return;
+      for (const it of items) {
+        stockMap[it.sku] = { qty: it.qty, name: it.name || (stockMap[it.sku] && stockMap[it.sku].name) || "", updatedAt: now };
+      }
+      saveStock();
+      _stockTakeFilter = "all";
+      renderStockTake();
+      showToast(`✓ 已載入 ${items.length} SKU, 可開始輸入實盤比對`);
+    } catch (err) {
+      console.error("[st-import]", err);
+      showToast("⚠ 解析錯誤: " + err.message);
+    }
+  };
+  reader.readAsText(f, "UTF-8");
+  setTimeout(() => { e.target.value = ""; }, 100);
+});
+// 盤點: 匯出差異 CSV (主畫面 + 差異報告 modal)
+document.getElementById("st-export-diff-btn").addEventListener("click", exportStockTakeDiffCsv);
+document.getElementById("stocktake-diff-export").addEventListener("click", exportStockTakeDiffCsv);
 
 // 差異報告
 function showStockTakeDiffReport() {
@@ -5790,13 +6047,14 @@ function showStockTakeDiffReport() {
   const plus = results.filter(r => r.status === "diff_plus");
   const minus = results.filter(r => r.status === "diff_minus");
   const equal = results.filter(r => r.status === "equal");
-  const notCounted = results.filter(r => !r.inStockTake);
+  const notCounted = results.filter(r => r.status === "not_counted");
+  const skipped = results.filter(r => r.status === "skipped");
   const totalActual = (stockTake.counts ? Object.values(stockTake.counts).reduce((s,q)=>s+q,0) : 0);
   const summary = document.getElementById("stocktake-diff-summary");
   summary.innerHTML = `<div style="font-size: 0.8125rem;">
     <div><strong>已盤 ${counted.length} SKU · 共 ${totalActual} 件</strong></div>
     <div style="margin-top: 4px;">
-      ✓ 一致 ${equal.length} · <span style="color: var(--success);">＋多 ${plus.length}</span> · <span style="color: var(--danger);">−少 ${minus.length}</span> · 未盤 ${notCounted.length}
+      ✓ 一致 ${equal.length} · <span style="color: var(--success);">＋多 ${plus.length}</span> · <span style="color: var(--danger);">−少 ${minus.length}</span> · 未盤 ${notCounted.length}${skipped.length ? ` · 略過 ${skipped.length}` : ""}
     </div>
   </div>`;
   // 內容: 有差異的優先列
@@ -5822,8 +6080,8 @@ function showStockTakeDiffReport() {
         </div>
       `;
     }).join("");
-    if (notCounted.length > 0) {
-      content.innerHTML += `<div style="text-align: center; color: var(--text-soft); font-size: 0.6875rem; margin-top: 8px;">⚠ 還有 ${notCounted.length} 個 SKU 未盤 (套用後不影響它們的庫存)</div>`;
+    if (notCounted.length > 0 || skipped.length > 0) {
+      content.innerHTML += `<div style="text-align: center; color: var(--text-soft); font-size: 0.6875rem; margin-top: 8px;">未盤 ${notCounted.length}${skipped.length ? ` · 略過 ${skipped.length}` : ""} 個 SKU 不會被更動 — 可直接按下方套用完成盤點。</div>`;
     }
   }
   document.getElementById("stocktake-diff-modal").hidden = false;
@@ -5838,6 +6096,86 @@ document.getElementById("stocktake-diff-apply").addEventListener("click", () => 
 });
 document.getElementById("stocktake-diff-modal").addEventListener("click", (e) => {
   if (e.target.id === "stocktake-diff-modal") document.getElementById("stocktake-diff-modal").hidden = true;
+});
+
+// ===== ⌨ 盤點 ERP 鍵單清單 (鍵入 ERP 時逐一打勾) =====
+let _stErpKeyed = new Set();   // 本次已鍵入 ERP 的 SKU (暫存)
+let _stErpHideDone = false;
+function stockTakeCountedRows() {
+  // 只列「有實盤數」的 SKU (未盤/略過的不用鍵), 依分類→SKU 排序方便鍵入
+  return computeStockTakeDiff().filter(r => r.inStockTake).sort((a, b) => {
+    const ca = CATEGORY_ORDER.indexOf(a.category), cb = CATEGORY_ORDER.indexOf(b.category);
+    const na = ca === -1 ? 99 : ca, nb = cb === -1 ? 99 : cb;
+    if (na !== nb) return na - nb;
+    return a.sku.localeCompare(b.sku);
+  });
+}
+function renderStockErpList() {
+  const rows = stockTakeCountedRows();
+  const total = rows.length;
+  const done = rows.filter(r => _stErpKeyed.has(r.sku)).length;
+  const prog = document.getElementById("stocktake-erp-progress");
+  if (prog) prog.innerHTML = `已鍵入 <strong>${done} / ${total}</strong> SKU${done === total && total > 0 ? " ✓ 全部完成" : ""}`;
+  const hideBtn = document.getElementById("stocktake-erp-hide-done");
+  if (hideBtn) hideBtn.classList.toggle("active", _stErpHideDone);
+  const listEl = document.getElementById("stocktake-erp-list");
+  if (!listEl) return;
+  const shown = _stErpHideDone ? rows.filter(r => !_stErpKeyed.has(r.sku)) : rows;
+  if (shown.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><div>' + (total === 0 ? "沒有已盤的 SKU" : "全部都鍵好了") + '</div></div>';
+    return;
+  }
+  listEl.innerHTML = shown.map(r => {
+    const keyed = _stErpKeyed.has(r.sku);
+    const diffTxt = r.diff === 0 ? "" : `<span style="color:${r.diff>0?'var(--success)':'var(--danger)'}; font-weight:700; margin-left:6px;">${r.diff>0?'+':''}${r.diff}</span>`;
+    return `
+      <div data-erp-toggle="${escapeHtml(r.sku)}" style="display:flex; align-items:center; gap:10px; padding:9px 10px; border-bottom:1px solid var(--border-light); cursor:pointer; background:${keyed?'var(--success-bg,rgba(34,197,94,0.10))':'transparent'};">
+        <div style="width:22px; height:22px; border-radius:5px; border:2px solid ${keyed?'var(--success)':'var(--border)'}; background:${keyed?'var(--success)':'transparent'}; color:white; display:flex; align-items:center; justify-content:center; font-size:0.8125rem; flex:none;">${keyed?'✓':''}</div>
+        <div style="flex:1; min-width:0; ${keyed?'opacity:.6; text-decoration:line-through;':''}">
+          <div style="font-weight:600; font-size:0.8125rem;">${escapeHtml(r.sku)}</div>
+          <div style="font-size:0.6875rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</div>
+        </div>
+        <div style="text-align:right; font-size:0.8125rem; white-space:nowrap;">
+          <span style="font-size:0.625rem; color:var(--text-soft);">鍵入</span>
+          <strong style="font-size:1.0625rem;">${r.actual}</strong>${diffTxt}
+        </div>
+      </div>`;
+  }).join("");
+}
+function openStockErp() {
+  if (!stockTake || Object.keys(stockTake.counts || {}).length === 0) { showToast("⚠ 尚未盤任何 SKU"); return; }
+  _stErpKeyed = new Set();
+  _stErpHideDone = false;
+  renderStockErpList();
+  document.getElementById("stocktake-erp-modal").hidden = false;
+}
+document.getElementById("stocktake-diff-erp").addEventListener("click", openStockErp);
+document.getElementById("stocktake-erp-close").addEventListener("click", () => {
+  document.getElementById("stocktake-erp-modal").hidden = true;
+});
+document.getElementById("stocktake-erp-modal").addEventListener("click", (e) => {
+  if (e.target.id === "stocktake-erp-modal") document.getElementById("stocktake-erp-modal").hidden = true;
+});
+document.getElementById("stocktake-erp-list").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-erp-toggle]");
+  if (!row) return;
+  const sku = row.dataset.erpToggle;
+  if (_stErpKeyed.has(sku)) _stErpKeyed.delete(sku); else _stErpKeyed.add(sku);
+  renderStockErpList();
+});
+document.getElementById("stocktake-erp-hide-done").addEventListener("click", () => {
+  _stErpHideDone = !_stErpHideDone;
+  renderStockErpList();
+});
+document.getElementById("stocktake-erp-export").addEventListener("click", () => {
+  const rows = stockTakeCountedRows();
+  if (rows.length === 0) { showToast("沒有已盤的 SKU"); return; }
+  const out = [["分類", "SKU", "商品名稱", "系統庫存", "實盤數(鍵入ERP)", "差異"]];
+  for (const r of rows) {
+    out.push([r.category, r.sku, (r.name || "").replace(/[\r\n]+/g, " "), r.system, r.actual, r.diff > 0 ? "+" + r.diff : r.diff]);
+  }
+  downloadCsvRows(out, `盤點ERP鍵單_${new Date().toISOString().slice(0,10)}.csv`);
+  showToast(`✓ 已匯出 ${rows.length} SKU 鍵單`);
 });
 
 // 出貨自動扣帳設定
@@ -8735,6 +9073,20 @@ document.getElementById("menu-items").addEventListener("click", (e) => {
   }
 });
 
+// 商品庫首頁: 跨分類搜尋
+const _menuSearchEl = document.getElementById("menu-search");
+if (_menuSearchEl) _menuSearchEl.addEventListener("input", (e) => { _menuSearch = e.target.value; renderMenu(); });
+
+// 商品庫首頁: 全部展開 / 全部收合
+const _menuExpandBtn = document.getElementById("menu-expand-toggle");
+if (_menuExpandBtn) _menuExpandBtn.addEventListener("click", () => {
+  const groups = groupByCategory(library);
+  const anyCollapsed = groups.some(g => !!collapsedCats[g.name]);
+  groups.forEach(g => { collapsedCats[g.name] = anyCollapsed ? false : true; });
+  saveCollapsed();
+  renderMenu();
+});
+
 // Library management
 const libModal = document.getElementById("lib-modal");
 document.getElementById("manage-lib-btn").addEventListener("click", () => {
@@ -10086,6 +10438,7 @@ document.getElementById("manual-create").addEventListener("click", () => {
   if (window.__homeOverride) window.__homeOverride = false;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  maybeAutoCreateRoom("手動建單");
 });
 
 // 補寄訂單 modal 事件
@@ -10187,6 +10540,7 @@ document.getElementById("repl-create").addEventListener("click", () => {
   if (_keepRoom) pushRoomListReset(); // 同步補寄清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  maybeAutoCreateRoom("補寄");
 });
 
 // 補寄/退貨 - 客人手機輸入時即時查詢風險
@@ -10288,6 +10642,7 @@ document.getElementById("ret-create").addEventListener("click", () => {
   if (_keepRoom) pushRoomListReset(); // 同步退貨清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  maybeAutoCreateRoom("退貨");
 });
 
 // 入倉驗收 modal 事件
@@ -10347,6 +10702,7 @@ document.getElementById("inb-create").addEventListener("click", () => {
   if (_keepRoom) pushRoomListReset(); // 同步入倉清單給同仁那台
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  maybeAutoCreateRoom("入倉");
 });
 
 // 退貨 - 客人手機即時風險查詢
