@@ -1965,8 +1965,10 @@ footer.summary-bar {
       <button class="btn full sm" id="bulk-import-btn" style="margin-top:6px;">匯入到商品庫</button>
     </details>
 
-    <h3 style="font-size:0.875rem; margin: 16px 0 8px; color: var(--text-soft);">目前商品庫 (<span id="lib-count">0</span>)</h3>
-    <div id="lib-items"></div>
+    <details id="lib-list-details" style="margin: 16px 0 0;">
+      <summary style="font-size:0.875rem; font-weight:700; color: var(--text-soft); cursor:pointer; padding:8px 10px; background:var(--bg); border-radius:8px; list-style:none;">📚 目前商品庫 (<span id="lib-count">0</span>) — 點此展開 / 收合</summary>
+      <div id="lib-items" style="margin-top:8px;"></div>
+    </details>
 
     <div style="height: 12px"></div>
     <button class="btn full outline sm" id="restore-defaults-btn">↻ 補回 Koca 預設庫 (15 個主賣商品)</button>
@@ -2271,6 +2273,10 @@ footer.summary-bar {
         <input type="text" id="my-name-input" placeholder="例: 阿明 / A / Kyle" maxlength="20" style="margin-bottom:6px;">
 
         <button class="btn outline sm full" id="sync-test-btn">📡 測試連線</button>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8125rem; margin-top:10px;">
+          <input type="checkbox" id="auto-room-input" style="transform: scale(1.2);"> 🤝 匯入 CSV 自動開房(共同包貨)
+        </label>
+        <p class="hint" style="font-size:0.6875rem; margin:4px 0 0;">開啟後,建好清單就自動開房拿 4 碼(需先填上方 URL + 暱稱)。單人包不想開房可關掉。</p>
       </div>
 
       <div style="height: 16px"></div>
@@ -3030,7 +3036,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.2.1 · 2026-07-07";
+const APP_VERSION = "V3.2.4 · 2026-07-07";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3689,6 +3695,17 @@ function pushRoomListReset() {
       essential: !!it.essential, missing: !!it.missing,
     })),
   });
+}
+
+// 自動開房 (共同包貨免手動點「開新房間」): 有清單 + 已設 Worker URL & 暱稱 + 不在房間 → 自動建房。
+// 沒設 Worker URL / 暱稱就不自動 (使用者仍可手動「開新房間」)。同仁一樣用「加入房間」輸 4 碼進來。
+function maybeAutoCreateRoom(reason) {
+  if (state.roomMode) return;                                   // 已在房間就不重複開
+  if (settings.autoRoom === false) return;                      // 使用者可在設定關掉
+  if (!settings.syncWorkerUrl || !settings.myName) return;      // 沒設定就不自動
+  if (!state.items || state.items.length === 0) return;
+  console.log("[room] 自動開房:", reason || "");
+  createRoom(); // 會自己設 roomMode + 顯示 4 碼邀請碼 toast
 }
 
 async function createRoom() {
@@ -4691,6 +4708,14 @@ const BUNDLE_RULES = [
     ],
     note: "歷史 16 筆加購單 1:1 配對 100% 成立",
   },
+  {
+    trigger: "KVC-40MV46-BAS",
+    triggerName: "Dusty Lite 1 充電底座",
+    children: [
+      { sku: "KVC-40MV46", name: "KOCA Dusty Lite 1 家用吸塵器", qty: 1 },
+    ],
+    note: "充電底座 → 帶主機 1 (KOCA Dusty Lite 1 家用吸塵器)",
+  },
 ];
 
 function checkBundleRule(triggerIdx, deltaAdded) {
@@ -4909,6 +4934,7 @@ function renderLibrary() {
       const price = p.price || 0;
       return `
       <div class="lib-item">
+        <span class="lib-drag-handle" data-lib-drag="${idx}" title="拖曳排序" style="cursor:grab; touch-action:none; user-select:none; padding:2px 8px; color:var(--text-soft); font-size:1.15rem; align-self:center;">☰</span>
         <div class="item-info">
           <div class="item-sku">${escapeHtml(p.sku)}${p.essential ? ' <span class="essential-badge">必要</span>' : ''}</div>
           <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
@@ -5223,6 +5249,7 @@ function applyA1MappingToPickingList() {
   pendingA1 = [];
   showToast(`已建立今日清單，共 ${items.length} 個 SKU`);
   render();
+  maybeAutoCreateRoom("CSV 匯入"); // 自動開房 (共同包貨)
   return true;
 }
 
@@ -8801,6 +8828,47 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
   showToast(`匯入 ${parsed.length} 筆，新增 ${added} 筆 (其餘已存在)`);
 });
 
+// 商品庫拖曳排序 (拖把手 ☰; 支援手機觸控 + 電腦滑鼠, 用 pointer 事件)
+(function setupLibDrag() {
+  const container = document.getElementById("lib-items");
+  if (!container) return;
+  let dragEl = null;
+  function onMove(e) {
+    if (!dragEl) return;
+    e.preventDefault();
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    const overItem = over && over.closest ? over.closest(".lib-item") : null;
+    if (!overItem || overItem === dragEl || overItem.parentElement !== container) return;
+    const rect = overItem.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    container.insertBefore(dragEl, after ? overItem.nextSibling : overItem);
+  }
+  function onUp() {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    document.removeEventListener("pointercancel", onUp);
+    if (!dragEl) return;
+    dragEl.style.opacity = "";
+    dragEl = null;
+    // 依新的 DOM 順序重排 library (data-lib-drag 存的是原始索引)
+    const order = Array.from(container.querySelectorAll(".lib-drag-handle")).map(h => parseInt(h.dataset.libDrag, 10));
+    if (order.length === library.length && order.every(i => Number.isInteger(i))) {
+      const newLib = order.map(i => library[i]).filter(Boolean);
+      if (newLib.length === library.length) { library.length = 0; newLib.forEach(p => library.push(p)); saveLibrary(); renderLibrary(); showToast("✓ 已更新排序"); }
+    }
+  }
+  container.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(".lib-drag-handle");
+    if (!handle) return;
+    dragEl = handle.closest(".lib-item");
+    if (!dragEl) return;
+    e.preventDefault();
+    dragEl.style.opacity = "0.5";
+    document.addEventListener("pointermove", onMove, { passive: false });
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+  });
+})();
 document.getElementById("lib-items").addEventListener("click", (e) => {
   // 編輯 price
   const editPrice = e.target.closest("button[data-lib-edit-price]");
@@ -9466,6 +9534,8 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
     if (card.dataset.settingsView === "integration") {
       const _adb = document.getElementById("auto-daily-backup-input");
       if (_adb) _adb.checked = !!settings.autoDailyBackup;
+      const _ar = document.getElementById("auto-room-input");
+      if (_ar) _ar.checked = settings.autoRoom !== false; // 預設開
       if (typeof updateBackupInfoLabel === "function") updateBackupInfoLabel();
     }
     return;
@@ -9674,6 +9744,14 @@ if (_adbInp) {
     settings.autoDailyBackup = e.target.checked;
     saveSettings();
     updateBackupInfoLabel();
+  });
+}
+const _arInp = document.getElementById("auto-room-input");
+if (_arInp) {
+  _arInp.addEventListener("change", (e) => {
+    settings.autoRoom = e.target.checked;
+    saveSettings();
+    showToast(e.target.checked ? "✓ 自動開房已開啟" : "自動開房已關閉");
   });
 }
 const _mbBtn = document.getElementById("manual-backup-btn");
