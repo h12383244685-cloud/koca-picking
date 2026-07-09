@@ -2531,7 +2531,7 @@ footer.summary-bar {
   </div>
 
   <div class="panel standalone">
-    <div id="stocktake-stats" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.75rem;">—</div>
+    <div id="stocktake-stats" class="hint" style="background: var(--primary-light); padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 0.875rem;">—</div>
 
     <div class="filter-bar" id="stocktake-filter-bar" style="margin-bottom: 8px;">
       <button data-st-filter="all" class="active">全部 <span id="st-cnt-all">0</span></button>
@@ -3098,7 +3098,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.3.1 · 2026-07-08";
+const APP_VERSION = "V3.3.3 · 2026-07-08";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5896,13 +5896,13 @@ function renderStockTake() {
     // 略過 (暫不盤點) 的列: 灰底 + 恢復鈕
     if (r.isSkipped) {
       return `
-      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light); background: var(--bg); opacity: .75;">
+      <div style="display:flex; align-items:center; gap: 8px; padding: 10px 10px; border-bottom: 1px solid var(--border-light); background: var(--bg); opacity: .75;">
         <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 600; font-size: 0.75rem; text-decoration: line-through;">${escapeHtml(r.sku)}</div>
-          <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+          <div style="font-weight: 700; font-size: 0.9375rem; text-decoration: line-through;">${escapeHtml(r.sku)}</div>
+          <div style="font-size: 0.8125rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
         </div>
-        <span style="font-size: 0.6875rem; color: var(--text-soft); background: var(--border); padding: 3px 7px; border-radius: 6px; white-space: nowrap;">🚫 暫不盤點</span>
-        <button data-st-restore="${escapeHtml(r.sku)}" style="background: var(--bg); color: var(--primary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 0.75rem; font-weight: 600; white-space: nowrap;">恢復</button>
+        <span style="font-size: 0.75rem; color: var(--text-soft); background: var(--border); padding: 4px 8px; border-radius: 6px; white-space: nowrap;">🚫 暫不盤點</span>
+        <button data-st-restore="${escapeHtml(r.sku)}" style="background: var(--bg); color: var(--primary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 0.875rem; font-weight: 600; white-space: nowrap;">恢復</button>
       </div>`;
     }
     const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
@@ -5910,24 +5910,24 @@ function renderStockTake() {
     const diffText = (r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤") + (big ? " ⚠" : "");
     const rowBg = r.status === "diff_plus" ? "rgba(34,197,94,0.10)" : (r.status === "diff_minus" ? "rgba(239,68,68,0.10)" : "transparent");
     const skipBtn = !r.inStockTake
-      ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
+      ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.8125rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
       : "";
     return `
-      <div style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border-light); background: ${rowBg};">
+      <div style="display:flex; align-items:center; gap: 8px; padding: 10px 10px; border-bottom: 1px solid var(--border-light); background: ${rowBg};">
         <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}</div>
-          <div style="font-size: 0.6875rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+          <div style="font-weight: 700; font-size: 0.9375rem;">${escapeHtml(r.sku)}</div>
+          <div style="font-size: 0.8125rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
           ${skipBtn}
         </div>
-        <div style="text-align: right; min-width: 46px;">
-          <div style="font-size: 0.6875rem; color: var(--text-soft);">系統 ${r.system}</div>
-          <div style="font-size: 0.6875rem; color: ${diffColor}; font-weight: 600;">${diffText}</div>
+        <div style="text-align: right; min-width: 52px;">
+          <div style="font-size: 0.8125rem; color: var(--text-soft);">系統 ${r.system}</div>
+          <div style="font-size: 0.875rem; color: ${diffColor}; font-weight: 700;">${diffText}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 30px; height: 34px; cursor: pointer; font-weight: 700; font-size: 1.125rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 34px; height: 40px; cursor: pointer; font-weight: 700; font-size: 1.25rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
           <input type="number" inputmode="numeric" min="0" step="1" data-st-set="${escapeHtml(r.sku)}" value="${r.actual}"
-                 style="width: 52px; height: 34px; text-align: center; padding: 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9375rem; font-weight: 700; background: var(--surface); color: var(--text);">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 30px; height: 34px; cursor: pointer; font-weight: 700; font-size: 1.125rem;">+</button>
+                 style="width: 58px; height: 40px; text-align: center; padding: 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 1.1875rem; font-weight: 700; background: var(--surface); color: var(--text);">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 34px; height: 40px; cursor: pointer; font-weight: 700; font-size: 1.25rem;">+</button>
         </div>
       </div>
     `;
@@ -9702,6 +9702,7 @@ const BACKUP_KEYS = [
   STATE_KEY, STATE_BACKUP_KEY, LIB_KEY, LIB_INIT_KEY, LIB_DELETED_KEY,
   MENU_QTY_KEY, COLLAPSED_KEY, SPEC_MAP_KEY, HISTORY_KEY, SETTINGS_KEY,
   STOCK_KEY, PLATFORM_KEY,
+  STOCKTAKE_KEY, STOCKTAKE_HISTORY_KEY,   // 盤點: 進行中 + 歷史紀錄也一起備份
 ];
 
 document.getElementById("backup-export-btn").addEventListener("click", () => {
