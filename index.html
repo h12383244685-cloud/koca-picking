@@ -2103,7 +2103,7 @@ footer.summary-bar {
         <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
           <strong>兩件事要分清楚:</strong><br>
           • <strong>共同包貨(一起刷商品)</strong>=房間,<strong>不用金鑰</strong>,填 Worker URL + 暱稱、輸 4 碼就能一起刷。<br>
-          • <strong>共享出貨紀錄(看彼此完成的單)</strong>=雲端,<strong>一定要 Spidey Key</strong>。<br>
+          • <strong>共享出貨紀錄 + 盤點紀錄(看彼此完成的單 / 手機盤完電腦看得到)</strong>=雲端,<strong>一定要 Spidey Key</strong>。<br>
           <strong>要看到同仁的出貨紀錄:</strong>兩台都要在 ⚙ 外部整合 →「X-Spidey-Key」欄位填<strong>同一組</strong>(跟 Worker 設定的一樣),完成的單才會上雲共享。<br>
           • 只有一台有填 → 你看得到自己的、看不到對方的(對方沒上雲)。<br>
           • 填好後回出貨紀錄按「重新整理」拉一次。<br>
@@ -2220,6 +2220,13 @@ footer.summary-bar {
       </div>
 
       <button class="btn full outline" id="sound-test-btn">🔉 測試出貨完成音 (3 連音)</button>
+
+      <div style="border-top:1px solid var(--border); margin:16px 0 10px;"></div>
+      <label style="display:flex; align-items:center; gap:8px; font-size: 0.875rem;">
+        <input type="checkbox" id="pkg-guard-input" style="transform: scale(1.3);"> 📦 包材防呆(刷錯包材先詢問)
+      </label>
+      <p class="hint" style="font-size:0.6875rem; margin:4px 0 0;">刷到與本單主機建議不符的包材時,跳確認框問你(不強制擋、可繼續)。關掉則不再提醒。</p>
+
       <button class="btn full settings-save-btn" style="margin-top:12px; background: var(--success);">💾 儲存設定</button>
     </div>
 
@@ -2309,6 +2316,11 @@ footer.summary-bar {
           <input type="checkbox" id="auto-room-input" style="transform: scale(1.2);"> 🤝 匯入 CSV 自動開房(共同包貨)
         </label>
         <p class="hint" style="font-size:0.6875rem; margin:4px 0 0;">開啟後,建好清單就自動開房拿 4 碼(需先填上方 URL + 暱稱)。單人包不想開房可關掉。</p>
+
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8125rem; margin-top:12px;">
+          <input type="checkbox" id="master-device-input" style="transform: scale(1.2);"> 🖥 這台是主機(電腦)
+        </label>
+        <p class="hint" style="font-size:0.6875rem; margin:4px 0 0;">只在<strong>電腦這台</strong>打勾。商品庫/庫存/分類以這台為準,一改就推送給其他裝置。手機請<strong>不要</strong>勾(手機為鏡像,開 App 自動拉最新;需填同一組 Spidey Key)。</p>
       </div>
 
       <div style="height: 16px"></div>
@@ -3098,7 +3110,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.3.3 · 2026-07-08";
+const APP_VERSION = "V3.3.9 · 2026-07-09";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3273,6 +3285,8 @@ let currentTab = "menu";
 let history = []; // [{id, completedAt, platform, items: [...], summary: {totalSku, totalExpected, totalPacked, completionRate}}]
 let cloudHistory = [];      // 雲端共享出貨紀錄 (不存本機, 開出貨紀錄時拉回)
 let _cloudHistFetchedAt = 0; // 上次拉雲端時間 (節流)
+let cloudStocktake = [];    // 雲端共享盤點紀錄 (手機盤完電腦看得到)
+let _cloudStFetchedAt = 0;  // 上次拉雲端盤點時間 (節流)
 let historyFilter = "all"; // "all" | "normal" | "replacement" | "return" - 出貨紀錄篩選 (session only)
 let historyPlatformFilter = "all"; // 出貨紀錄: 依商家(通路)篩選 (上報用)
 let historyCarrierFilter = "all";  // 出貨紀錄: 依物流篩選 (上報用)
@@ -3296,6 +3310,8 @@ const STOCKTAKE_HISTORY_KEY = "picking_stocktake_history_v1";
 let settings = {
   soundEnabled: true,
   soundVolume: 50,  // 0-100, 預設 50%
+  packagingGuard: true, // 📦 包材防呆 (刷錯包材先詢問)
+  isMasterDevice: false, // 🖥 這台是主機(電腦): 商品庫/庫存以這台為準, 推送給其他裝置
   discordWebhook: "",
   sheetsWebhook: "",
   theme: "koca", // 預設 KOCA 品牌橘; 可選 "default"(藍) | "warm" | "dark" | "koca"
@@ -4320,7 +4336,7 @@ function tryRestoreFromBackup() {
   } catch(e) { console.warn("[storage] backup parse failed", e); }
   return null;
 }
-function saveLibrary() { try { localStorage.setItem(LIB_KEY, JSON.stringify(library)); } catch(e) { console.warn("[storage] saveLibrary failed", e); } }
+function saveLibrary() { try { localStorage.setItem(LIB_KEY, JSON.stringify(library)); } catch(e) { console.warn("[storage] saveLibrary failed", e); } if (typeof scheduleMasterPush === "function") scheduleMasterPush(); }
 function loadLibrary() {
   try {
     const s = localStorage.getItem(LIB_KEY);
@@ -4486,7 +4502,7 @@ function saveHistory() {
   catch(e) { notifyStorageFull("saveHistory"); return false; }
 }
 function saveStock() {
-  try { localStorage.setItem(STOCK_KEY, JSON.stringify(stockMap)); return true; }
+  try { localStorage.setItem(STOCK_KEY, JSON.stringify(stockMap)); if (typeof scheduleMasterPush === "function") scheduleMasterPush(); return true; }
   catch(e) { notifyStorageFull("saveStock"); return false; }
 }
 function loadStock() {
@@ -5480,7 +5496,10 @@ function renderInventory() {
             <div style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 0.6875rem;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 0.625rem;">未入庫</span>' : ''}</div>
             <div style="font-size: 0.75rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(name)}</div>
           </div>
-          <div style="text-align: right; white-space: nowrap;">${qtyHtml}</div>
+          <div style="text-align: right; white-space: nowrap; display:flex; align-items:center; gap:8px; justify-content:flex-end;">
+            <div>${qtyHtml}</div>
+            <button data-inv-edit="${escapeHtml(sku)}" title="修改庫存數量" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:0.8125rem; flex:none;">✏️ 改</button>
+          </div>
         </div>
       `;
     }).join("");
@@ -5763,7 +5782,13 @@ function computeStockTakeDiff() {
 function applyStockTake() {
   if (!stockTake) return;
   const counts = stockTake.counts || {};
+  const notesObj = stockTake.notes || {};
   const now = new Date().toISOString();
+  // ⚠ 一定要在覆蓋庫存「之前」算差異, 否則覆蓋後 stockMap=實盤, 差異全變 0
+  const diffResults = computeStockTakeDiff();
+  const snapshotItems = diffResults
+    .filter(r => r.inStockTake)
+    .map(r => ({ sku: r.sku, name: r.name, system: r.system, actual: r.actual, diff: r.diff, note: notesObj[r.sku] || "" }));
   let updated = 0;
   for (const sku in counts) {
     if (!stockMap[sku]) {
@@ -5775,12 +5800,12 @@ function applyStockTake() {
     stockMap[sku].updatedAt = now;
   }
   saveStock();
-  // 寫入盤點歷史
-  const diffResults = computeStockTakeDiff();
-  stockTakeHistory.unshift({
+  // 寫入盤點歷史 (含逐項明細, 件數可回查/匯出)
+  const histEntry = {
     id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     startedAt: stockTake.startedAt,
     completedAt: now,
+    device: settings.myName || "(未命名)",   // 哪台/誰盤的
     countedSkus: Object.keys(counts).length,
     totalActual: Object.values(counts).reduce((s, q) => s + q, 0),
     plusCount: diffResults.filter(r => r.status === "diff_plus").length,
@@ -5788,10 +5813,13 @@ function applyStockTake() {
     notCountedCount: diffResults.filter(r => r.status === "not_counted").length,
     skippedCount: diffResults.filter(r => r.status === "skipped").length,
     bigDiffCount: diffResults.filter(isBigDiff).length,
-    notes: Object.assign({}, stockTake.notes || {}),
-  });
+    notes: Object.assign({}, notesObj),
+    items: snapshotItems,
+  };
+  stockTakeHistory.unshift(histEntry);
   if (stockTakeHistory.length > 50) stockTakeHistory = stockTakeHistory.slice(0, 50);
   saveStockTakeHistory();
+  pushStocktakeToCloud(histEntry);   // 推上雲端 (別台看得到; 失敗不影響本機)
   stockTake = null;
   saveStockTake();
   document.getElementById("stocktake-diff-modal").hidden = true;
@@ -5948,19 +5976,39 @@ function renderStockTakeStatusInSettings() {
     document.getElementById("stocktake-start-btn").hidden = false;
     document.getElementById("stocktake-resume-btn").hidden = true;
   }
-  // 歷史
+  // 歷史 (本機 + 雲端合併)
   const histList = document.getElementById("stocktake-history-list");
   const histCount = document.getElementById("stocktake-hist-count");
-  if (histCount) histCount.textContent = stockTakeHistory.length;
+  const merged = allStockTakeHistory();
+  const localIds = new Set(stockTakeHistory.map(h => h.id));
+  if (histCount) histCount.textContent = merged.length;
   if (histList) {
-    if (stockTakeHistory.length === 0) {
-      histList.innerHTML = '<div class="hint" style="text-align:center; padding:8px;">尚無盤點紀錄</div>';
+    if (merged.length === 0) {
+      histList.innerHTML = '<div class="hint" style="text-align:center; padding:8px;">尚無盤點紀錄</div>' +
+        (cloudHistoryEnabled() ? '' : '<div class="hint" style="text-align:center; padding:4px; font-size:0.6875rem;">(要跨裝置看,兩台需在 ⚙ 外部整合填同一組 Spidey Key)</div>');
     } else {
-      histList.innerHTML = stockTakeHistory.slice(0, 10).map(h => {
+      histList.innerHTML = merged.slice(0, 20).map(h => {
         const d = new Date(h.completedAt);
+        const hasItems = Array.isArray(h.items) && h.items.length > 0;
+        const fromCloud = !localIds.has(h.id);
+        const devTag = h.device ? ` · ${escapeHtml(h.device)}` : "";
+        const itemsHtml = hasItems
+          ? h.items.map(it => {
+              const c = it.diff > 0 ? "var(--success)" : (it.diff < 0 ? "var(--danger)" : "var(--text-soft)");
+              return `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; font-size:0.75rem; border-bottom:1px dashed var(--border-light);">
+                <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(it.sku)}</span>
+                <span style="white-space:nowrap;">${it.system}→<strong>${it.actual}</strong> <span style="color:${c}; font-weight:700;">${it.diff>0?'+':''}${it.diff}</span>${it.note?` 📝${escapeHtml(it.note)}`:''}</span>
+              </div>`;
+            }).join("")
+          : '<div class="hint" style="padding:4px 0;">此筆無逐項明細(舊版紀錄)</div>';
         return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-light);">
-          <div style="font-weight: 600;">${d.toLocaleString("zh-TW", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})}</div>
-          <div style="font-size: 0.6875rem; color: var(--text-soft);">${h.countedSkus} SKU / ${h.totalActual} 件 · ＋${h.plusCount} −${h.minusCount} · 未盤 ${h.notCountedCount}</div>
+          <div style="font-weight: 600;">${d.toLocaleString("zh-TW", {month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"})}${fromCloud?' <span style="font-size:0.625rem; color:var(--primary); font-weight:700;">☁ 雲端</span>':''}</div>
+          <div style="font-size: 0.6875rem; color: var(--text-soft);">${h.countedSkus} SKU / ${h.totalActual} 件 · ＋${h.plusCount} −${h.minusCount} · 未盤 ${h.notCountedCount||0}${h.skippedCount?` · 略過 ${h.skippedCount}`:''}${devTag}</div>
+          <details style="margin-top:4px;">
+            <summary style="font-size:0.75rem; color:var(--primary); cursor:pointer;">逐項明細${hasItems?` (${h.items.length})`:''}</summary>
+            <div style="margin-top:4px;">${itemsHtml}</div>
+            ${hasItems?`<button data-hist-export="${escapeHtml(h.id)}" class="btn outline sm" style="margin-top:6px;">📊 匯出這筆 CSV</button>`:''}
+          </details>
         </div>`;
       }).join("");
     }
@@ -5976,6 +6024,21 @@ document.getElementById("stocktake-start-btn").addEventListener("click", () => {
 });
 document.getElementById("stocktake-resume-btn").addEventListener("click", () => {
   if (stockTake) showStockTakeView();
+});
+// 盤點歷史: 匯出某一筆的逐項明細 CSV
+const _stHistListEl = document.getElementById("stocktake-history-list");
+if (_stHistListEl) _stHistListEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-hist-export]");
+  if (!btn) return;
+  const h = allStockTakeHistory().find(x => x.id === btn.dataset.histExport);
+  if (!h || !Array.isArray(h.items) || h.items.length === 0) { showToast("此筆無逐項明細"); return; }
+  const rows = [["SKU", "商品名稱", "系統庫存", "實盤數", "差異", "備註"]];
+  for (const it of h.items) {
+    rows.push([it.sku, (it.name || "").replace(/[\r\n]+/g, " "), it.system, it.actual, it.diff > 0 ? "+" + it.diff : it.diff, it.note || ""]);
+  }
+  const ts = new Date(h.completedAt).toISOString().slice(0, 10);
+  downloadCsvRows(rows, `盤點明細_${ts}.csv`);
+  showToast(`✓ 已匯出 ${h.items.length} 項`);
 });
 document.getElementById("stocktake-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -6250,6 +6313,7 @@ showSettingsView = function(view) {
   _origShowSettingsView(view);
   if (view === "stocktake") {
     renderStockTakeStatusInSettings();
+    fetchCloudStocktake(true);   // 拉別台盤的紀錄 (跨裝置)
     document.getElementById("auto-deduct-input").checked = !!settings.autoDeductOnShip;
     document.getElementById("safety-stock-input").value = settings.safetyStockThreshold || 10;
     document.getElementById("auto-low-stock-alert-input").checked = !!settings.autoLowStockAlert;
@@ -7059,6 +7123,100 @@ async function fetchCloudHistory(force) {
   } catch (e) { console.warn("[cloud-history] fetch failed", e); }
 }
 
+// ===== 盤點紀錄雲端共享 (沿用同一組 Worker + Spidey Key) =====
+// 合併本機 + 雲端盤點歷史, 以 id 去重 (本機優先), 新→舊
+function allStockTakeHistory() {
+  if (!cloudStocktake || cloudStocktake.length === 0) return stockTakeHistory;
+  const byId = new Map();
+  for (const e of cloudStocktake) if (e && e.id) byId.set(e.id, e);
+  for (const e of stockTakeHistory) if (e && e.id) byId.set(e.id, e);
+  const merged = Array.from(byId.values());
+  merged.sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
+  return merged;
+}
+// 盤點完成 → 推一筆到雲端 (失敗不影響本機)
+async function pushStocktakeToCloud(entry) {
+  if (!entry || !cloudHistoryEnabled()) return;
+  try {
+    await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/stocktake/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+      body: JSON.stringify({ entry }),
+    });
+  } catch (e) { console.warn("[cloud-stocktake] push failed", e); }
+}
+// 開盤點畫面時拉雲端最近 90 天 (節流 8 秒)
+async function fetchCloudStocktake(force) {
+  if (!cloudHistoryEnabled()) return;
+  if (!force && Date.now() - _cloudStFetchedAt < 8000) return;
+  _cloudStFetchedAt = Date.now();
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/stocktake/list?days=90", {
+      headers: { "X-Spidey-Key": settings.spideyKey || "" },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && Array.isArray(data.entries)) {
+      cloudStocktake = data.entries.map(e => ({ ...e, items: Array.isArray(e.items) ? e.items : [] }));
+      renderStockTakeStatusInSettings();
+    }
+  } catch (e) { console.warn("[cloud-stocktake] fetch failed", e); }
+}
+
+// ===== 🖥 主檔連動 (電腦為主, 手機鏡像): 商品庫 library + 庫存 stockMap =====
+const MASTER_VER_KEY = "picking_master_ver_v1";
+let _lastMasterVersion = (() => { try { return parseInt(localStorage.getItem(MASTER_VER_KEY) || "0", 10) || 0; } catch (_) { return 0; } })();
+let _masterPushTimer = null;
+let _masterFetchedAt = 0;
+// 主機(電腦)在主檔變動後推送 (debounce, 避免連續存檔狂送)
+function scheduleMasterPush() {
+  if (!settings.isMasterDevice || !cloudHistoryEnabled()) return; // 只有主機、且有填金鑰才推
+  clearTimeout(_masterPushTimer);
+  _masterPushTimer = setTimeout(pushMasterNow, 1500);
+}
+async function pushMasterNow() {
+  if (!settings.isMasterDevice || !cloudHistoryEnabled()) return;
+  const version = Date.now();
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/master/put", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+      body: JSON.stringify({ version, updatedAt: new Date().toISOString(), updatedBy: settings.myName || "電腦", library, stockMap }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok) {
+      _lastMasterVersion = version; // 自己推的, 不用再拉回
+      try { localStorage.setItem(MASTER_VER_KEY, String(version)); } catch (_) {}
+    }
+  } catch (e) { console.warn("[master] push failed", e); }
+}
+// 非主機: 拉主檔, 較新才覆蓋本機 (空/壞主檔一律不套用, 防止清空)
+async function fetchMasterMirror(force) {
+  if (settings.isMasterDevice || !cloudHistoryEnabled()) return; // 主機自己不拉
+  if (!force && Date.now() - _masterFetchedAt < 8000) return;
+  _masterFetchedAt = Date.now();
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/master/get", {
+      headers: { "X-Spidey-Key": settings.spideyKey || "" },
+    });
+    const data = await res.json().catch(() => ({}));
+    const doc = data && data.doc;
+    if (!doc || typeof doc !== "object") return;
+    if (!Array.isArray(doc.library) || doc.library.length === 0) return; // 空/壞主檔不套用
+    const v = Number(doc.version) || 0;
+    if (v <= _lastMasterVersion) return; // 沒有更新
+    library.length = 0;
+    for (const p of doc.library) library.push(p);
+    saveLibrary();
+    if (doc.stockMap && typeof doc.stockMap === "object") { stockMap = doc.stockMap; saveStock(); }
+    _lastMasterVersion = v;
+    try { localStorage.setItem(MASTER_VER_KEY, String(v)); } catch (_) {}
+    if (typeof renderMenu === "function") renderMenu();
+    if (typeof renderInventory === "function") renderInventory();
+    if (typeof renderLibrary === "function") renderLibrary();
+    showToast(`🖥 已同步電腦主檔 (${doc.updatedBy || "電腦"})`);
+  } catch (e) { console.warn("[master] fetch failed", e); }
+}
+
 function renderHistory() {
   const history = allHistory(); // 顯示用: 本機 + 雲端合併 (shadow 外層, 只影響此函式的呈現)
   const list = document.getElementById("history-list");
@@ -7524,6 +7682,57 @@ function makeTrackingButtonsHtml(parcelId, opts) {
   ).join("");
 }
 
+// ===== 📦 包材防呆 =====
+// 依當下這單刷到的「主機」判斷該用哪個包材; 刷到不符先詢問 (不強制擋)。
+// host = 主機 SKU (用其數量當「幾組」); single = 一組建議包材; multi = 兩組以上建議包材。
+// requireCompanion = 需與此配件同時出現才套用此規則; withoutCompanion = 沒有此配件時才套用。
+const PACKAGING_RULES = [
+  { name: "Dusty MINI", host: "KVC-18MV45", single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
+  { name: "Dusty Lite", host: "KVC-40MV46", single: ["5E-5061-EV"], multi: ["CTN-A1-F"] },
+  { name: "Joy Lite(含收納包)", host: "KPJ-40MV47", requireCompanion: "KPJ-40MV47-BAG", single: ["CTN-A1-G"], multi: ["CTN-A1-F"] },
+  { name: "Joy Lite(單主機)", host: "KPJ-40MV47", withoutCompanion: "KPJ-40MV47-BAG", single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
+  // 濾芯 / 遙控器 → CTN-A1-Z (不分組數)
+  { name: "Dusty MINI 濾芯", host: "KVC-18MV45-HEPA", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "2個" },
+  { name: "Dusty Lite 濾芯", host: "KVC-40MV46-HEPA", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "2個" },
+  { name: "藍牙遙控器", host: "RC-BT", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "1個" },
+  { name: "紅外線遙控器", host: "RC-IR", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "1個" },
+];
+// 受規則管的包材 SKU (只有刷到這些才會做防呆比對)
+const GOVERNED_PACKAGING = (() => {
+  const s = new Set();
+  for (const r of PACKAGING_RULES) { (r.single || []).forEach(x => s.add(x)); (r.multi || []).forEach(x => s.add(x)); }
+  return s;
+})();
+function _pkgName(sku) { const p = library.find(x => x.sku === sku); return p && p.name ? `${sku}(${p.name})` : sku; }
+// 依 parcel 內的主機數量算出「建議包材集合」
+function expectedPackagingFor(items) {
+  const expected = new Set();
+  const reasons = [];
+  for (const rule of PACKAGING_RULES) {
+    const hq = (items && items[rule.host]) || 0;
+    if (hq <= 0) continue;
+    if (rule.requireCompanion && !((items[rule.requireCompanion] || 0) > 0)) continue;
+    if (rule.withoutCompanion && ((items[rule.withoutCompanion] || 0) > 0)) continue;
+    const pkgs = hq >= 2 ? rule.multi : rule.single;
+    (pkgs || []).forEach(s => expected.add(s));
+    const qh = rule.qtyHint ? ` ${rule.qtyHint}` : "";
+    reasons.push(`${rule.name}${hq >= 2 ? ` ×${hq} 組` : ""} → ${(pkgs || []).map(_pkgName).join(" 或 ")}${qh}`);
+  }
+  return { expected, reasons };
+}
+// 檢查「剛刷的包材」是否符合本單建議; 回傳 {ok} 或 {ok:false, message}
+function checkPackagingMismatch(scannedSku) {
+  if (settings.packagingGuard === false) return { ok: true };         // 使用者關閉防呆
+  if (!GOVERNED_PACKAGING.has(scannedSku)) return { ok: true };       // 非規則管的包材, 不判斷
+  if (!state.activeParcel || !state.activeParcel.items) return { ok: true };
+  const { expected, reasons } = expectedPackagingFor(state.activeParcel.items);
+  if (expected.size === 0) return { ok: true };                        // 還沒刷到主機, 無法判斷
+  if (expected.has(scannedSku)) return { ok: true };                   // 符合建議
+  const expList = Array.from(expected).map(_pkgName).join("\n   或 ");
+  const message = `⚠ 包材確認\n\n本單內容:\n ${reasons.join("\n ")}\n\n建議包材:\n   ${expList}\n\n你刷到的是:\n   ${_pkgName(scannedSku)}\n\n可能是刷錯,或本單另有需求。\n確定要用「${scannedSku}」嗎?`;
+  return { ok: false, message };
+}
+
 function processScan(code) {
   // ×N 倍數模式偵測
   const _rawTrim = (code || "").trim();
@@ -7593,6 +7802,16 @@ function processScan(code) {
     }
     const idx = state.items.findIndex(it => it.sku === matchedProd.sku);
     if (idx >= 0) {
+      // 📦 包材防呆: 刷到受規則管的包材且與本單建議不符 → 先問, 不強制擋
+      const _pkgChk = checkPackagingMismatch(matchedProd.sku);
+      if (!_pkgChk.ok) {
+        SOUND.scanError();
+        if (!confirm(_pkgChk.message)) {
+          showToast(`✗ 未計入 ${matchedProd.sku}`);
+          _scanMultiplier = 1; renderMultiplierBadge();
+          return;
+        }
+      }
       SOUND.scanSku();
       bumpPickItem(idx, _mul);
       _scanMultiplier = 1; renderMultiplierBadge();
@@ -8144,6 +8363,8 @@ function switchTab(t) {
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
   if (t === "history") { renderHistory(); fetchCloudHistory(true); } // 切到歷史: 先畫本機, 再強制拉雲端最新 (看得到別人剛刪的)
   if (t === "inventory") renderInventory(); // 切到倉庫清冊時重新渲染
+  // 手機鏡像: 切到商品庫/倉庫清冊時, 拉電腦主檔最新 (主機自己不拉)
+  if (t === "menu" || t === "inventory") fetchMasterMirror(true);
 }
 
 // (Excel paste 功能已移除, 改為倉庫清冊)
@@ -8233,6 +8454,28 @@ document.getElementById("a1-parse-paste-btn").addEventListener("click", () => {
 // 清空所有對應
 // === 出貨紀錄事件 ===
 // 倉庫清冊 - 匯入庫存 CSV
+// 倉庫清冊 - 直接修改某 SKU 庫存數量
+document.getElementById("inventory-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-inv-edit]");
+  if (!btn) return;
+  const sku = btn.dataset.invEdit;
+  const libP = library.find(p => p.sku === sku);
+  const nm = (libP && libP.name) || (stockMap[sku] && stockMap[sku].name) || "";
+  const cur = (stockMap[sku] && typeof stockMap[sku].qty === "number") ? stockMap[sku].qty : "";
+  const val = prompt(`修改庫存數量\n${sku}${nm ? "  " + nm : ""}\n\n輸入新的庫存數量:`, cur === "" ? "" : String(cur));
+  if (val === null) return;
+  const t = val.trim();
+  if (t === "") { showToast("未修改"); return; }
+  const q = Math.round(Number(t));
+  if (isNaN(q) || q < 0) { showToast("⚠ 請輸入 0 或正整數"); return; }
+  const now = new Date().toISOString();
+  if (!stockMap[sku]) stockMap[sku] = { qty: 0, name: nm, updatedAt: now };
+  stockMap[sku].qty = q;
+  stockMap[sku].updatedAt = now;
+  saveStock();
+  renderInventory();
+  showToast(`✓ ${sku} 庫存改為 ${q.toLocaleString()}`);
+});
 document.getElementById("inv-import-btn").addEventListener("click", () => {
   document.getElementById("inv-import-file").click();
 });
@@ -9683,6 +9926,8 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   showSettingsView("menu"); // 每次開啟回主選單
   // 載入當前設定到 UI
   document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
+  const _pg = document.getElementById("pkg-guard-input");
+  if (_pg) _pg.checked = settings.packagingGuard !== false; // 預設開
   const _svInp = document.getElementById("sound-volume-input");
   const _svLbl = document.getElementById("sound-volume-label");
   if (_svInp) _svInp.value = settings.soundVolume || 50;
@@ -9937,6 +10182,8 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
       if (_adb) _adb.checked = !!settings.autoDailyBackup;
       const _ar = document.getElementById("auto-room-input");
       if (_ar) _ar.checked = settings.autoRoom !== false; // 預設開
+      const _md = document.getElementById("master-device-input");
+      if (_md) _md.checked = !!settings.isMasterDevice;
       if (typeof updateBackupInfoLabel === "function") updateBackupInfoLabel();
     }
     return;
@@ -10005,6 +10252,12 @@ document.getElementById("sound-enabled-input").addEventListener("change", (e) =>
   settings.soundEnabled = e.target.checked;
   saveSettings();
   if (e.target.checked) SOUND.scanSku();
+});
+const _pgInp = document.getElementById("pkg-guard-input");
+if (_pgInp) _pgInp.addEventListener("change", (e) => {
+  settings.packagingGuard = e.target.checked;
+  saveSettings();
+  showToast(e.target.checked ? "📦 包材防呆已開啟" : "包材防呆已關閉");
 });
 document.getElementById("sound-volume-input").addEventListener("input", (e) => {
   const v = parseInt(e.target.value, 10);
@@ -10153,6 +10406,19 @@ if (_arInp) {
     settings.autoRoom = e.target.checked;
     saveSettings();
     showToast(e.target.checked ? "✓ 自動開房已開啟" : "自動開房已關閉");
+  });
+}
+const _mdInp = document.getElementById("master-device-input");
+if (_mdInp) {
+  _mdInp.addEventListener("change", (e) => {
+    settings.isMasterDevice = e.target.checked;
+    saveSettings();
+    if (e.target.checked) {
+      showToast("🖥 已設為主機, 推送主檔中...");
+      pushMasterNow(); // 立刻把這台的商品庫/庫存推上雲當基準
+    } else {
+      showToast("已取消主機 (這台變回鏡像)");
+    }
   });
 }
 const _mbBtn = document.getElementById("manual-backup-btn");
@@ -11230,6 +11496,9 @@ currentPlatform = "";
 document.getElementById("platform-select").value = "";
 document.getElementById("platform-hint").textContent = "請先選擇通路, 再上傳對應的 CSV。";
 render();
+// 🖥 手機鏡像: 開機拉一次電腦主檔 + 每 60 秒保持最新 (主機自己不拉; 函式內自我判斷)
+setTimeout(() => fetchMasterMirror(true), 1200);
+setInterval(() => fetchMasterMirror(false), 60000);
 // 若上次離線前在房間模
 // 若上次離線前在房間模式, 自動恢復同步
 loadPendingEvents(); // 還原上次沒送出的事件 (重整/當機不掉刷), startSyncTimer 會自動補送
