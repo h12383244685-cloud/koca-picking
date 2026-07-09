@@ -1817,6 +1817,9 @@ footer.summary-bar {
       <button data-inv-filter="out_of_stock">缺貨 <span id="inv-cnt-out">0</span></button>
     </div>
 
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="btn outline sm" id="inv-expand-toggle" type="button" style="white-space:nowrap;">全部收合</button>
+    </div>
     <div id="inventory-list"></div>
   </div>
 </div>
@@ -1877,7 +1880,7 @@ footer.summary-bar {
   <div id="scan-panel" class="scan-panel">
     <button class="scan-toggle" id="scan-toggle-btn">
       <span id="scan-toggle-icon">▶</span>
-      <span>📦 裝箱掃描</span>
+      <span id="scan-toggle-title">📦 裝箱掃描</span>
       <span class="scan-status" id="scan-status">未啟用</span>
     </button>
     <div id="scan-body" class="scan-body" hidden>
@@ -1891,7 +1894,7 @@ footer.summary-bar {
              enterkeyhint="done"
              placeholder="SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter"
              class="scan-input">
-      <div class="hint" style="font-size: 0.6875rem; margin-top: 4px; color: var(--text-soft);">
+      <div class="hint" id="scan-carrier-hint" style="font-size: 0.6875rem; margin-top: 4px; color: var(--text-soft);">
         💡 蝦皮 / 黑貓 / 國際小包 → 直接刷 QR<br>
         💡 7-11 / 全家 → QR 是內部代碼, <strong>用下方按鈕手動輸入</strong>
       </div>
@@ -1902,7 +1905,7 @@ footer.summary-bar {
         <span>💡 倍數: 輸入 <code style="background: var(--bg); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace;">*5</code> 後刷碼會 +5</span>
         <span id="scan-multiplier-badge" hidden style="background: var(--warn); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 0.75rem;">× 5</span>
       </div>
-      <div class="scan-stats">
+      <div class="scan-stats" id="scan-stats-line">
         ✓ 已完成 <strong id="completed-parcels-count">0</strong> 筆訂單
       </div>
       <details id="completed-parcels-details" style="margin-top:8px;">
@@ -1910,6 +1913,14 @@ footer.summary-bar {
         <div id="completed-parcels-list" class="completed-parcels-list">尚無</div>
       </details>
     </div>
+  </div>
+  <!-- 入倉驗收: 從商品庫點選(免刷條碼) -->
+  <div id="inbound-picker" hidden style="margin-top:10px; border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+    <div style="background:var(--primary-light); padding:8px 10px; font-weight:600; font-size:0.8125rem;">📋 從商品庫點選驗收(免刷條碼)</div>
+    <div style="padding:8px 10px;">
+      <input type="search" id="inbound-search" placeholder="🔍 搜尋 SKU 或品名" autocomplete="off" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.875rem; background:var(--surface); color:var(--text);">
+    </div>
+    <div id="inbound-picker-list" style="max-height:360px; overflow-y:auto;"></div>
   </div>
   <div class="filter-bar" id="filter-bar">
     <button data-filter="all" class="active">全部 <span id="cnt-all">0</span></button>
@@ -2888,7 +2899,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="inbound-modal" hidden>
   <div class="modal" style="max-width: 540px;">
     <h2>🏭 入倉驗收 (進貨)</h2>
-    <p class="hint">廠商進貨到倉時用。填進貨單號 → 刷商品條碼清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
+    <p class="hint">廠商進貨到倉時用。填進貨單號 → 開始後可<strong>刷條碼</strong>或直接從下方「📋 商品庫點選(可搜尋、免刷)」點＋清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">進貨單號 <span style="color: var(--danger);">*</span></label>
     <div style="display: flex; gap: 4px;">
@@ -3110,7 +3121,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.3.9 · 2026-07-09";
+const APP_VERSION = "V3.4.3 · 2026-07-09";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5074,6 +5085,58 @@ function renderLibrary() {
 }
 
 // ---- Render: Picking view ----
+// ===== 🏭 入倉驗收: 從商品庫點選(免刷條碼, 可搜尋) =====
+let _inboundSearch = "";
+function renderInboundPicker() {
+  const wrap = document.getElementById("inbound-picker");
+  if (!wrap) return;
+  if (!state.inboundInfo) { wrap.hidden = true; return; }  // 只在入倉驗收時出現
+  wrap.hidden = false;
+  const listEl = document.getElementById("inbound-picker-list");
+  if (!listEl) return;
+  const q = (_inboundSearch || "").trim().toLowerCase();
+  let prods = library.slice().sort((a, b) => {
+    const ca = CATEGORY_ORDER.indexOf(a.category || "其他"), cb = CATEGORY_ORDER.indexOf(b.category || "其他");
+    const na = ca === -1 ? 99 : ca, nb = cb === -1 ? 99 : cb;
+    if (na !== nb) return na - nb;
+    return (a.sku || "").localeCompare(b.sku || "");
+  });
+  if (q) prods = prods.filter(p => ((p.sku || "") + " " + (p.name || "")).toLowerCase().includes(q));
+  if (prods.length === 0) {
+    listEl.innerHTML = '<div class="hint" style="text-align:center; padding:10px;">找不到符合的商品</div>';
+    return;
+  }
+  const countOf = sku => { const it = state.items.find(x => x.sku === sku); return it ? it.packed : 0; };
+  listEl.innerHTML = prods.slice(0, 300).map(p => {
+    const c = countOf(p.sku);
+    return `
+      <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border-light); ${c > 0 ? "background:var(--primary-light);" : ""}">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:0.8125rem;">${escapeHtml(p.sku)}</div>
+          <div style="font-size:0.75rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(p.name || "")}</div>
+        </div>
+        ${c > 0 ? `<span style="font-weight:800; color:var(--primary); font-size:1rem; min-width:26px; text-align:right;">${c}</span>` : ""}
+        <button data-inb-add="${escapeHtml(p.sku)}" title="驗收 +1" style="background:var(--success); color:white; border:0; border-radius:8px; width:44px; height:38px; font-size:1.25rem; font-weight:700; cursor:pointer; flex:none;">＋</button>
+      </div>`;
+  }).join("");
+}
+// 點「＋」把商品加入驗收清單並 +1 (等同刷到, 但免條碼)
+function addInboundItem(sku) {
+  if (!state.activeParcel) { showToast("⚠ 尚未開始驗收"); return; }
+  const prod = library.find(p => p.sku === sku);
+  if (!prod) return;
+  let idx = state.items.findIndex(it => it.sku === sku);
+  if (idx < 0) {
+    const newItem = { sku: prod.sku, name: prod.name || "", category: prod.category || "其他", expected: 0, packed: 0 };
+    state.items.push(newItem);
+    idx = state.items.length - 1;
+    if (state.roomMode) queueRoomEvent("item_add", { sku: newItem.sku, name: newItem.name, category: newItem.category, expected: 0, essential: false });
+  }
+  SOUND.scanSku();
+  bumpPickItem(idx, 1, { noBundle: true });  // 入倉只算實到, 不觸發連動加單; 會記到 activeParcel + renderPicking
+  renderInboundPicker();    // 更新該列數字
+}
+
 function renderPicking() {
   const _scrollY = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
   const shipped = getShippedBySkuMap();
@@ -5381,6 +5444,7 @@ function getLowStockThreshold() {
   return (settings && typeof settings.safetyStockThreshold === "number") ? settings.safetyStockThreshold : LOW_STOCK_THRESHOLD;
 }
 
+let _invCollapsed = {}; // 倉庫清冊分類收合狀態 (本機暫存)
 function renderInventory() {
   const sumEl = document.getElementById("inventory-summary");
   const listEl = document.getElementById("inventory-list");
@@ -5503,14 +5567,22 @@ function renderInventory() {
         </div>
       `;
     }).join("");
+    const collapsed = !!_invCollapsed[cat];
     return `
       <div class="cat-group" style="margin-bottom: 10px;">
-        <div class="cat-header" style="background: var(--primary-light); padding: 8px 10px; font-weight: 600; font-size: 0.8125rem;">
-          ${catEmoji} ${escapeHtml(cat)} <span style="color: var(--text-soft); font-weight: normal;">(${skus.length})</span>
-        </div>
-        <div>${itemsHtml}</div>
+        <button type="button" data-inv-cat-toggle="${escapeHtml(cat)}" style="width:100%; text-align:left; background: var(--primary-light); padding: 8px 10px; font-weight: 600; font-size: 0.8125rem; border:0; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px; color:var(--text);">
+          <span>${catEmoji}</span>
+          <span style="flex:1;">${escapeHtml(cat)} <span style="color: var(--text-soft); font-weight: normal;">(${skus.length})</span></span>
+          <span style="font-size:0.6875rem; opacity:.7;">${collapsed ? "▶" : "▼"}</span>
+        </button>
+        <div ${collapsed ? "hidden" : ""}>${itemsHtml}</div>
       </div>`;
   }).join("");
+  const _et = document.getElementById("inv-expand-toggle");
+  if (_et) {
+    const anyCollapsed = catNames.some(c => !!_invCollapsed[c]);
+    _et.textContent = anyCollapsed ? "全部展開" : "全部收合";
+  }
 }
 
 // 解析庫存 CSV (格式: 產品編號,品名規格,現有數量,)
@@ -7813,7 +7885,7 @@ function processScan(code) {
         }
       }
       SOUND.scanSku();
-      bumpPickItem(idx, _mul);
+      bumpPickItem(idx, _mul, state.inboundInfo ? { noBundle: true } : undefined); // 入倉驗收只算實到, 不觸發連動加單
       _scanMultiplier = 1; renderMultiplierBadge();
       const it = state.items[idx];
       if (it.essential || (it.packed < it.expected) || it.expected === 0) {
@@ -8014,15 +8086,30 @@ function renderScanPanel() {
   const status = document.getElementById("scan-status");
   const body = document.getElementById("scan-body");
   if (!toggleBtn) return;
+  const inb = !!state.inboundInfo;
   toggleBtn.classList.toggle("active", state.scanMode);
   icon.textContent = state.scanMode ? "▼" : "▶";
+  // 入倉驗收: 用「進貨/清點」語境, 不用出貨的「裝箱」字眼
+  const titleEl = document.getElementById("scan-toggle-title");
+  if (titleEl) titleEl.textContent = inb ? "🏭 進貨清點掃描" : "📦 裝箱掃描";
   if (state.scanMode) {
-    status.textContent = state.activeParcel ? "裝箱中..." : "等待刷碼";
+    status.textContent = state.activeParcel ? (inb ? "清點中..." : "裝箱中...") : "等待刷碼";
     body.hidden = false;
   } else {
     status.textContent = "未啟用";
     body.hidden = true;
   }
+  // 入倉時隱藏「寄件/超商」相關(那是出貨用的), 並改 placeholder / 統計字
+  const carrierHint = document.getElementById("scan-carrier-hint");
+  const manualIdBtn = document.getElementById("manual-parcel-id-btn");
+  const scanInput = document.getElementById("scan-input");
+  if (carrierHint) carrierHint.hidden = inb;
+  if (manualIdBtn) manualIdBtn.hidden = inb;
+  if (scanInput) scanInput.placeholder = inb ? "刷商品條碼 + Enter(或用下方點選)" : "SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter";
+  const statsLine = document.getElementById("scan-stats-line");
+  if (statsLine) statsLine.innerHTML = inb
+    ? `✓ 已驗收 <strong id="completed-parcels-count">${state.completedParcels.length}</strong> 筆`
+    : `✓ 已完成 <strong id="completed-parcels-count">${state.completedParcels.length}</strong> 筆訂單`;
   document.getElementById("completed-parcels-count").textContent = state.completedParcels.length;
   renderActiveParcel();
   renderCompletedParcelsList();
@@ -8088,6 +8175,14 @@ function renderActiveParcel() {
     return;
   }
   wrapper.hidden = false;
+  const inb = !!state.inboundInfo;
+  // 入倉驗收: 標題/按鈕改「進貨/驗收」語境, 不沿用出貨字眼
+  const labelEl = wrapper.querySelector(".active-parcel-label");
+  if (labelEl) labelEl.textContent = inb ? "進貨單" : "當前訂單";
+  const cancelBtn = document.getElementById("cancel-parcel-btn");
+  const finishBtn = document.getElementById("finish-parcel-btn");
+  if (cancelBtn) cancelBtn.textContent = inb ? "✗ 取消此單" : "✗ 取消此筆";
+  if (finishBtn) finishBtn.textContent = inb ? "✓ 完成驗收" : "✓ 再刷一次 / 手動完成此筆";
   idEl.textContent = state.activeParcel.id;
   const items = state.activeParcel.items || {};
   const skus = Object.keys(items);
@@ -8098,12 +8193,14 @@ function renderActiveParcel() {
   if (countEl) countEl.textContent = totalQty + " 件";
   if (lastEl) {
     const last = state.activeParcel.lastSku;
-    if (last && items[last]) lastEl.textContent = "剛刷 " + last + " ×" + items[last];
-    else if (skus.length === 0) lastEl.textContent = "尚未刷碼";
+    if (last && items[last]) lastEl.textContent = (inb ? "剛點 " : "剛刷 ") + last + " ×" + items[last];
+    else if (skus.length === 0) lastEl.textContent = inb ? "尚未清點" : "尚未刷碼";
     else lastEl.textContent = skus.length + " 個 SKU";
   }
   if (skus.length === 0) {
-    itemsEl.innerHTML = '<span class="empty">▶ 從下方備貨清單點 + 加入此訂單</span>';
+    itemsEl.innerHTML = inb
+      ? '<span class="empty">▶ 從下方「商品庫點選驗收」點 + 清點</span>'
+      : '<span class="empty">▶ 從下方備貨清單點 + 加入此訂單</span>';
   } else {
     itemsEl.innerHTML = skus.map(sku => {
       const prod = state.items.find(it => it.sku === sku) || { name: "" };
@@ -8219,7 +8316,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); }
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!state.inboundInfo; }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
 }
@@ -8339,8 +8436,8 @@ function bumpPickItem(idx, delta, options) {
     if (it.packed === it.expected) showToast("✓ " + it.sku + " 已完成");
     else if (it.packed > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
   }
-  // 連動規則檢查 (不在遞迴 child 加單時觸發)
-  if (delta > 0 && !options.suppressBundle) {
+  // 連動規則檢查 (不在遞迴 child 加單時觸發; 入倉用 noBundle 只擋連動、保留 undo)
+  if (delta > 0 && !options.suppressBundle && !options.noBundle) {
     checkBundleRule(idx, delta);
   }
 }
@@ -8454,6 +8551,25 @@ document.getElementById("a1-parse-paste-btn").addEventListener("click", () => {
 // 清空所有對應
 // === 出貨紀錄事件 ===
 // 倉庫清冊 - 匯入庫存 CSV
+// 倉庫清冊 - 分類收合 / 展開
+document.getElementById("inventory-list").addEventListener("click", (e) => {
+  const catBtn = e.target.closest("button[data-inv-cat-toggle]");
+  if (catBtn) {
+    const cat = catBtn.dataset.invCatToggle;
+    _invCollapsed[cat] = !_invCollapsed[cat];
+    renderInventory();
+    return;
+  }
+});
+// 倉庫清冊 - 全部展開 / 全部收合
+const _invExpandBtn = document.getElementById("inv-expand-toggle");
+if (_invExpandBtn) _invExpandBtn.addEventListener("click", () => {
+  // 取目前畫面上的分類 (從按鈕 DOM 讀, 免得重算 byCat)
+  const cats = Array.from(document.querySelectorAll("#inventory-list button[data-inv-cat-toggle]")).map(b => b.dataset.invCatToggle);
+  const anyCollapsed = cats.some(c => !!_invCollapsed[c]);
+  cats.forEach(c => { _invCollapsed[c] = anyCollapsed ? false : true; });
+  renderInventory();
+});
 // 倉庫清冊 - 直接修改某 SKU 庫存數量
 document.getElementById("inventory-list").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-inv-edit]");
@@ -9852,6 +9968,17 @@ document.getElementById("scan-input").addEventListener("keydown", (e) => {
     setTimeout(() => e.target.focus({ preventScroll: true }), 50);
   }
 });
+
+// 入倉驗收: 從商品庫點選 — 搜尋 + 「＋」加入
+(function wireInboundPicker() {
+  const s = document.getElementById("inbound-search");
+  if (s) s.addEventListener("input", (e) => { _inboundSearch = e.target.value; renderInboundPicker(); });
+  const list = document.getElementById("inbound-picker-list");
+  if (list) list.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-inb-add]");
+    if (btn) addInboundItem(btn.dataset.inbAdd);
+  });
+})();
 
 // (已移除 auto-refocus blur 處理: 改用全域 keydown 監聽, 不需強制 focus)
 
