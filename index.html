@@ -3098,7 +3098,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.3.0 · 2026-07-08";
+const APP_VERSION = "V3.3.1 · 2026-07-08";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5609,6 +5609,7 @@ function startStockTake() {
     startedAt: new Date().toISOString(),
     counts: {},
     skipped: {},   // 暫不盤點 (滯銷品等): {sku: true}
+    notes: {},     // 差異備註: {sku: "破損3個"}
   };
   saveStockTake();
   showStockTakeView();
@@ -5676,6 +5677,33 @@ function toggleStockTakeSkip(sku) {
     if (stockTake.counts) delete stockTake.counts[sku]; // 略過就清掉已輸入的數
   }
   saveStockTake();
+  renderStockTake();
+}
+
+// 差異過大警示門檻: 差 ≥ 10 件, 或 ≥ 系統庫存的 30%
+const STOCKTAKE_BIG_DIFF_ABS = 10;
+const STOCKTAKE_BIG_DIFF_PCT = 0.3;
+function isBigDiff(r) {
+  if (!r || !r.inStockTake || r.diff === 0) return false;
+  const abs = Math.abs(r.diff);
+  if (abs >= STOCKTAKE_BIG_DIFF_ABS) return true;
+  if (r.system > 0 && abs / r.system >= STOCKTAKE_BIG_DIFF_PCT) return true;
+  return false;
+}
+
+// 差異備註 (原因: 破損/遺失/登錄錯...)
+function setStockTakeNote(sku) {
+  if (!stockTake) return;
+  if (!stockTake.notes) stockTake.notes = {};
+  const cur = stockTake.notes[sku] || "";
+  const val = prompt(`「${sku}」差異備註\n\n常見原因: 破損、遺失、退貨未入、贈品領用、登錄錯\n(留空可清除備註)`, cur);
+  if (val === null) return; // 取消
+  const v = val.trim();
+  if (v) stockTake.notes[sku] = v;
+  else delete stockTake.notes[sku];
+  saveStockTake();
+  // 差異報告開著就刷新
+  if (!document.getElementById("stocktake-diff-modal").hidden) showStockTakeDiffReport();
   renderStockTake();
 }
 
@@ -5758,6 +5786,9 @@ function applyStockTake() {
     plusCount: diffResults.filter(r => r.status === "diff_plus").length,
     minusCount: diffResults.filter(r => r.status === "diff_minus").length,
     notCountedCount: diffResults.filter(r => r.status === "not_counted").length,
+    skippedCount: diffResults.filter(r => r.status === "skipped").length,
+    bigDiffCount: diffResults.filter(isBigDiff).length,
+    notes: Object.assign({}, stockTake.notes || {}),
   });
   if (stockTakeHistory.length > 50) stockTakeHistory = stockTakeHistory.slice(0, 50);
   saveStockTakeHistory();
@@ -5794,7 +5825,8 @@ function exportStockTakeDiffCsv() {
     return Math.abs(b.diff) - Math.abs(a.diff);
   });
   const statusText = { diff_plus: "實盤多", diff_minus: "實盤少", equal: "相符", not_counted: "未盤", skipped: "略過(暫不盤點)" };
-  const rows = [["分類", "SKU", "商品名稱", "系統庫存", "實盤數", "差異", "狀態"]];
+  const notes = (stockTake && stockTake.notes) || {};
+  const rows = [["分類", "SKU", "商品名稱", "系統庫存", "實盤數", "差異", "狀態", "建議複盤", "備註"]];
   for (const r of results) {
     rows.push([
       r.category, r.sku, (r.name || "").replace(/[\r\n]+/g, " "),
@@ -5802,6 +5834,8 @@ function exportStockTakeDiffCsv() {
       r.inStockTake ? r.actual : "",
       r.inStockTake ? (r.diff > 0 ? "+" + r.diff : r.diff) : "",
       statusText[r.status] || r.status,
+      isBigDiff(r) ? "⚠" : "",
+      notes[r.sku] || "",
     ]);
   }
   downloadCsvRows(rows, `盤點差異_${new Date().toISOString().slice(0,10)}.csv`);
@@ -5872,7 +5906,8 @@ function renderStockTake() {
       </div>`;
     }
     const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
-    const diffText = r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤";
+    const big = isBigDiff(r);
+    const diffText = (r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤") + (big ? " ⚠" : "");
     const rowBg = r.status === "diff_plus" ? "rgba(34,197,94,0.10)" : (r.status === "diff_minus" ? "rgba(239,68,68,0.10)" : "transparent");
     const skipBtn = !r.inStockTake
       ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
@@ -6050,12 +6085,15 @@ function showStockTakeDiffReport() {
   const notCounted = results.filter(r => r.status === "not_counted");
   const skipped = results.filter(r => r.status === "skipped");
   const totalActual = (stockTake.counts ? Object.values(stockTake.counts).reduce((s,q)=>s+q,0) : 0);
+  const bigDiffCount = counted.filter(isBigDiff).length;
+  const notes = stockTake.notes || {};
   const summary = document.getElementById("stocktake-diff-summary");
   summary.innerHTML = `<div style="font-size: 0.8125rem;">
     <div><strong>已盤 ${counted.length} SKU · 共 ${totalActual} 件</strong></div>
     <div style="margin-top: 4px;">
       ✓ 一致 ${equal.length} · <span style="color: var(--success);">＋多 ${plus.length}</span> · <span style="color: var(--danger);">−少 ${minus.length}</span> · 未盤 ${notCounted.length}${skipped.length ? ` · 略過 ${skipped.length}` : ""}
     </div>
+    ${bigDiffCount ? `<div style="margin-top: 6px; color: var(--danger); font-weight: 700;">⚠ 有 ${bigDiffCount} 項差異偏大, 建議複盤或加註原因</div>` : ""}
   </div>`;
   // 內容: 有差異的優先列
   const interesting = [...plus, ...minus].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
@@ -6067,15 +6105,23 @@ function showStockTakeDiffReport() {
     content.innerHTML = noteWorth.map(r => {
       const color = r.diff > 0 ? "var(--success)" : (r.diff < 0 ? "var(--danger)" : "var(--text-soft)");
       const bg = r.diff > 0 ? "var(--success-bg)" : (r.diff < 0 ? "var(--danger-bg)" : "var(--bg)");
+      const big = isBigDiff(r);
+      const note = notes[r.sku] || "";
       return `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: ${bg}; border-radius: 6px; margin-bottom: 4px;">
-          <div style="min-width: 0; flex: 1;">
-            <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}</div>
-            <div style="font-size: 0.625rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+        <div style="padding: 6px 10px; background: ${bg}; border-radius: 6px; margin-bottom: 4px; ${big ? "border: 1.5px solid var(--danger);" : ""}">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(r.sku)}${big ? ' <span style="color:var(--danger); font-size:0.625rem; font-weight:700;">⚠建議複盤</span>' : ""}</div>
+              <div style="font-size: 0.625rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
+            </div>
+            <div style="text-align: right; font-size: 0.75rem; white-space: nowrap;">
+              ${r.system} → <strong>${r.actual}</strong>
+              <span style="color: ${color}; font-weight: 700; margin-left: 6px;">${r.diff > 0 ? '+' : ''}${r.diff}</span>
+            </div>
           </div>
-          <div style="text-align: right; font-size: 0.75rem;">
-            ${r.system} → <strong>${r.actual}</strong>
-            <span style="color: ${color}; font-weight: 700; margin-left: 6px;">${r.diff > 0 ? '+' : ''}${r.diff}</span>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+            <button data-st-note="${escapeHtml(r.sku)}" style="background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:2px 8px; flex:none;">${note ? "📝 改備註" : "＋ 加備註"}</button>
+            ${note ? `<span style="font-size:0.6875rem; color:var(--text); background:var(--surface); border-radius:6px; padding:2px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(note)}</span>` : ""}
           </div>
         </div>
       `;
@@ -6095,6 +6141,8 @@ document.getElementById("stocktake-diff-apply").addEventListener("click", () => 
   applyStockTake();
 });
 document.getElementById("stocktake-diff-modal").addEventListener("click", (e) => {
+  const noteBtn = e.target.closest("button[data-st-note]");
+  if (noteBtn) { setStockTakeNote(noteBtn.dataset.stNote); return; }
   if (e.target.id === "stocktake-diff-modal") document.getElementById("stocktake-diff-modal").hidden = true;
 });
 
