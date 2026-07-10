@@ -1590,19 +1590,19 @@ footer.summary-bar {
   </div>
   <div class="tab-bar">
     <button data-tab="menu" id="tab-menu" class="active">
-      <span class="tab-icon">⭐</span>
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.5 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg></span>
       <span class="tab-label">商品庫</span>
     </button>
     <button data-tab="a1" id="tab-a1">
-      <span class="tab-icon">📥</span>
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10v8H3z"/><path d="M13 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg></span>
       <span class="tab-label">開始出貨</span>
     </button>
     <button data-tab="history" id="tab-history">
-      <span class="tab-icon">📜</span>
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 11h6M9 15h4"/></svg></span>
       <span class="tab-label">出貨紀錄</span>
     </button>
     <button data-tab="inventory" id="tab-inventory">
-      <span class="tab-icon">📦</span>
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg></span>
       <span class="tab-label">倉庫清冊</span>
     </button>
   </div>
@@ -1645,16 +1645,16 @@ footer.summary-bar {
 
     <!-- 多人協作入口 -->
     <div class="room-entry">
-      <div class="room-entry-title">👥 共同包貨 (Cloudflare 同步)</div>
+      <div class="room-entry-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19a4.5 4.5 0 0 1 9 0M11.5 19a4.5 4.5 0 0 1 9 0"/></svg> 共同包貨 (Cloudflare 同步)</div>
       <div class="room-entry-desc">建好清單會<strong>自動開房</strong>(需先在 ⚙ 外部整合 設定 Worker URL + 暱稱)。把 4 碼給同事,他按「🚪 加入房間」即可。開房卡片仍可手動補開。</div>
       <div class="settings-grid" style="margin: 10px 0 0;">
         <button class="settings-card" id="open-create-room-btn">
-          <div class="card-icon">🏠</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/><path d="M10 19v-5h4v5"/></svg></div>
           <div class="card-title">開新房間</div>
           <div class="card-desc">建立並分享 4 碼</div>
         </button>
         <button class="settings-card" id="open-join-room-btn">
-          <div class="card-icon">🚪</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="1.5"/><circle cx="14.5" cy="12" r="1"/></svg></div>
           <div class="card-title">加入房間</div>
           <div class="card-desc">輸入 4 碼加入</div>
         </button>
@@ -1666,22 +1666,22 @@ footer.summary-bar {
       <summary style="cursor:pointer; font-weight:600; font-size:0.85rem; color:var(--text-soft); padding:8px 2px;">＋ 其他建單方式(手動 / 補寄 / 退貨 / 入倉)</summary>
       <div class="settings-grid" style="margin-top:6px;">
       <button class="settings-card" id="open-manual-order-btn">
-        <div class="card-icon">📝</div>
+        <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg></div>
         <div class="card-title">手動建單</div>
         <div class="card-desc">小單 · 不用 CSV</div>
       </button>
       <button class="settings-card" id="open-replacement-order-btn">
-        <div class="card-icon">📮</div>
+        <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="12" height="10" rx="1.5"/><path d="M15 9l4 4-4 4"/><path d="M19 13H9"/></svg></div>
         <div class="card-title">補寄訂單</div>
         <div class="card-desc">售後 · 不扣庫存</div>
       </button>
       <button class="settings-card" id="open-return-order-btn">
-        <div class="card-icon">📥</div>
+        <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="8" width="12" height="10" rx="1.5"/><path d="M9 9L5 13l4 4"/><path d="M5 13h10"/></svg></div>
         <div class="card-title">退貨確認</div>
         <div class="card-desc">收貨 · 良品回庫</div>
       </button>
       <button class="settings-card" id="open-inbound-btn">
-        <div class="card-icon">🏭</div>
+        <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V10l5 3V10l5 3V10l5 3v7z"/><path d="M3 20h18"/><path d="M7 20v-3M12 20v-3M17 20v-3"/></svg></div>
         <div class="card-title">入倉驗收</div>
         <div class="card-desc">進貨 · 只記錄</div>
       </button>
@@ -1720,11 +1720,11 @@ footer.summary-bar {
       尚無紀錄
     </div>
     <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
-      <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 100px;">↻ 重新整理</button>
-      <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);">⌨ ERP 鍵單</button>
+      <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 100px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg> 重新整理</button>
+      <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg> ERP 鍵單</button>
     </div>
     <details style="margin-bottom: 10px;">
-      <summary style="cursor:pointer; font-size:0.8rem; font-weight:600; color:var(--text-soft); padding:6px 2px;">📊 統計分析(績效 · 客戶 · 熱銷 · 退貨)</summary>
+      <summary style="cursor:pointer; font-size:0.8rem; font-weight:600; color:var(--text-soft); padding:6px 2px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M4 4v16h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="12" y="8" width="2.5" height="9"/><rect x="17" y="5" width="2.5" height="12"/></svg> 統計分析(績效 · 客戶 · 熱銷 · 退貨)</summary>
       <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
         <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
         <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
@@ -1745,10 +1745,10 @@ footer.summary-bar {
     </div>
     <div class="filter-bar" id="history-filter-bar" style="margin-bottom: 10px;">
       <button data-hist-filter="all" class="active">全部 <span id="hist-cnt-all">0</span></button>
-      <button data-hist-filter="normal">📦 一般 <span id="hist-cnt-normal">0</span></button>
-      <button data-hist-filter="replacement">📮 補寄 <span id="hist-cnt-replacement">0</span></button>
-      <button data-hist-filter="return">📥 退貨 <span id="hist-cnt-return">0</span></button>
-      <button data-hist-filter="inbound">🏭 進貨 <span id="hist-cnt-inbound">0</span></button>
+      <button data-hist-filter="normal"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg> 一般 <span id="hist-cnt-normal">0</span></button>
+      <button data-hist-filter="replacement"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><rect x="3" y="8" width="12" height="10" rx="1.5"/><path d="M15 9l4 4-4 4"/><path d="M19 13H9"/></svg> 補寄 <span id="hist-cnt-replacement">0</span></button>
+      <button data-hist-filter="return"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><rect x="9" y="8" width="12" height="10" rx="1.5"/><path d="M9 9L5 13l4 4"/><path d="M5 13h10"/></svg> 退貨 <span id="hist-cnt-return">0</span></button>
+      <button data-hist-filter="inbound"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M3 20V10l5 3V10l5 3V10l5 3v7z"/><path d="M3 20h18"/></svg> 進貨 <span id="hist-cnt-inbound">0</span></button>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
       <label style="font-size:0.78rem; display:flex; align-items:center; gap:4px; font-weight:600;">商家
@@ -1815,6 +1815,8 @@ footer.summary-bar {
       <button data-inv-filter="in_stock">有貨 <span id="inv-cnt-instock">0</span></button>
       <button data-inv-filter="low_stock">⚠ 低 <span id="inv-cnt-low">0</span></button>
       <button data-inv-filter="out_of_stock">缺貨 <span id="inv-cnt-out">0</span></button>
+      <button data-inv-filter="scrap">報廢倉 <span id="inv-cnt-scrap">0</span></button>
+      <button data-inv-filter="repair">檢修倉 <span id="inv-cnt-repair">0</span></button>
     </div>
 
     <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
@@ -1916,7 +1918,7 @@ footer.summary-bar {
   </div>
   <!-- 入倉驗收: 從商品庫點選(免刷條碼) -->
   <div id="inbound-picker" hidden style="margin-top:10px; border:1px solid var(--border); border-radius:10px; overflow:hidden;">
-    <div style="background:var(--primary-light); padding:8px 10px; font-weight:600; font-size:0.8125rem;">📋 從商品庫點選驗收(免刷條碼)</div>
+    <div id="inbound-picker-title" style="background:var(--primary-light); padding:8px 10px; font-weight:600; font-size:0.8125rem;">📋 從商品庫點選驗收(免刷條碼)</div>
     <div style="padding:8px 10px;">
       <input type="search" id="inbound-search" placeholder="🔍 搜尋 SKU 或品名" autocomplete="off" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.875rem; background:var(--surface); color:var(--text);">
     </div>
@@ -2030,46 +2032,46 @@ footer.summary-bar {
       <div class="settings-grid">
         <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:2px 0 -2px; letter-spacing:1px;">常用</div>
         <button class="settings-card wide" data-settings-view="help">
-          <div class="card-icon">📖</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4a2 2 0 0 1 2-2h11v16H7a2 2 0 0 0-2 2z"/><path d="M18 18H7a2 2 0 0 0-2 2"/></svg></div>
           <div class="card-title">新手教學 / 懶人包</div>
           <div class="card-desc">第一次用、或忘記流程時看這個</div>
         </button>
         <button class="settings-card" data-settings-view="theme">
-          <div class="card-icon">🎨</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 1.8-1 1.3-1.9s0-1.9 1.4-1.9H18a3 3 0 0 0 3-3 8 8 0 0 0-9-8.2z"/><circle cx="8" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="10.5" r="1"/></svg></div>
           <div class="card-title">外觀</div>
           <div class="card-desc">主題顏色 · 護眼</div>
         </button>
         <button class="settings-card" data-settings-view="sound">
-          <div class="card-icon">🔊</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9.5a3 3 0 0 1 0 5M18.5 7.5a6 6 0 0 1 0 9"/></svg></div>
           <div class="card-title">聲音提示</div>
           <div class="card-desc">刷槍 / 完成提示音</div>
         </button>
 
         <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">進階</div>
         <button class="settings-card" data-settings-view="integration">
-          <div class="card-icon">🌐</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div>
           <div class="card-title">外部整合</div>
           <div class="card-desc">Worker · Discord · 金鑰</div>
         </button>
         <button class="settings-card" data-settings-view="stocktake">
-          <div class="card-icon">🔍</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg></div>
           <div class="card-title">盤點</div>
           <div class="card-desc">掃描比對實際庫存</div>
         </button>
 
         <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">資料 / 其他</div>
         <a href="shipping.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
-          <div class="card-icon">🚚</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10v8H3z"/><path d="M13 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg></div>
           <div class="card-title">宅配寄件紀錄</div>
           <div class="card-desc">補寄 / 宅配寄件登記 · 誰寄了、誰還沒寄</div>
         </a>
         <button class="settings-card wide" data-settings-view="backup">
-          <div class="card-icon">💾</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-6h8v6"/></svg></div>
           <div class="card-title">資料搬家 / 備份</div>
           <div class="card-desc">換網址或換手機時, 用這個搬移商品庫 + 庫存 + 紀錄</div>
         </button>
         <button class="settings-card danger wide" data-settings-view="danger">
-          <div class="card-icon">⚠</div>
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 20h19z"/><path d="M12 10v5M12 17.6v.01"/></svg></div>
           <div class="card-title">取消出貨</div>
           <div class="card-desc">中止當前清單</div>
         </button>
@@ -2127,8 +2129,8 @@ footer.summary-bar {
         <summary style="font-weight:600; font-size:0.85rem;">📮 補寄 / ↩️ 退貨 / 🏭 入倉</summary>
         <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
           • <strong>補寄</strong>:售後補件。客人手機選填。<strong>不扣庫存、不推</strong>。<br>
-          • <strong>退貨確認</strong>:收回商品。良品自動加回庫存;選「瑕疵/破損」則不入庫。<br>
-          • <strong>入倉驗收</strong>:進貨。填進貨單號 → 刷商品。<strong>不扣也不加、不推</strong>,只記紀錄。<br>
+          • <strong>退貨確認</strong>:收回商品,依原因分倉——良品→一般倉、商品瑕疵→報廢倉、商品故障→檢修倉。<br>
+          • <strong>入倉驗收</strong>:進貨。填進貨單號 → 刷/點商品。完成後<strong>加進一般倉庫存</strong>,不推。<br>
           💡 連續多位客人:刷下一位單號會跳「換下一位?」自動收上一筆。
         </div>
       </details>
@@ -2868,20 +2870,13 @@ footer.summary-bar {
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">退貨原因</label>
     <select id="ret-reason" style="width:100%; padding:10px; font-size:0.875rem; border:1px solid var(--border); border-radius:8px; background:white;">
-      <option value="不喜歡/不適合">不喜歡 / 不適合</option>
       <option value="商品瑕疵">商品瑕疵</option>
       <option value="商品錯誤">商品錯誤</option>
-      <option value="運送破損">運送破損</option>
+      <option value="商品故障">商品故障</option>
+      <option value="包裹未取">包裹未取</option>
       <option value="7天鑑賞期">7 天鑑賞期</option>
       <option value="其他">其他</option>
     </select>
-
-    <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">原訂單號 (選填)</label>
-    <div style="display: flex; gap: 4px;">
-      <input type="text" id="ret-original-order" placeholder="客人原本下單的訂單編號"
-             style="flex: 1; padding: 10px; font-size: 0.8125rem; border: 1px solid var(--border); border-radius: 8px;">
-      <button type="button" class="btn outline sm" data-paste-target="ret-original-order" title="從剪貼簿貼上" style="padding: 6px 10px; font-size: 1.125rem;">📋</button>
-    </div>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
     <textarea id="ret-note" placeholder="例如: 商品狀況、退款金額、客服對話紀錄"
@@ -2899,7 +2894,7 @@ footer.summary-bar {
 <div class="modal-backdrop" id="inbound-modal" hidden>
   <div class="modal" style="max-width: 540px;">
     <h2>🏭 入倉驗收 (進貨)</h2>
-    <p class="hint">廠商進貨到倉時用。填進貨單號 → 開始後可<strong>刷條碼</strong>或直接從下方「📋 商品庫點選(可搜尋、免刷)」點＋清點。<strong>目前只記錄、不動庫存</strong>, 不推送 Discord/Sheets。</p>
+    <p class="hint">廠商進貨到倉時用。填進貨單號 → 開始後可<strong>刷條碼</strong>或直接從下方「📋 商品庫點選(可搜尋、免刷)」點＋清點。完成後<strong>數量會加進「一般倉」庫存</strong>, 不推送 Discord/Sheets。</p>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">進貨單號 <span style="color: var(--danger);">*</span></label>
     <div style="display: flex; gap: 4px;">
@@ -2919,6 +2914,17 @@ footer.summary-bar {
       <button class="btn outline" id="inb-cancel" style="flex:1;">取消</button>
       <button class="btn" id="inb-create" style="flex:2; background: var(--primary); color: white;">▶ 開始驗收</button>
     </div>
+  </div>
+</div>
+
+<!-- 倉庫清冊: 修改商品分類 modal -->
+<div class="modal-backdrop" id="inv-cat-modal" hidden>
+  <div class="modal" style="max-width: 440px;">
+    <h2>🏷 修改商品分類</h2>
+    <p class="hint" id="inv-cat-target" style="font-size:0.8125rem;">—</p>
+    <div id="inv-cat-options" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;"></div>
+    <div style="height: 14px"></div>
+    <button class="btn outline full" id="inv-cat-cancel">取消</button>
   </div>
 </div>
 
@@ -3121,7 +3127,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.4.3 · 2026-07-09";
+const APP_VERSION = "V3.5.3 · 2026-07-09";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3207,9 +3213,64 @@ const DEFAULT_LIBRARY = [
   { sku: "KAD-13B3Y8",       name: "Cloudy Lite 1 雲朵除濕機",           category: "除濕機", barcode: "KAD-13B3Y8", price: 0 },
 ];
 const CATEGORY_EMOJI = {
-  "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "除濕機": "💧", "加購品": "🎁", "其他": "📌",
+  "包裝": "📦", "零件": "🔧", "吹風機": "💨", "投影機": "📽", "吸塵器": "🌪", "除濕機": "💧",
+  "熱感紙": "🧾", "電熱毯": "🛏", "清潔刷": "🧹", "刮鬍刀": "🪒", "烘熱機": "♨", "支架": "📐",
+  "加購品": "🎁", "其他": "📌",
 };
-const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "除濕機", "加購品", "其他"];
+const CATEGORY_ORDER = ["包裝", "零件", "吹風機", "投影機", "吸塵器", "除濕機", "熱感紙", "電熱毯", "清潔刷", "刮鬍刀", "烘熱機", "支架", "加購品", "其他"];
+// KOCA 品牌橘色線條分類圖示 (取代 emoji 的視覺標題; 純文字處仍用 CATEGORY_EMOJI)
+const CATEGORY_ICON = {
+  "包裝": '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/>',
+  "零件": '<path d="M14.7 6.3a4 4 0 0 0-5.4 5l-6 6 2.4 2.4 6-6a4 4 0 0 0 5-5.4l-2.6 2.6-2-2z"/>',
+  "吹風機": '<path d="M4 6h10a4 4 0 0 1 0 8H4z"/><path d="M4 6v8"/><path d="M9 14l1 6h2l-1-6"/><circle cx="9" cy="10" r="1.3"/>',
+  "投影機": '<rect x="3" y="7" width="18" height="11" rx="2.5"/><circle cx="9" cy="12.5" r="3"/><path d="M16 11h2"/>',
+  "吸塵器": '<circle cx="8" cy="16" r="4"/><path d="M8 16 15 5a3 3 0 0 1 5 2v3"/><circle cx="8" cy="16" r="1.2"/>',
+  "除濕機": '<path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/>',
+  "熱感紙": '<path d="M6 3h9l3 3v15H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  "電熱毯": '<rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 10c2 1 2 3 0 4M12 10c2 1 2 3 0 4M17 10c2 1 2 3 0 4"/>',
+  "清潔刷": '<path d="M4 20l6-6"/><path d="M10 14l4-4a2.8 2.8 0 1 1 4 4l-4 4z"/><path d="M4 20l1-3.5 2.5 2.5z"/>',
+  "刮鬍刀": '<path d="M4 4l7 7"/><path d="M10 12h8v4h-6z"/><path d="M12.5 16v2M14.5 16v2M16.5 16v2"/>',
+  "烘熱機": '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/>',
+  "支架": '<rect x="9" y="3" width="6" height="3.5" rx="1"/><path d="M12 6.5v7"/><path d="M6.5 20 12 13l5.5 7z"/>',
+  "加購品": '<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M4 13h16M12 9v11"/><path d="M12 9c-2-4-6-2-4 0M12 9c2-4 6-2 4 0"/>',
+  "其他": '<path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.4"/>',
+};
+function catIcon(cat, size) {
+  const p = CATEGORY_ICON[cat] || '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>';
+  size = size || 22;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; flex:none;">${p}</svg>`;
+}
+// KOCA 橘線條通用圖示 (取代介面 emoji; 純文字/toast 仍用 emoji)
+const UI_ICON = {
+  star: '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.5 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
+  truck: '<path d="M3 7h10v8H3z"/><path d="M13 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/>',
+  records: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 11h6M9 15h4"/>',
+  box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/>',
+  home: '<path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/><path d="M10 19v-5h4v5"/>',
+  door: '<rect x="6" y="3" width="12" height="18" rx="1.5"/><circle cx="14.5" cy="12" r="1"/>',
+  pencil: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>',
+  resend: '<rect x="3" y="8" width="12" height="10" rx="1.5"/><path d="M15 9l4 4-4 4"/><path d="M19 13H9"/>',
+  returnbox: '<rect x="9" y="8" width="12" height="10" rx="1.5"/><path d="M9 9L5 13l4 4"/><path d="M5 13h10"/>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V10l5 3v7z"/><path d="M3 20h18"/><path d="M7 20v-3M12 20v-3M17 20v-3"/>',
+  users: '<circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19a4.5 4.5 0 0 1 9 0M11.5 19a4.5 4.5 0 0 1 9 0"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/>',
+  keyboard: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/>',
+  chart: '<path d="M4 4v16h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="12" y="8" width="2.5" height="9"/><rect x="17" y="5" width="2.5" height="12"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>',
+  list: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+  inbox: '<path d="M4 13l2-8h12l2 8"/><path d="M4 13v6h16v-6"/><path d="M4 13h5l1.2 2h3.6l1.2-2h5"/>',
+  book: '<path d="M5 4a2 2 0 0 1 2-2h11v16H7a2 2 0 0 0-2 2z"/><path d="M18 18H7a2 2 0 0 0-2 2"/>',
+  palette: '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 1.8-1 1.3-1.9s0-1.9 1.4-1.9H18a3 3 0 0 0 3-3 8 8 0 0 0-9-8.2z"/><circle cx="8" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="10.5" r="1"/>',
+  sound: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9.5a3 3 0 0 1 0 5M18.5 7.5a6 6 0 0 1 0 9"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-6h8v6"/>',
+  warning: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v5M12 17.6v.01"/>',
+};
+function icon(name, size, color) {
+  const p = UI_ICON[name]; if (!p) return "";
+  size = size || 22;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color || "var(--primary)"}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; flex:none;">${p}</svg>`;
+}
 // 訂單類型的標準值 (single source of truth)。程式各處以字面字串比對, 新增/改字務必對照這裡,
 // 打錯字會靜默失效 (例如漏扣庫存 / 漏推 webhook)。
 const ORDER_TYPE = { NORMAL: "normal", MANUAL: "manual", REPLACEMENT: "replacement", RETURN: "return", INBOUND: "inbound" };
@@ -4516,6 +4577,23 @@ function saveStock() {
   try { localStorage.setItem(STOCK_KEY, JSON.stringify(stockMap)); if (typeof scheduleMasterPush === "function") scheduleMasterPush(); return true; }
   catch(e) { notifyStorageFull("saveStock"); return false; }
 }
+// 多倉入庫: 把 items 各商品的 packed 加到指定倉別 (qty=一般 / scrap=報廢 / repair=檢修)。回傳加了幾個 SKU。
+function stockAddToBin(items, binField) {
+  const now = new Date().toISOString();
+  let n = 0;
+  for (const it of (items || [])) {
+    if (it.essential) continue;
+    if ((it.packed || 0) <= 0) continue;
+    if (!stockMap[it.sku]) {
+      const libItem = library.find(p => p.sku === it.sku);
+      stockMap[it.sku] = { qty: 0, name: (libItem && libItem.name) || it.name || "", updatedAt: now };
+    }
+    stockMap[it.sku][binField] = (stockMap[it.sku][binField] || 0) + it.packed;
+    stockMap[it.sku].updatedAt = now;
+    n++;
+  }
+  return n;
+}
 function loadStock() {
   try {
     const s = localStorage.getItem(STOCK_KEY);
@@ -4983,7 +5061,7 @@ function renderMenu() {
         return `
         <div class="cat-group">
           <button class="cat-header" data-cat-toggle="${escapeHtml(g.name)}">
-            <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
+            <span class="cat-emoji">${catIcon(g.name)}</span>
             <span class="cat-name">${escapeHtml(g.name)}</span>
             <span class="cat-count">${g.items.length}</span>
             <span class="cat-arrow">${collapsed ? "▶" : "▼"}</span>
@@ -5085,13 +5163,23 @@ function renderLibrary() {
 }
 
 // ---- Render: Picking view ----
-// ===== 🏭 入倉驗收: 從商品庫點選(免刷條碼, 可搜尋) =====
+// ===== 從商品庫點選(免刷條碼, 可搜尋): 入倉 / 退貨 / 補寄 =====
 let _inboundSearch = "";
+// 當前是否為「可用免刷點選」的模式, 及其標題
+function _pickerModeInfo() {
+  if (state.inboundInfo) return { on: true, title: "📋 從商品庫點選驗收(免刷條碼)" };
+  if (state.returnInfo) return { on: true, title: "📋 從商品庫點選退貨(免刷條碼)" };
+  if (state.replacementInfo) return { on: true, title: "📋 從商品庫點選補寄(免刷條碼)" };
+  return { on: false, title: "" };
+}
 function renderInboundPicker() {
   const wrap = document.getElementById("inbound-picker");
   if (!wrap) return;
-  if (!state.inboundInfo) { wrap.hidden = true; return; }  // 只在入倉驗收時出現
+  const pm = _pickerModeInfo();
+  if (!pm.on) { wrap.hidden = true; return; }  // 只在入倉/退貨/補寄時出現
   wrap.hidden = false;
+  const titleEl = document.getElementById("inbound-picker-title");
+  if (titleEl) titleEl.textContent = pm.title;
   const listEl = document.getElementById("inbound-picker-list");
   if (!listEl) return;
   const q = (_inboundSearch || "").trim().toLowerCase();
@@ -5122,7 +5210,7 @@ function renderInboundPicker() {
 }
 // 點「＋」把商品加入驗收清單並 +1 (等同刷到, 但免條碼)
 function addInboundItem(sku) {
-  if (!state.activeParcel) { showToast("⚠ 尚未開始驗收"); return; }
+  if (!state.activeParcel) { showToast("⚠ 尚未開始"); return; }
   const prod = library.find(p => p.sku === sku);
   if (!prod) return;
   let idx = state.items.findIndex(it => it.sku === sku);
@@ -5255,7 +5343,7 @@ function renderPicking() {
       return `
         <div class="cat-group">
           <button class="cat-header ${allDone ? "has-selected" : ""}" data-cat-toggle="${escapeHtml(g.name)}">
-            <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
+            <span class="cat-emoji">${catIcon(g.name)}</span>
             <span class="cat-name">${escapeHtml(g.name)}</span>
             <span class="cat-count">${doneInCat} / ${g.items.length}</span>
             <span class="cat-arrow">${collapsed ? "▶" : "▼"}</span>
@@ -5470,10 +5558,13 @@ function renderInventory() {
   const allSkus = Array.from(skuSet);
 
   // 篩選計數
-  let cntAll = 0, cntIn = 0, cntLow = 0, cntOut = 0;
+  let cntAll = 0, cntIn = 0, cntLow = 0, cntOut = 0, cntScrap = 0, cntRepair = 0;
   for (const sku of allSkus) {
-    const qty = (stockMap[sku] && typeof stockMap[sku].qty === "number") ? stockMap[sku].qty : null;
+    const e = stockMap[sku];
+    const qty = (e && typeof e.qty === "number") ? e.qty : null;
     cntAll++;
+    if (e && e.scrap > 0) cntScrap++;
+    if (e && e.repair > 0) cntRepair++;
     if (qty === null) continue; // 未匯入庫存的不計入有/低/缺
     if (qty === 0) cntOut++;
     else if (qty < getLowStockThreshold()) cntLow++;
@@ -5485,12 +5576,16 @@ function renderInventory() {
   if ($("inv-cnt-instock")) $("inv-cnt-instock").textContent = cntIn;
   if ($("inv-cnt-low")) $("inv-cnt-low").textContent = cntLow;
   if ($("inv-cnt-out")) $("inv-cnt-out").textContent = cntOut;
+  if ($("inv-cnt-scrap")) $("inv-cnt-scrap").textContent = cntScrap;
+  if ($("inv-cnt-repair")) $("inv-cnt-repair").textContent = cntRepair;
   document.querySelectorAll("#inventory-filter-bar button").forEach(b => {
     b.classList.toggle("active", b.dataset.invFilter === inventoryFilter);
   });
 
   // 統計列
   const stockTotal = Object.values(stockMap).reduce((s, v) => s + (typeof v.qty === "number" ? v.qty : 0), 0);
+  const scrapTotal = Object.values(stockMap).reduce((s, v) => s + (v.scrap || 0), 0);
+  const repairTotal = Object.values(stockMap).reduce((s, v) => s + (v.repair || 0), 0);
   const stockSkuCount = Object.keys(stockMap).length;
   const lastUpdated = Object.values(stockMap).reduce((latest, v) => {
     if (!v.updatedAt) return latest;
@@ -5501,16 +5596,22 @@ function renderInventory() {
       sumEl.innerHTML = '尚未匯入庫存資料。點「📥 匯入庫存 CSV」上傳商品庫存 CSV。';
     } else {
       const updateStr = lastUpdated ? new Date(lastUpdated).toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12: false }) : "—";
-      sumEl.innerHTML = `<div><strong>庫存 SKU</strong> ${stockSkuCount} 個 · <strong>總件數</strong> ${stockTotal.toLocaleString()} 件 · ⚠ 低 ${cntLow} · 缺 ${cntOut}</div><div style="font-size:0.6875rem; color:var(--text-soft); margin-top:4px;">最後更新: ${updateStr}</div>`;
+      const _binSum = (scrapTotal > 0 || repairTotal > 0) ? ` · <span style="color:var(--danger);">報廢 ${scrapTotal}</span> · <span style="color:#B4690E;">檢修 ${repairTotal}</span>` : "";
+      sumEl.innerHTML = `<div><strong>庫存 SKU</strong> ${stockSkuCount} 個 · <strong>一般倉</strong> ${stockTotal.toLocaleString()} 件 · ⚠ 低 ${cntLow} · 缺 ${cntOut}${_binSum}</div><div style="font-size:0.6875rem; color:var(--text-soft); margin-top:4px;">最後更新: ${updateStr}</div>`;
     }
   }
 
+  // 目前檢視的倉別 (報廢/檢修 篩選時, 主數字改顯示該倉)
+  const activeBin = inventoryFilter === "scrap" ? "scrap" : (inventoryFilter === "repair" ? "repair" : "qty");
   // 依篩選過濾
   const filtered = allSkus.filter(sku => {
-    const qty = (stockMap[sku] && typeof stockMap[sku].qty === "number") ? stockMap[sku].qty : null;
+    const e = stockMap[sku];
+    const qty = (e && typeof e.qty === "number") ? e.qty : null;
     if (inventoryFilter === "in_stock") return qty !== null && qty >= getLowStockThreshold();
     if (inventoryFilter === "low_stock") return qty !== null && qty > 0 && qty < getLowStockThreshold();
     if (inventoryFilter === "out_of_stock") return qty === 0;
+    if (inventoryFilter === "scrap") return !!(e && e.scrap > 0);
+    if (inventoryFilter === "repair") return !!(e && e.repair > 0);
     return true; // all
   });
 
@@ -5535,16 +5636,25 @@ function renderInventory() {
 
   listEl.innerHTML = catNames.map(cat => {
     const skus = byCat[cat].sort((a, b) => a.localeCompare(b));
-    const catEmoji = CATEGORY_EMOJI[cat] || (cat === "未分類" ? "❓" : "📌");
+    const catEmoji = catIcon(cat);
     const itemsHtml = skus.map(sku => {
       const libP = library.find(p => p.sku === sku);
       const stockEntry = stockMap[sku];
       const qty = (stockEntry && typeof stockEntry.qty === "number") ? stockEntry.qty : null;
+      const scrap = (stockEntry && stockEntry.scrap) || 0;
+      const repair = (stockEntry && stockEntry.repair) || 0;
       const name = (libP && libP.name) || (stockEntry && stockEntry.name) || "(無名稱)";
       const isEssential = libP && libP.essential;
+      const binLine = (activeBin === "qty" && (scrap > 0 || repair > 0))
+        ? `<div style="font-size:0.6875rem; margin-top:2px; display:flex; gap:6px;">${scrap > 0 ? `<span style="color:var(--danger); background:#fdecea; padding:1px 6px; border-radius:6px;">報廢 ${scrap}</span>` : ""}${repair > 0 ? `<span style="color:#B4690E; background:#FEF3E2; padding:1px 6px; border-radius:6px;">檢修 ${repair}</span>` : ""}</div>`
+        : "";
 
       let qtyHtml;
-      if (qty === null) {
+      if (activeBin === "scrap") {
+        qtyHtml = `<span style="color:var(--danger); font-weight:700; font-size:1rem;">${scrap.toLocaleString()}</span> <span style="color:var(--danger); font-size:0.6875rem;">報廢</span>`;
+      } else if (activeBin === "repair") {
+        qtyHtml = `<span style="color:#B4690E; font-weight:700; font-size:1rem;">${repair.toLocaleString()}</span> <span style="color:#B4690E; font-size:0.6875rem;">檢修</span>`;
+      } else if (qty === null) {
         qtyHtml = '<span style="color: var(--text-soft); font-size: 0.6875rem;">未匯入</span>';
       } else if (qty === 0) {
         qtyHtml = `<span style="color: var(--danger); font-weight: 700; font-size: 1rem;">${qty}</span> <span style="color: var(--danger); font-size: 0.6875rem;">缺貨</span>`;
@@ -5559,10 +5669,12 @@ function renderInventory() {
           <div style="flex:1; min-width:0;">
             <div style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 0.6875rem;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 0.625rem;">未入庫</span>' : ''}</div>
             <div style="font-size: 0.75rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(name)}</div>
+            ${binLine}
           </div>
-          <div style="text-align: right; white-space: nowrap; display:flex; align-items:center; gap:8px; justify-content:flex-end;">
+          <div style="text-align: right; white-space: nowrap; display:flex; align-items:center; gap:6px; justify-content:flex-end;">
             <div>${qtyHtml}</div>
-            <button data-inv-edit="${escapeHtml(sku)}" title="修改庫存數量" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:0.8125rem; flex:none;">✏️ 改</button>
+            <button data-inv-cat="${escapeHtml(sku)}" title="修改分類" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 8px; cursor:pointer; font-size:0.8125rem; flex:none;">🏷</button>
+            <button data-inv-edit="${escapeHtml(sku)}" title="修改庫存數量" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 8px; cursor:pointer; font-size:0.8125rem; flex:none;">✏️</button>
           </div>
         </div>
       `;
@@ -5741,6 +5853,7 @@ function bumpStockTakeCount(sku, delta) {
   const newQty = Math.max(0, (stockTake.counts[sku] || 0) + delta);
   if (newQty === 0) delete stockTake.counts[sku];
   else stockTake.counts[sku] = newQty;
+  _stLastTouched = sku;
   saveStockTake();
   renderStockTake();
 }
@@ -5754,6 +5867,7 @@ function setStockTakeCount(sku, qty) {
   else stockTake.counts[sku] = qty;
   // 有輸入實盤數就自動取消略過
   if (qty > 0 && stockTake.skipped) delete stockTake.skipped[sku];
+  _stLastTouched = sku;
   saveStockTake();
   renderStockTake();
 }
@@ -5943,6 +6057,51 @@ function exportStockTakeDiffCsv() {
 }
 
 let _stockTakeFilter = "all";
+let _stCollapsed = {};    // 盤點分類收合狀態
+let _stLastTouched = "";  // 最近點/改的 SKU (顯示「剛更新」標記)
+
+// 單列渲染 (略過列 / 一般列); 字體加大 + 剛更新的列 highlight
+function _renderStocktakeRow(r) {
+  const touched = r.sku === _stLastTouched;
+  if (r.isSkipped) {
+    return `
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 10px; border-bottom:1px solid var(--border-light); background:var(--bg); opacity:.72;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:1rem; text-decoration:line-through;">${escapeHtml(r.sku)}</div>
+          <div style="font-size:0.875rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</div>
+        </div>
+        <span style="font-size:0.8125rem; color:var(--text-soft); background:var(--border); padding:4px 8px; border-radius:6px; white-space:nowrap;">🚫 暫不盤點</span>
+        <button data-st-restore="${escapeHtml(r.sku)}" style="background:var(--bg); color:var(--primary); border:1px solid var(--border); border-radius:6px; padding:9px 12px; cursor:pointer; font-size:0.9375rem; font-weight:600; white-space:nowrap;">恢復</button>
+      </div>`;
+  }
+  const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
+  const big = isBigDiff(r);
+  const diffText = (r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤") + (big ? " ⚠" : "");
+  const rowBg = touched ? "var(--primary-light)" : (r.status === "diff_plus" ? "rgba(34,197,94,0.10)" : (r.status === "diff_minus" ? "rgba(239,68,68,0.10)" : "transparent"));
+  const touchStyle = touched ? "box-shadow: inset 5px 0 0 var(--primary);" : "";
+  const touchBadge = touched ? ' <span style="color:var(--primary); font-size:0.6875rem; font-weight:800;">✓ 剛更新</span>' : "";
+  const skipBtn = !r.inStockTake
+    ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.875rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
+    : "";
+  return `
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 10px; border-bottom:1px solid var(--border-light); background:${rowBg}; ${touchStyle}">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:1rem;">${escapeHtml(r.sku)}${touchBadge}</div>
+          <div style="font-size:0.875rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</div>
+          ${skipBtn}
+        </div>
+        <div style="text-align:right; min-width:56px;">
+          <div style="font-size:0.875rem; color:var(--text-soft);">系統 ${r.system}</div>
+          <div style="font-size:0.9375rem; color:${diffColor}; font-weight:700;">${diffText}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:5px;">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+          <input type="number" inputmode="numeric" min="0" step="1" data-st-set="${escapeHtml(r.sku)}" value="${r.actual}"
+                 style="width:62px; height:46px; text-align:center; padding:2px; border:1px solid var(--border); border-radius:8px; font-size:1.3125rem; font-weight:700; background:var(--surface); color:var(--text);">
+          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background:var(--success); color:white; border:0; border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;">+</button>
+        </div>
+      </div>`;
+}
 
 function renderStockTake() {
   if (!stockTake) return;
@@ -5979,59 +6138,37 @@ function renderStockTake() {
   else if (_stockTakeFilter === "diff_minus") displayed = diffResults.filter(r => r.status === "diff_minus");
   else if (_stockTakeFilter === "not_counted") displayed = diffResults.filter(r => r.status === "not_counted");
   else if (_stockTakeFilter === "skipped") displayed = diffResults.filter(r => r.status === "skipped");
-  // 排序: 已盤(差異大優先) → 未盤 → 略過(最後)
-  displayed.sort((a, b) => {
-    const rank = x => x.isSkipped ? 2 : (x.inStockTake ? 0 : 1);
-    const ra = rank(a), rb = rank(b);
-    if (ra !== rb) return ra - rb;
-    return Math.abs(b.diff) - Math.abs(a.diff);
-  });
   const list = document.getElementById("stocktake-list");
   if (!list) return;
   if (displayed.length === 0) {
     list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有符合條件的 SKU</div></div>';
     return;
   }
-  list.innerHTML = displayed.slice(0, 200).map(r => {
-    // 略過 (暫不盤點) 的列: 灰底 + 恢復鈕
-    if (r.isSkipped) {
-      return `
-      <div style="display:flex; align-items:center; gap: 8px; padding: 10px 10px; border-bottom: 1px solid var(--border-light); background: var(--bg); opacity: .75;">
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 700; font-size: 0.9375rem; text-decoration: line-through;">${escapeHtml(r.sku)}</div>
-          <div style="font-size: 0.8125rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
-        </div>
-        <span style="font-size: 0.75rem; color: var(--text-soft); background: var(--border); padding: 4px 8px; border-radius: 6px; white-space: nowrap;">🚫 暫不盤點</span>
-        <button data-st-restore="${escapeHtml(r.sku)}" style="background: var(--bg); color: var(--primary); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 0.875rem; font-weight: 600; white-space: nowrap;">恢復</button>
-      </div>`;
-    }
-    const diffColor = r.status === "diff_plus" ? "var(--success)" : (r.status === "diff_minus" ? "var(--danger)" : "var(--text-soft)");
-    const big = isBigDiff(r);
-    const diffText = (r.inStockTake ? (r.diff > 0 ? `+${r.diff}` : (r.diff === 0 ? "= 0" : `${r.diff}`)) : "未盤") + (big ? " ⚠" : "");
-    const rowBg = r.status === "diff_plus" ? "rgba(34,197,94,0.10)" : (r.status === "diff_minus" ? "rgba(239,68,68,0.10)" : "transparent");
-    const skipBtn = !r.inStockTake
-      ? `<button data-st-skip="${escapeHtml(r.sku)}" style="background:none; border:0; color:var(--text-soft); font-size:0.8125rem; cursor:pointer; padding:2px 0; text-decoration:underline;">暫不盤點</button>`
-      : "";
+  // 依分類分組 (盤點好找); 同分類內用 SKU 穩定排序, 不會因為輸入而亂跳
+  const _groups = {};
+  for (const r of displayed) { const c = r.category || "其他"; (_groups[c] = _groups[c] || []).push(r); }
+  const _catOrder = [...CATEGORY_ORDER, "其他", "未分類"];
+  const _cats = Object.keys(_groups).sort((a, b) => {
+    const ai = _catOrder.indexOf(a), bi = _catOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  const _sy = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
+  list.innerHTML = _cats.map(cat => {
+    const rows = _groups[cat].sort((a, b) => (a.sku || "").localeCompare(b.sku || ""));
+    const collapsed = !!_stCollapsed[cat];
+    const emoji = catIcon(cat);
+    const countedInCat = rows.filter(r => r.inStockTake).length;
     return `
-      <div style="display:flex; align-items:center; gap: 8px; padding: 10px 10px; border-bottom: 1px solid var(--border-light); background: ${rowBg};">
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 700; font-size: 0.9375rem;">${escapeHtml(r.sku)}</div>
-          <div style="font-size: 0.8125rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(r.name)}</div>
-          ${skipBtn}
-        </div>
-        <div style="text-align: right; min-width: 52px;">
-          <div style="font-size: 0.8125rem; color: var(--text-soft);">系統 ${r.system}</div>
-          <div style="font-size: 0.875rem; color: ${diffColor}; font-weight: 700;">${diffText}</div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; width: 34px; height: 40px; cursor: pointer; font-weight: 700; font-size: 1.25rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
-          <input type="number" inputmode="numeric" min="0" step="1" data-st-set="${escapeHtml(r.sku)}" value="${r.actual}"
-                 style="width: 58px; height: 40px; text-align: center; padding: 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 1.1875rem; font-weight: 700; background: var(--surface); color: var(--text);">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background: var(--success); color: white; border: 0; border-radius: 6px; width: 34px; height: 40px; cursor: pointer; font-weight: 700; font-size: 1.25rem;">+</button>
-        </div>
-      </div>
-    `;
+      <div class="cat-group" style="margin-bottom:6px;">
+        <button type="button" data-st-cat-toggle="${escapeHtml(cat)}" style="width:100%; text-align:left; background:var(--primary-light); padding:11px 10px; font-weight:700; font-size:1rem; border:0; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px; color:var(--text);">
+          <span>${emoji}</span>
+          <span style="flex:1;">${escapeHtml(cat)} <span style="color:var(--text-soft); font-weight:normal; font-size:0.8125rem;">已盤 ${countedInCat}/${rows.length}</span></span>
+          <span style="font-size:0.8125rem; opacity:.7;">${collapsed ? "▶" : "▼"}</span>
+        </button>
+        <div ${collapsed ? "hidden" : ""}>${rows.map(_renderStocktakeRow).join("")}</div>
+      </div>`;
   }).join("");
+  requestAnimationFrame(() => { if (document.scrollingElement) document.scrollingElement.scrollTop = _sy; else window.scrollTo(0, _sy); });
 }
 
 function renderStockTakeStatusInSettings() {
@@ -6144,6 +6281,8 @@ document.getElementById("stocktake-filter-bar").addEventListener("click", (e) =>
 
 // 列表上的 +/- 按鈕 / 暫不盤點 / 恢復
 document.getElementById("stocktake-list").addEventListener("click", (e) => {
+  const catBtn = e.target.closest("button[data-st-cat-toggle]");
+  if (catBtn) { const c = catBtn.dataset.stCatToggle; _stCollapsed[c] = !_stCollapsed[c]; renderStockTake(); return; }
   const bumpBtn = e.target.closest("button[data-st-bump]");
   if (bumpBtn) {
     const sku = bumpBtn.dataset.stBump;
@@ -6192,7 +6331,8 @@ document.getElementById("st-import-file").addEventListener("change", (e) => {
       for (const it of items) { if (stockMap[it.sku]) updated++; else added++; }
       if (!confirm(`📥 載入目前庫存作為盤點對照\n\n總共 ${items.length} 個 SKU (新增 ${added}, 更新 ${updated})\n\n載入後這些商品會出現在「全部」清單, 你就能逐一輸入實盤數比對。\n不會動到你已輸入的實盤數。\n\n要繼續嗎?`)) return;
       for (const it of items) {
-        stockMap[it.sku] = { qty: it.qty, name: it.name || (stockMap[it.sku] && stockMap[it.sku].name) || "", updatedAt: now };
+        const _ex = stockMap[it.sku] || {};
+        stockMap[it.sku] = { ..._ex, qty: it.qty, name: it.name || _ex.name || "", updatedAt: now }; // 保留 scrap/repair 等既有倉別
       }
       saveStock();
       _stockTakeFilter = "all";
@@ -6566,7 +6706,7 @@ function renderCustomers(query) {
 }
 
 // ===== 🔁 退貨原因熱力圖分析 =====
-const RETURN_REASONS = ["不喜歡/不適合", "商品瑕疵", "商品錯誤", "運送破損", "7天鑑賞期", "其他"];
+const RETURN_REASONS = ["商品瑕疵", "商品錯誤", "商品故障", "包裹未取", "7天鑑賞期", "其他"];
 
 function computeReturnAnalysis(range) {
   const cutoff = getRangeCutoff(range);
@@ -7318,7 +7458,7 @@ function renderHistory() {
 
   if (history.length === 0) {
     stats.textContent = "尚無紀錄。完成出貨後會自動存入這裡。";
-    list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>還沒有出貨紀錄</div></div>';
+    list.innerHTML = `<div class="empty-state"><div class="icon">${icon('inbox', 44, 'var(--text-soft)')}</div><div>還沒有出貨紀錄</div></div>`;
     return;
   }
   // 統計 (本月) - 拆一般 vs 補寄
@@ -7553,10 +7693,8 @@ function renderHistory() {
 // ---- 裝箱掃描模式 ----
 function toggleScanMode() {
   state.scanMode = !state.scanMode;
-  if (!state.scanMode) {
-    // 關閉掃描模式時, 若有 active parcel, 先收尾
-    if (state.activeParcel) finalizeActiveParcel(true);
-  }
+  // 收合掃描面板只是收起輸入區, 不結束當前訂單 (避免剛刷/剛點的內容消失)。
+  // 訂單會在「刷下一張寄件單」或按「完成」時才結案; 出貨完成流程也會自動收尾 active parcel。
   saveState();
   renderScanPanel();
   // (開啟掃描模式時不強制 focus, 全域監聽會接管)
@@ -7885,7 +8023,7 @@ function processScan(code) {
         }
       }
       SOUND.scanSku();
-      bumpPickItem(idx, _mul, state.inboundInfo ? { noBundle: true } : undefined); // 入倉驗收只算實到, 不觸發連動加單
+      bumpPickItem(idx, _mul, (state.inboundInfo || state.returnInfo || state.replacementInfo) ? { noBundle: true } : undefined); // 入倉/退貨/補寄只算實到, 不觸發連動加單
       _scanMultiplier = 1; renderMultiplierBadge();
       const it = state.items[idx];
       if (it.essential || (it.packed < it.expected) || it.expected === 0) {
@@ -8080,36 +8218,46 @@ function finalizeActiveParcel(skipIfEmpty) {
   state.activeParcel = null;
 }
 
+// 目前建單模式 (決定各處用語): inbound / return / replacement / normal
+function _stateOrderMode() {
+  if (state.inboundInfo) return "inbound";
+  if (state.returnInfo) return "return";
+  if (state.replacementInfo) return "replacement";
+  return "normal";
+}
+
 function renderScanPanel() {
   const toggleBtn = document.getElementById("scan-toggle-btn");
   const icon = document.getElementById("scan-toggle-icon");
   const status = document.getElementById("scan-status");
   const body = document.getElementById("scan-body");
   if (!toggleBtn) return;
-  const inb = !!state.inboundInfo;
+  const mode = _stateOrderMode();
+  const countMode = mode === "inbound" || mode === "return"; // 清點語境(免出貨、無寄件單)
   toggleBtn.classList.toggle("active", state.scanMode);
   icon.textContent = state.scanMode ? "▼" : "▶";
-  // 入倉驗收: 用「進貨/清點」語境, 不用出貨的「裝箱」字眼
+  // 各模式各自語境
+  const TITLE = { inbound: "🏭 進貨清點掃描", return: "📥 退貨清點掃描", replacement: "📮 補寄裝箱掃描", normal: "📦 裝箱掃描" };
   const titleEl = document.getElementById("scan-toggle-title");
-  if (titleEl) titleEl.textContent = inb ? "🏭 進貨清點掃描" : "📦 裝箱掃描";
+  if (titleEl) titleEl.textContent = TITLE[mode];
   if (state.scanMode) {
-    status.textContent = state.activeParcel ? (inb ? "清點中..." : "裝箱中...") : "等待刷碼";
+    status.textContent = state.activeParcel ? (countMode ? "清點中..." : "裝箱中...") : "等待刷碼";
     body.hidden = false;
   } else {
     status.textContent = "未啟用";
     body.hidden = true;
   }
-  // 入倉時隱藏「寄件/超商」相關(那是出貨用的), 並改 placeholder / 統計字
+  // 清點模式(入倉/退貨)隱藏「寄件/超商」相關(那是出貨用的), 並改 placeholder / 統計字
   const carrierHint = document.getElementById("scan-carrier-hint");
   const manualIdBtn = document.getElementById("manual-parcel-id-btn");
   const scanInput = document.getElementById("scan-input");
-  if (carrierHint) carrierHint.hidden = inb;
-  if (manualIdBtn) manualIdBtn.hidden = inb;
-  if (scanInput) scanInput.placeholder = inb ? "刷商品條碼 + Enter(或用下方點選)" : "SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter";
+  if (carrierHint) carrierHint.hidden = countMode;
+  if (manualIdBtn) manualIdBtn.hidden = countMode;
+  if (scanInput) scanInput.placeholder = countMode ? "刷商品條碼 + Enter(或用下方點選)" : "SCAN 蝦皮 TW... / 黑貓 12 位數 + Enter";
+  const STATS_TXT = { inbound: "已驗收", return: "已退", replacement: "已補寄", normal: "已完成" };
+  const STATS_UNIT = { inbound: "筆", return: "筆", replacement: "筆", normal: "筆訂單" };
   const statsLine = document.getElementById("scan-stats-line");
-  if (statsLine) statsLine.innerHTML = inb
-    ? `✓ 已驗收 <strong id="completed-parcels-count">${state.completedParcels.length}</strong> 筆`
-    : `✓ 已完成 <strong id="completed-parcels-count">${state.completedParcels.length}</strong> 筆訂單`;
+  if (statsLine) statsLine.innerHTML = `✓ ${STATS_TXT[mode]} <strong id="completed-parcels-count">${state.completedParcels.length}</strong> ${STATS_UNIT[mode]}`;
   document.getElementById("completed-parcels-count").textContent = state.completedParcels.length;
   renderActiveParcel();
   renderCompletedParcelsList();
@@ -8175,14 +8323,19 @@ function renderActiveParcel() {
     return;
   }
   wrapper.hidden = false;
-  const inb = !!state.inboundInfo;
-  // 入倉驗收: 標題/按鈕改「進貨/驗收」語境, 不沿用出貨字眼
+  const mode = _stateOrderMode();
+  const countMode = mode === "inbound" || mode === "return";  // 清點語境
+  const pickerMode = mode !== "normal";                        // 有免刷點選面板
+  // 各模式各自語境, 不沿用出貨字眼
+  const LABEL = { inbound: "進貨單", return: "退貨單", replacement: "補寄單", normal: "當前訂單" };
+  const CANCEL = { inbound: "✗ 取消此單", return: "✗ 取消此單", replacement: "✗ 取消此筆", normal: "✗ 取消此筆" };
+  const FINISH = { inbound: "✓ 完成驗收", return: "✓ 完成退貨", replacement: "✓ 完成補寄", normal: "✓ 再刷一次 / 手動完成此筆" };
   const labelEl = wrapper.querySelector(".active-parcel-label");
-  if (labelEl) labelEl.textContent = inb ? "進貨單" : "當前訂單";
+  if (labelEl) labelEl.textContent = LABEL[mode];
   const cancelBtn = document.getElementById("cancel-parcel-btn");
   const finishBtn = document.getElementById("finish-parcel-btn");
-  if (cancelBtn) cancelBtn.textContent = inb ? "✗ 取消此單" : "✗ 取消此筆";
-  if (finishBtn) finishBtn.textContent = inb ? "✓ 完成驗收" : "✓ 再刷一次 / 手動完成此筆";
+  if (cancelBtn) cancelBtn.textContent = CANCEL[mode];
+  if (finishBtn) finishBtn.textContent = FINISH[mode];
   idEl.textContent = state.activeParcel.id;
   const items = state.activeParcel.items || {};
   const skus = Object.keys(items);
@@ -8193,13 +8346,13 @@ function renderActiveParcel() {
   if (countEl) countEl.textContent = totalQty + " 件";
   if (lastEl) {
     const last = state.activeParcel.lastSku;
-    if (last && items[last]) lastEl.textContent = (inb ? "剛點 " : "剛刷 ") + last + " ×" + items[last];
-    else if (skus.length === 0) lastEl.textContent = inb ? "尚未清點" : "尚未刷碼";
+    if (last && items[last]) lastEl.textContent = (countMode ? "剛點 " : "剛刷 ") + last + " ×" + items[last];
+    else if (skus.length === 0) lastEl.textContent = countMode ? "尚未清點" : "尚未刷碼";
     else lastEl.textContent = skus.length + " 個 SKU";
   }
   if (skus.length === 0) {
-    itemsEl.innerHTML = inb
-      ? '<span class="empty">▶ 從下方「商品庫點選驗收」點 + 清點</span>'
+    itemsEl.innerHTML = pickerMode
+      ? '<span class="empty">▶ 從下方「商品庫點選」點 + 加入(或刷條碼)</span>'
       : '<span class="empty">▶ 從下方備貨清單點 + 加入此訂單</span>';
   } else {
     itemsEl.innerHTML = skus.map(sku => {
@@ -8316,7 +8469,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!state.inboundInfo; }
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
 }
@@ -8570,15 +8723,48 @@ if (_invExpandBtn) _invExpandBtn.addEventListener("click", () => {
   cats.forEach(c => { _invCollapsed[c] = anyCollapsed ? false : true; });
   renderInventory();
 });
-// 倉庫清冊 - 直接修改某 SKU 庫存數量
+// 倉庫清冊 - 修改分類 modal
+let _invCatSku = null;
+function openInvCatModal(sku) {
+  _invCatSku = sku;
+  const libP = library.find(p => p.sku === sku);
+  const nm = (libP && libP.name) || (stockMap[sku] && stockMap[sku].name) || "";
+  const curCat = libP ? (libP.category || "其他") : "未分類";
+  document.getElementById("inv-cat-target").textContent = `${sku}${nm ? "  " + nm : ""}(目前: ${curCat})`;
+  document.getElementById("inv-cat-options").innerHTML = CATEGORY_ORDER.map(c => {
+    const active = c === curCat;
+    return `<button data-cat="${escapeHtml(c)}" style="display:inline-flex; align-items:center; gap:5px; padding:9px 12px; border-radius:8px; border:1px solid ${active ? "var(--primary)" : "var(--border)"}; background:${active ? "var(--primary-light)" : "var(--surface)"}; color:var(--text); font-size:0.9375rem; font-weight:600; cursor:pointer;">${catIcon(c, 18)} ${escapeHtml(c)}</button>`;
+  }).join("");
+  document.getElementById("inv-cat-modal").hidden = false;
+}
+document.getElementById("inv-cat-options").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-cat]");
+  if (!b || !_invCatSku) return;
+  const cat = b.dataset.cat, sku = _invCatSku;
+  const libP = library.find(p => p.sku === sku);
+  if (libP) libP.category = cat;
+  else library.push({ sku, name: (stockMap[sku] && stockMap[sku].name) || "", category: cat, barcode: "" });
+  saveLibrary();
+  document.getElementById("inv-cat-modal").hidden = true; _invCatSku = null;
+  renderInventory();
+  showToast(`✓ ${sku} 分類改為 ${cat}`);
+});
+document.getElementById("inv-cat-cancel").addEventListener("click", () => { document.getElementById("inv-cat-modal").hidden = true; _invCatSku = null; });
+document.getElementById("inv-cat-modal").addEventListener("click", (e) => { if (e.target.id === "inv-cat-modal") { document.getElementById("inv-cat-modal").hidden = true; _invCatSku = null; } });
+// 倉庫清冊 - 直接修改某 SKU 庫存數量 / 分類
 document.getElementById("inventory-list").addEventListener("click", (e) => {
+  const catBtn = e.target.closest("button[data-inv-cat]");
+  if (catBtn) { openInvCatModal(catBtn.dataset.invCat); return; }
   const btn = e.target.closest("button[data-inv-edit]");
   if (!btn) return;
   const sku = btn.dataset.invEdit;
+  // 依目前檢視的倉別決定改哪個倉 (報廢/檢修 篩選時改該倉, 否則改一般倉)
+  const bin = inventoryFilter === "scrap" ? "scrap" : (inventoryFilter === "repair" ? "repair" : "qty");
+  const binName = bin === "scrap" ? "報廢倉" : (bin === "repair" ? "檢修倉" : "一般倉");
   const libP = library.find(p => p.sku === sku);
   const nm = (libP && libP.name) || (stockMap[sku] && stockMap[sku].name) || "";
-  const cur = (stockMap[sku] && typeof stockMap[sku].qty === "number") ? stockMap[sku].qty : "";
-  const val = prompt(`修改庫存數量\n${sku}${nm ? "  " + nm : ""}\n\n輸入新的庫存數量:`, cur === "" ? "" : String(cur));
+  const cur = (stockMap[sku] && typeof stockMap[sku][bin] === "number") ? stockMap[sku][bin] : "";
+  const val = prompt(`修改${binName}數量\n${sku}${nm ? "  " + nm : ""}\n\n輸入新的數量:`, cur === "" ? "" : String(cur));
   if (val === null) return;
   const t = val.trim();
   if (t === "") { showToast("未修改"); return; }
@@ -8586,11 +8772,11 @@ document.getElementById("inventory-list").addEventListener("click", (e) => {
   if (isNaN(q) || q < 0) { showToast("⚠ 請輸入 0 或正整數"); return; }
   const now = new Date().toISOString();
   if (!stockMap[sku]) stockMap[sku] = { qty: 0, name: nm, updatedAt: now };
-  stockMap[sku].qty = q;
+  stockMap[sku][bin] = q;
   stockMap[sku].updatedAt = now;
   saveStock();
   renderInventory();
-  showToast(`✓ ${sku} 庫存改為 ${q.toLocaleString()}`);
+  showToast(`✓ ${sku} ${binName}改為 ${q.toLocaleString()}`);
 });
 document.getElementById("inv-import-btn").addEventListener("click", () => {
   document.getElementById("inv-import-file").click();
@@ -8627,6 +8813,7 @@ document.getElementById("inv-import-file").addEventListener("change", (e) => {
         // 名稱: 如果商品庫已有此 SKU, stockMap 的 name 留 CSV 的 (參考用)
         // 顯示時優先用 library.name
         stockMap[it.sku] = {
+          ...(stockMap[it.sku] || {}), // 保留 scrap/repair 等既有倉別
           qty: it.qty,
           name: it.name || (stockMap[it.sku] && stockMap[it.sku].name) || "",
           updatedAt: now,
@@ -10997,8 +11184,7 @@ function openReturnModal(prefillId) {
   document.getElementById("ret-platform-select").value = currentPlatform || "";
   document.getElementById("ret-parcel-id").value = prefillId || "";
   document.getElementById("ret-customer-phone").value = "";
-  document.getElementById("ret-reason").value = "不喜歡/不適合";
-  document.getElementById("ret-original-order").value = "";
+  document.getElementById("ret-reason").value = "7天鑑賞期";
   document.getElementById("ret-note").value = "";
   document.getElementById("return-order-modal").hidden = false;
   setTimeout(() => {
@@ -11020,7 +11206,7 @@ document.getElementById("ret-create").addEventListener("click", () => {
   const customerName = ""; // 已移除姓名欄, 只留手機
   const customerPhone = document.getElementById("ret-customer-phone").value.trim();
   const reason = document.getElementById("ret-reason").value;
-  const originalOrderNo = document.getElementById("ret-original-order").value.trim();
+  const originalOrderNo = ""; // 原訂單號欄位已移除 (保留欄位相容舊紀錄/搜尋)
   const note = document.getElementById("ret-note").value.trim();
 
   if (!rawId) { showToast("⚠ 退貨寄件單號必填"); document.getElementById("ret-parcel-id").focus(); return; }
@@ -11284,31 +11470,19 @@ function actuallyCompleteShipping(opts) {
     }
   }
 
-  // 退貨入庫: 客人退回的良品加回庫存 (瑕疵 / 運送破損不入庫)
+  // 退貨入庫 (依原因分倉): 良品→一般倉(qty) / 商品瑕疵→報廢倉(scrap) / 商品故障→檢修倉(repair)
   if (entry && entry.orderType === "return") {
-    const _badReasons = ["商品瑕疵", "運送破損"];
     const _reason = (entry.returnInfo && entry.returnInfo.reason) || "";
-    if (!_badReasons.includes(_reason)) {
-      let restocked = 0;
-      const _now = new Date().toISOString();
-      for (const it of (entry.items || [])) {
-        if (it.essential) continue;
-        if ((it.packed || 0) <= 0) continue;
-        if (!stockMap[it.sku]) {
-          const libItem = library.find(p => p.sku === it.sku);
-          stockMap[it.sku] = { qty: 0, name: (libItem && libItem.name) || it.name || "", updatedAt: _now };
-        }
-        stockMap[it.sku].qty = (stockMap[it.sku].qty || 0) + it.packed;
-        stockMap[it.sku].updatedAt = _now;
-        restocked++;
-      }
-      if (restocked > 0) {
-        saveStock();
-        setTimeout(() => showToast(`📈 退貨良品入庫 ${restocked} SKU`), 600);
-      }
-    } else {
-      setTimeout(() => showToast(`⚠ 退貨原因「${_reason}」, 未自動入庫`), 600);
-    }
+    const _bin = _reason === "商品瑕疵" ? "scrap" : (_reason === "商品故障" ? "repair" : "qty");
+    const _binName = _bin === "scrap" ? "報廢倉" : (_bin === "repair" ? "檢修倉" : "一般倉");
+    const n = stockAddToBin(entry.items, _bin);
+    if (n > 0) { saveStock(); setTimeout(() => showToast(`📦 退貨入${_binName} ${n} SKU`), 600); }
+  }
+
+  // 入倉驗收 (進貨): 加到一般倉(qty)
+  if (entry && entry.orderType === "inbound") {
+    const n = stockAddToBin(entry.items, "qty");
+    if (n > 0) { saveStock(); setTimeout(() => showToast(`📈 進貨入一般倉 ${n} SKU`), 600); }
   }
 
   // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
@@ -11464,7 +11638,7 @@ function renderBarcodeContent(mode) {
       }).join("");
       return `<div class="barcode-category">
         <div class="barcode-category-header">
-          <span class="cat-emoji">${CATEGORY_EMOJI[g.name] || "📌"}</span>
+          <span class="cat-emoji">${catIcon(g.name)}</span>
           <span class="cat-name">${escapeHtml(g.name)}</span>
           <span class="cat-count">${g.items.length} 個 SKU</span>
         </div>
