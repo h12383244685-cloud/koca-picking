@@ -120,18 +120,20 @@
       <p class="kv" style="margin-top:6px">填了之後新增/標記/刪除會同步到雲端,多台共享。需先部署 shipping_sync_worker.js(見「宅配寄件紀錄_說明.md」)。</p>
       <button class="btn outline sm" id="sync-now" style="margin-top:8px">↻ 立即同步</button>
     </details>
-    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.3.0</span> · 宅配寄件紀錄</p>
+    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.3.1</span> · 宅配寄件紀錄</p>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION="1.3.0";
+const APP_VERSION="1.3.1";
 const KEY="koca_shipping_records_v1", NAME_KEY="koca_shipping_shipper", URL_KEY="koca_shipping_sync_url";
 const TYPES={reship:{label:"補寄",emoji:"📮"},normal:{label:"一般宅配",emoji:"🚚"},exchange:{label:"換貨寄出",emoji:"🔁"},returnIn:{label:"退貨收回",emoji:"↩️"}};
 const REASONS={missing:"漏寄 / 缺件補寄",damage:"破損補寄",wrong:"出錯貨重寄",lost:"包裹遺失重寄",exchange:"換貨",returnIn:"退貨收回",other:"其他"};
 const SIZES={small:"小",medium:"中",large:"大",xlarge:"特大"};
-const PLATS={unknown:"—未指定—",shopee:"🛒 蝦皮",momo:"🛍 MOMO",coupang:"🅒 酷澎",koca:"🌐 KOCA官網",seven:"🏪 7-11",family:"🏬 全家",hilife:"🏪 萊爾富",hsinchu:"🚚 新竹物流",other:"其他"};
+const PLATS={unknown:"—未指定—",shopee:"🛒 蝦皮",momo:"🛍 MOMO",koca:"🌐 官方",coupang:"🅒 酷澎",kol:"📣 KOL",meet:"🤝 面交",other:"其他"};
+// 舊資料相容: 已淘汰通路仍能正確顯示, 但不出現在下拉
+const PLAT_LEGACY={seven:"🏪 7-11",family:"🏬 全家",hilife:"🏪 萊爾富",hsinchu:"🚚 新竹物流"};
 
 let records=[], tab="pending", q="";
 const $=id=>document.getElementById(id);
@@ -202,7 +204,7 @@ function render(){
     return `<div class="rec ${r.status==="shipped"?"shipped":""}">
       <div class="rec-top"><span class="badge b-type">${t.emoji} ${t.label}</span>${reason}${st}</div>
       <div class="rec-main">${esc(r.recipient||"(未填收件人)")}</div>
-      <div class="rec-sub">${r.platform&&r.platform!=="unknown"?`平台:${esc(PLATS[r.platform]||r.platform)} · `:""}包裹:${esc(SIZES[r.size]||r.size||"-")} · 寄件人:${esc(r.shipper||"-")} · 建立 ${fmt(r.createdAt)}${r.phone?`<br>📱 ${esc(r.phone)}`:""}${r.addr?`<br>🏠 ${esc(r.addr)}`:""}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
+      <div class="rec-sub">${r.platform&&r.platform!=="unknown"?`平台:${esc(PLATS[r.platform]||PLAT_LEGACY[r.platform]||r.platform)} · `:""}包裹:${esc(SIZES[r.size]||r.size||"-")} · 寄件人:${esc(r.shipper||"-")} · 建立 ${fmt(r.createdAt)}${r.phone?`<br>📱 ${esc(r.phone)}`:""}${r.addr?`<br>🏠 ${esc(r.addr)}`:""}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
       <div class="rec-act">
         ${r.status==="pending"?`<button class="btn ok sm" data-ship="${r.id}">✓ 標記已寄</button>`:""}
         <button class="btn danger sm" data-del="${r.id}">🗑 刪除</button>
@@ -214,7 +216,7 @@ function render(){
 // 匯出 / 匯入
 $("exp-csv").addEventListener("click",()=>{
   if(!records.length){toast("沒有資料");return;}
-  const PLAT_PLAIN={unknown:"",shopee:"蝦皮",momo:"MOMO",coupang:"酷澎",koca:"KOCA官網",seven:"7-11",family:"全家",hilife:"萊爾富",hsinchu:"新竹物流",other:"其他"};
+  const PLAT_PLAIN={unknown:"",shopee:"蝦皮",momo:"MOMO",koca:"官方",coupang:"酷澎",kol:"KOL",meet:"面交",other:"其他",seven:"7-11",family:"全家",hilife:"萊爾富",hsinchu:"新竹物流"};
   const head=["建立時間","寄件類型","平台","原因","收件人","電話","地址","包裹大小","寄件人","狀態","寄出時間","備註"];
   const rows=[head].concat(records.map(r=>[fmtFull(r.createdAt),(TYPES[r.type]||{}).label||r.type,PLAT_PLAIN[r.platform]||r.platform||"",REASONS[r.reason]||r.reason||"",r.recipient,r.phone||"",r.addr||"",SIZES[r.size]||r.size,r.shipper,r.status==="shipped"?"已寄":"待寄",fmtFull(r.shippedAt),r.note]));
   const csv="﻿"+rows.map(rw=>rw.map(c=>{let s=String(c==null?"":c);if(/^[=+\-@]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(",")).join("\r\n");
