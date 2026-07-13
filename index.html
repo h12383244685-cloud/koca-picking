@@ -3150,7 +3150,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.6.6 · 2026-07-13";
+const APP_VERSION = "V3.6.7 · 2026-07-13";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -7965,6 +7965,12 @@ function scheduleMasterPush() {
 }
 async function pushMasterNow() {
   if (!settings.isMasterDevice || !cloudHistoryEnabled()) return;
+  // ★ 絕不推空主檔: 萬一主機的瀏覽器資料被清掉(或裝置重灌), 空的 library 推上雲端會很危險。
+  //   (鏡像端本來就有「空主檔不套用」的防呆, 這裡是第二道: 源頭就不推。)
+  if (!Array.isArray(library) || library.length === 0) {
+    console.warn("[master] 商品庫是空的, 略過推送 (避免把雲端主檔洗成空的)");
+    return;
+  }
   const version = Date.now();
   try {
     const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/master/put", {
@@ -12036,10 +12042,4 @@ document.getElementById("finish-btn").addEventListener("click", () => {
   // 報告計算: essential 商品另外處理, 不算進 done/miss/over
   const _normalItems = state.items.filter(it => !it.essential);
   const _essentialItems = state.items.filter(it => it.essential && it.packed > 0);
-  const dones = _normalItems.filter(it => statusOf(it, _shipped) === "done");
-  const misses = _normalItems.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
-  const overs = _normalItems.filter(it => statusOf(it, _shipped) === "over");
-
-  let html = "";
-  html += `<div class="report-section"><h3>📊 總結</h3>
-    <div class="report-line">應出貨 ${state.items.length} 個
+  const dones = _n
