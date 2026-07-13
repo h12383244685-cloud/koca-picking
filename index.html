@@ -3150,7 +3150,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "V3.6.7 · 2026-07-13";
+const APP_VERSION = "V3.6.3 · 2026-07-13";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5690,54 +5690,6 @@ function matchSkuByName(name) {
   return cands[0];
 }
 
-// ★ 重複出貨防呆 (最重要的一道防線)
-// 官網待出貨池積了幾百張說不清楚的舊單, 所以「有沒有出過」不能信官網狀態,
-// 只信「這個 App 自己刷過沒有」: 從出貨紀錄推導出已出過的官網訂單。
-// 出貨紀錄是雲端共享的 → 電腦刷過的單, 手機也會擋, 全公司共用同一份防呆。
-function kocaShippedMap() {
-  const m = {};
-  const hist = (typeof allHistory === "function") ? allHistory() : (typeof history !== "undefined" ? history : []);
-  for (const e of (hist || [])) {
-    if (!e || !e.kocaOrderId) continue;
-    // 退貨/補寄/入倉不算「出過這張單」
-    if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue;
-    const prev = m[e.kocaOrderId];
-    if (!prev || String(e.completedAt || "") > String(prev.completedAt || "")) {
-      m[e.kocaOrderId] = { completedAt: e.completedAt || "", completedBy: e.completedBy || "" };
-    }
-  }
-  return m;
-}
-function fmtShippedWhen(iso) {
-  if (!iso) return "(時間不明)";
-  try {
-    const d = new Date(iso);
-    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  } catch (_) { return String(iso).slice(0, 16).replace("T", " "); }
-}
-
-// 把 Worker 回的錯誤翻成「看得懂、知道怎麼修」的訊息 (不外洩金鑰內容, 只用長度判斷)
-function kocaErrMessage(data) {
-  if (!data) return "❌ 官網沒有回應可讀的資料,請稍後再試。";
-  const e = data.error || "未知錯誤";
-  if (e === "unauthorized") return "❌ Worker 驗證失敗:請到 ⚙ 外部整合 確認 X-Spidey-Key 填對了。";
-  if (e === "spidey_key_not_set") return "❌ Worker 還沒設定 SPIDEY_KEY。";
-  if (e === "koca_internal_api_key_not_set") return "❌ Cloudflare 還沒設定官網金鑰(KOCA_INTERNAL_API_KEY)。";
-  if (e === "order_not_found") return "❌ 官網查無此訂單。";
-  if (e === "fetch_failed") return "❌ 連不到官網,請稍後再試。";
-  if (e === "koca_api_error") {
-    const st = data.httpStatus || "?";
-    if (data.keyLen !== undefined && data.keyLen !== 64) {
-      return `❌ <strong>Cloudflare 的官網金鑰不正確</strong>(長度 ${data.keyLen},應為 64)。<br>請到 Cloudflare → koca-picking-sync → Variables and Secrets 重新貼上完整金鑰。`;
-    }
-    if (st === 401 || st === 403) return "❌ 官網拒絕這把金鑰(401/403)。金鑰長度正確但內容不符,請重新取得。";
-    if (st === 429) return "⏳ 官網限流中(太頻繁),請等一分鐘再按一次。";
-    if (String(st).startsWith("5")) return `⚠ 官網暫時異常(HTTP ${st}),請稍後再試一次。`;
-    return `❌ 官網 API 回錯誤(HTTP ${st})。請稍後再試,若持續發生請截圖回報。`;
-  }
-  return `❌ 失敗:${escapeHtml(e)}`;
-}
-
 function setKocaOrderStatus(html, tone) {
   const el = document.getElementById("koca-order-status");
   if (!el) return;
@@ -5771,9 +5723,12 @@ async function fetchKocaOrder(orderId, opts) {
       return false;
     }
     if (!data.ok) {
-      setKocaOrderStatus(data.error === "order_not_found"
-        ? `❌ 查無此訂單:${escapeHtml(orderId)}`
-        : kocaErrMessage(data), "err");
+      let msg;
+      if (data.error === "order_not_found") msg = `❌ 查無此訂單:${escapeHtml(orderId)}`;
+      else if (data.error === "unauthorized") msg = "❌ Worker 驗證失敗:請到 ⚙ 外部整合 確認 SPIDEY_KEY 是否正確。";
+      else if (data.error === "koca_api_error") msg = `❌ 官網 API 回錯誤(HTTP ${data.httpStatus || "?"})。若是剛換金鑰,請確認 Cloudflare 的 KOCA_INTERNAL_API_KEY 已設定正確。`;
+      else msg = `❌ 拉單失敗:${escapeHtml(data.error || "未知錯誤")}`;
+      setKocaOrderStatus(msg, "err");
       SOUND.scanError();
       return false;
     }
@@ -5786,26 +5741,6 @@ async function fetchKocaOrder(orderId, opts) {
         escapeHtml(gate.reason).replace(/\n/g, "<br>"), "err");
       SOUND.scanError();
       alert(`🚫 這張官網訂單不建立出貨清單\n\n訂單:${data.orderId}\n狀態:${data.statusLabel || data.status || "未知"}\n\n${gate.reason}`);
-      return false;
-    }
-
-    // ---- 重複出貨防呆: 這張單這個 App 出過了嗎? ----
-    // 這道防線比官網狀態更可信 (官網待出貨池有大量說不清楚的舊單)。
-    const already = kocaShippedMap()[data.orderId];
-    if (already) {
-      const when = fmtShippedWhen(already.completedAt);
-      const who = already.completedBy || "(未命名)";
-      SOUND.scanError();
-      if (!confirm(`⛔ 這張官網訂單「已經出過了」!\n\n訂單:${data.orderId}\n出貨時間:${when}\n出貨人員:${who}\n\n再建一次清單就是【重複出貨】,客人會收到兩份。\n\n除非你確定這是要補寄/重出, 否則請按「取消」。\n\n真的還要再建一次清單嗎?`)) {
-        setKocaOrderStatus(
-          `⛔ <strong>已擋下重複出貨</strong><br>訂單 ${escapeHtml(data.orderId)} 已於 <strong>${escapeHtml(when)}</strong> 由 <strong>${escapeHtml(who)}</strong> 出貨完成。<br><span style="color:var(--text-soft);">若真的要補件, 請改用「補寄訂單」建單(不扣庫存)。</span>`, "err");
-        return false;
-      }
-    }
-    // 同一張單正在出貨中 (清單還沒結案)
-    if (state.kocaOrderId === data.orderId && (state.items || []).length > 0) {
-      setKocaOrderStatus(`ℹ️ 訂單 ${escapeHtml(data.orderId)} <strong>正在出貨中</strong>,清單已經在畫面上了。`, "err");
-      showToast("這張單正在出貨中");
       return false;
     }
 
@@ -5934,7 +5869,7 @@ async function fetchKocaPendingOrders() {
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json().catch(() => null);
     if (!data || !data.ok) {
-      setKocaOrderStatus(kocaErrMessage(data), "err");
+      setKocaOrderStatus(`❌ 拉取待出貨清單失敗:${escapeHtml((data && data.error) || "未知錯誤")}`, "err");
       SOUND.scanError();
       return;
     }
@@ -5957,58 +5892,25 @@ function renderKocaOrderList(data) {
     setKocaOrderStatus("✅ 目前沒有待出貨的官網訂單。", "ok");
     return;
   }
-  // 新單在前 (官網待出貨池積了幾百張說不清楚的舊單, 以前人工出貨沒回寫狀態 → 一直卡在 label_created)
-  orders.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-  const today = new Date().toISOString().slice(0, 10);
-  const staleDays = 7;
-  const staleBefore = new Date(Date.now() - staleDays * 86400000).toISOString().slice(0, 10);
-
-  const shipped = kocaShippedMap();          // ★ 這個 App 出過的單 (雲端共享, 最可信)
-  const shippedCount = orders.filter(o => shipped[o.orderId]).length;
-  const staleCount = orders.filter(o => !shipped[o.orderId] && String(o.date || "") < staleBefore).length;
-
-  const warn =
-    (shippedCount > 0
-      ? `<div style="border:1px solid var(--danger); border-radius:10px; padding:8px 10px; margin-top:8px; background:rgba(220,38,38,.08); font-size:0.75rem; color:var(--danger); line-height:1.6;">
-           ⛔ <strong>其中 ${shippedCount} 張這個 App 已經出過了</strong>(標「已出過」、灰底)。<strong>不要再出一次</strong>,點下去會再次警告。
-         </div>`
-      : "") +
-    (staleCount > 0
-      ? `<div style="border:1px solid var(--warn, #b26b00); border-radius:10px; padding:8px 10px; margin-top:8px; background:rgba(178,107,0,.08); font-size:0.75rem; color:#b26b00; line-height:1.6;">
-           ⚠ <strong>其中 ${staleCount} 張是 ${staleDays} 天前的舊單</strong>(標「舊單」)。官網待出貨池有大量舊單狀態不明,<strong>很可能早就人工出過了</strong>(以前出貨沒回寫官網)。<br>
-           出貨前請自行確認。<strong>從現在起,只要經過本 App 出貨的單都會被記住,之後就擋得掉。</strong>
-         </div>`
-      : "");
-
-  setKocaOrderStatus(`共 ${orders.length} 張待出貨(官網待出貨池總計 ${data.total || orders.length} 張)。點一張開始出貨:`);
+  setKocaOrderStatus(`共 ${orders.length} 張待出貨(總計 ${data.total || orders.length} 張)。點一張開始出貨:`);
   el.hidden = false;
-  el.innerHTML = warn + `
+  el.innerHTML = `
     <div style="border:1px solid var(--border); border-radius:10px; margin-top:8px; max-height:340px; overflow-y:auto;">
       ${orders.map(o => {
         const cod = String(o.paymentMethod || "").toUpperCase() === "COD";
         const qty = (o.items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
         const names = (o.items || []).map(it => it.name).filter(Boolean).join("、");
-        const d = String(o.date || "").slice(0, 10);
-        const done = shipped[o.orderId];
-        const isStale = !done && d && d < staleBefore;
-        const isToday = d === today;
-        const bg = done ? "var(--surface-alt, rgba(128,128,128,.12))" : (isStale ? "rgba(178,107,0,.06)" : "transparent");
-        let tag = "";
-        if (done) tag = `<span style="color:var(--danger); font-weight:700;">⛔ 已出過 · ${escapeHtml(fmtShippedWhen(done.completedAt))} ${escapeHtml(done.completedBy || "")}</span> · `;
-        else if (isStale) tag = `<span style="color:#b26b00; font-weight:700;">${escapeHtml(d)} ⚠ 舊單</span> · `;
-        else if (d) tag = `<span style="${isToday ? "color:var(--success); font-weight:700;" : ""}">${escapeHtml(d)}${isToday ? " 今天" : ""}</span> · `;
         return `
-        <button type="button" data-koca-pick="${escapeHtml(o.orderId)}" style="display:block; width:100%; text-align:left; padding:10px 12px; border:0; border-bottom:1px solid var(--border); background:${bg}; color:var(--text); cursor:pointer; ${done ? "opacity:.6;" : ""}">
+        <button type="button" data-koca-pick="${escapeHtml(o.orderId)}" style="display:block; width:100%; text-align:left; padding:10px 12px; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer;">
           <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline;">
-            <strong style="font-size:0.875rem; ${done ? "text-decoration:line-through;" : ""}">${escapeHtml(o.orderId)}</strong>
-            <span style="font-size:0.75rem; color:var(--text-soft); white-space:nowrap;">${escapeHtml((o.shipping && o.shipping.carrier) || (o.shipping && o.shipping.method) || "")}</span>
+            <strong style="font-size:0.875rem;">${escapeHtml(o.orderId)}</strong>
+            <span style="font-size:0.75rem; color:var(--text-soft); white-space:nowrap;">${escapeHtml(o.shipping && o.shipping.method || "")}</span>
           </div>
           <div style="font-size:0.75rem; color:var(--text-soft); margin-top:2px;">
-            ${tag}${escapeHtml(o.recipient && o.recipient.name || "")} · ${qty} 件${cod ? ' · <strong style="color:#b26b00;">💰 貨到付款</strong>' : ""}
+            ${escapeHtml(o.recipient && o.recipient.name || "")} · ${qty} 件${cod ? ' · <strong style="color:#b26b00;">💰 貨到付款</strong>' : ""}
+            ${o.estimatedDeliveryDate ? ` · 期限 ${escapeHtml(String(o.estimatedDeliveryDate).slice(0, 10))}` : ""}
           </div>
-          <div style="font-size:0.75rem; color:var(--text-soft); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${escapeHtml(names)}${o.shipping && o.shipping.storeInfo ? " · " + escapeHtml(o.shipping.storeInfo) : ""}
-          </div>
+          <div style="font-size:0.75rem; color:var(--text-soft); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(names)}</div>
         </button>`;
       }).join("")}
     </div>`;
@@ -7965,12 +7867,6 @@ function scheduleMasterPush() {
 }
 async function pushMasterNow() {
   if (!settings.isMasterDevice || !cloudHistoryEnabled()) return;
-  // ★ 絕不推空主檔: 萬一主機的瀏覽器資料被清掉(或裝置重灌), 空的 library 推上雲端會很危險。
-  //   (鏡像端本來就有「空主檔不套用」的防呆, 這裡是第二道: 源頭就不推。)
-  if (!Array.isArray(library) || library.length === 0) {
-    console.warn("[master] 商品庫是空的, 略過推送 (避免把雲端主檔洗成空的)");
-    return;
-  }
   const version = Date.now();
   try {
     const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/master/put", {
@@ -12042,4 +11938,490 @@ document.getElementById("finish-btn").addEventListener("click", () => {
   // 報告計算: essential 商品另外處理, 不算進 done/miss/over
   const _normalItems = state.items.filter(it => !it.essential);
   const _essentialItems = state.items.filter(it => it.essential && it.packed > 0);
-  const dones = _n
+  const dones = _normalItems.filter(it => statusOf(it, _shipped) === "done");
+  const misses = _normalItems.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = _normalItems.filter(it => statusOf(it, _shipped) === "over");
+
+  let html = "";
+  html += `<div class="report-section"><h3>📊 總結</h3>
+    <div class="report-line">應出貨 ${state.items.length} 個 SKU，共 ${state.items.reduce((s,it)=>s+it.expected,0)} 件</div>
+    <div class="report-line">實際裝箱 ${state.items.reduce((s,it)=>s+it.packed,0)} 件 (${dones.length} 個 SKU 完成)</div>
+    </div>`;
+
+  const missingItems = state.items.filter(it => it.missing);
+  if (missingItems.length > 0) {
+    html += `<div class="report-section"><h3 style="color:var(--danger)">⚠ 缺貨 (${missingItems.length})</h3>`;
+    missingItems.forEach(it => {
+      html += `<div class="report-line miss">${escapeHtml(it.sku)} ${escapeHtml(it.name)} — 已標記缺貨${it.packed > 0 ? ` (仍裝了 ${it.packed})` : ""}</div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (misses.length > 0) {
+    html += `<div class="report-section"><h3 style="color:var(--danger)">❌ 未完成 (${misses.length})</h3>`;
+    misses.forEach(it => {
+      html += `<div class="report-line miss">${escapeHtml(it.sku)} ${escapeHtml(it.name)} — 已裝 ${it.packed} / 應出 ${it.expected}，還差 ${it.expected - it.packed} 件</div>`;
+    });
+    html += `</div>`;
+  }
+  if (overs.length > 0) {
+    html += `<div class="report-section"><h3 style="color:var(--warn)">⚠ 多裝 (${overs.length})</h3>`;
+    overs.forEach(it => {
+      html += `<div class="report-line over">${escapeHtml(it.sku)} ${escapeHtml(it.name)} — 已裝 ${it.packed} / 應出 ${it.expected}，多了 ${it.packed - it.expected} 件</div>`;
+    });
+    html += `</div>`;
+  }
+  if (dones.length > 0) {
+    html += `<div class="report-section"><h3 style="color:var(--success)">✓ 完成 (${dones.length})</h3>`;
+    dones.forEach(it => {
+      html += `<div class="report-line done">${escapeHtml(it.sku)} ${escapeHtml(it.name)} — ${it.packed} 件</div>`;
+    });
+    html += `</div>`;
+  }
+
+  document.getElementById("report-content").innerHTML = html;
+  reportModal.hidden = false;
+});
+document.getElementById("close-report").addEventListener("click", () => reportModal.hidden = true);
+async function closeRoomOnServer(code) {
+  if (!settings.syncWorkerUrl || !code) return;
+  try {
+    await fetch(settings.syncWorkerUrl + "/api/room/" + code + "/close", { method: "POST" });
+  } catch(e) { console.warn("[room] close failed", e); }
+}
+
+function actuallyCompleteShipping(opts) {
+  opts = opts || {};
+  // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
+  const entry = appendHistory();
+  // 🔒 資料安全命脈 (規範一-1): 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失。此判斷不可移除。
+  if (entry && !_lastHistorySaveOk) {
+    alert("⚠ 出貨紀錄存檔失敗（可能儲存空間已滿）。\n\n為避免資料遺失，本次清單不會被清空。\n請先到 ⚙ → 資料搬家/備份 匯出備份、或清掉舊出貨紀錄，再按一次「出貨完成」。");
+    return;
+  }
+  console.log("[state] shipping completed, archived to history, clearing state");
+  // 房間模式: 通知 server 歸檔房間 + 本機停止同步
+  const roomCodeAtCompletion = state.roomCode;
+  const wasInRoom = state.roomMode;
+  // keepRoom: 補寄/退貨/入倉「換下一位客人」存檔時用 — 不關房, 讓兩台繼續留在同一房接著包下一位。
+  const _keepRoom = opts.keepRoom && wasInRoom;
+  const _roomKeep = _keepRoom ? {
+    roomMode: true, roomCode: state.roomCode, isRoomHost: state.isRoomHost,
+    roomMembers: state.roomMembers || {}, roomActiveParcels: state.roomActiveParcels || {},
+    _lastSeenRoomVer: state._lastSeenRoomVer || 0, _lastListVersion: state._lastListVersion || 0,
+  } : {};
+  if (wasInRoom && !_keepRoom) {
+    leaveRoom(true);
+    closeRoomOnServer(roomCodeAtCompletion);
+  }
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, ..._roomKeep };
+  saveState();
+  try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
+  // 通路防呆: 真正收尾(非換下一位客人)後把通路重設為「請先選擇通路」, 下一批要重新明確選, 避免沿用上一批通路而記錯
+  if (!_keepRoom) {
+    currentPlatform = "";
+    const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+    const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+  }
+  reportModal.hidden = true;
+  render();
+  SOUND.shipDone();
+  showToast("✓ 本次出貨完成，已存入紀錄");
+  // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
+  if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement" && entry.orderType !== "inbound") {
+    let deducted = 0;
+    const lowStockSkus = [];
+    const threshold = getLowStockThreshold();
+    const now = new Date().toISOString();
+    for (const it of (entry.items || [])) {
+      if (it.essential) continue;
+      if (it.unmapped || String(it.sku || "").startsWith("__KOCA_UNMAPPED_")) continue; // 官網訂單未對應 SKU: 不扣帳 (假 SKU)
+      if ((it.packed || 0) <= 0) continue;
+      if (!stockMap[it.sku]) continue;
+      const beforeQty = stockMap[it.sku].qty || 0;
+      stockMap[it.sku].qty = Math.max(0, beforeQty - it.packed);
+      stockMap[it.sku].updatedAt = now;
+      deducted++;
+      const afterQty = stockMap[it.sku].qty;
+      const justCrossed = (beforeQty >= threshold && afterQty < threshold) || (beforeQty > 0 && afterQty === 0);
+      if (justCrossed && afterQty < threshold) {
+        const libItem = library.find(p => p.sku === it.sku);
+        lowStockSkus.push({ sku: it.sku, qty: afterQty, name: (libItem && libItem.name) || "" });
+      }
+    }
+    if (deducted > 0) {
+      saveStock();
+      console.log(`[stock] auto-deducted ${deducted} SKU`);
+      setTimeout(() => showToast(`📉 庫存自動扣帳 ${deducted} SKU`), 600);
+    }
+    if (lowStockSkus.length > 0 && settings.autoLowStockAlert && settings.discordWebhook) {
+      pushLowStockAlert(lowStockSkus, threshold);
+    }
+  }
+
+  // 退貨入庫 (依原因分倉): 良品→一般倉(qty) / 商品瑕疵→報廢倉(scrap) / 商品故障→檢修倉(repair)
+  if (entry && entry.orderType === "return") {
+    const _reason = (entry.returnInfo && entry.returnInfo.reason) || "";
+    const _bin = _reason === "商品瑕疵" ? "scrap" : (_reason === "商品故障" ? "repair" : "qty");
+    const _binName = _bin === "scrap" ? "報廢倉" : (_bin === "repair" ? "檢修倉" : "一般倉");
+    const n = stockAddToBin(entry.items, _bin);
+    if (n > 0) { saveStock(); setTimeout(() => showToast(`📦 退貨入${_binName} ${n} SKU`), 600); }
+  }
+
+  // 入倉驗收 (進貨): 加到一般倉(qty)
+  if (entry && entry.orderType === "inbound") {
+    const n = stockAddToBin(entry.items, "qty");
+    if (n > 0) { saveStock(); setTimeout(() => showToast(`📈 進貨入一般倉 ${n} SKU`), 600); }
+  }
+
+  // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
+  // 補寄訂單 / 退貨確認 / 入倉驗收不推送 (使用者要求只記本機)
+  const skipWebhook = entry && (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound");
+  if (entry && !skipWebhook && (settings.discordWebhook || settings.sheetsWebhook)) {
+    const outbound = buildPickingOutboundPayload(entry);
+    pushToDiscordRaw({
+      content: "```json\n" + JSON.stringify(outbound, null, 2) + "\n```",
+    });
+    pushToSheets(outbound);
+  } else if (skipWebhook) {
+    console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
+  }
+  // 推送出貨到 KOCA 庫存 API (預設關閉; 補寄/退貨/入倉不推; 透過 Worker 轉發)
+  pushKocaOutbound(entry);
+  // 🌐 回寫官網訂單「已出貨」+ 物流單號 (預設關閉; 只對來源是官網訂單的單生效)
+  pushKocaFulfill(entry);
+  // 雲端共享出貨紀錄: 全類型都推一筆上雲, 讓所有人在出貨紀錄看到同一份
+  pushHistoryToCloud(entry);
+  // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
+  backupSoon("出貨完成");
+}
+
+document.getElementById("complete-shipping-btn").addEventListener("click", () => {
+  // 防重複完成: 共同包貨時只讓「開房者」收尾, 避免兩台各存一筆紀錄 + 各扣一次庫存
+  if (state.roomMode && !state.isRoomHost) {
+    alert("👥 共同包貨中,請由「開房的那台」按完成出貨,避免重複扣帳。\n\n如果真的要由這台收尾,請先到房間狀態「離開房間」再完成。");
+    return;
+  }
+  // 📦 包材防呆: 完成前複查當前這張單的包材 (不分刷的順序)
+  const _pk = checkActiveParcelPackaging();
+  if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
+  // 先關掉出貨報告 modal (避免兩個 modal 疊在一起)
+  reportModal.hidden = true;
+  // 跑健康檢查
+  const issues = runHealthCheck();
+  if (issues.length > 0) {
+    SOUND.scanError();
+    showHealthCheck(issues, actuallyCompleteShipping);
+    return;
+  }
+  // 無異常, 直接 confirm
+  if (!confirm("✓ 健康檢查通過。確定完成本次出貨? 清空後會存到出貨紀錄。")) {
+    // 取消了 → 重新打開報告 modal 讓使用者繼續看
+    reportModal.hidden = false;
+    return;
+  }
+  actuallyCompleteShipping();
+});
+
+document.getElementById("copy-report").addEventListener("click", () => {
+  const _shipped = getShippedBySkuMap();
+  // 報告計算: essential 商品另外處理, 不算進 done/miss/over
+  const _normalItems = state.items.filter(it => !it.essential);
+  const _essentialItems = state.items.filter(it => it.essential && it.packed > 0);
+  const dones = _normalItems.filter(it => statusOf(it, _shipped) === "done");
+  const misses = _normalItems.filter(it => { const s = statusOf(it, _shipped); return s === "pending" || s === "partial"; });
+  const overs = _normalItems.filter(it => statusOf(it, _shipped) === "over");
+  let txt = `📦 備貨報告 ${new Date().toLocaleString("zh-TW")}\n`;
+  txt += `應出 ${state.items.length} SKU / ${state.items.reduce((s,it)=>s+it.expected,0)} 件\n`;
+  txt += `已裝 ${dones.length} SKU / ${state.items.reduce((s,it)=>s+it.packed,0)} 件\n\n`;
+  if (misses.length) { txt += `❌ 未完成：\n`; misses.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}/${it.expected} (還差${it.expected-it.packed})\n`); txt += `\n`; }
+  if (overs.length) { txt += `⚠ 多裝：\n`; overs.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}/${it.expected} (多${it.packed-it.expected})\n`); txt += `\n`; }
+  if (dones.length) { txt += `✓ 完成：\n`; dones.forEach(it => txt += `  ${it.sku} ${it.name}: ${it.packed}\n`); }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(txt).then(() => showToast("已複製到剪貼簿"));
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    showToast("已複製");
+  }
+});
+
+// Close modals on backdrop tap
+[libModal, settingsModal, reportModal].forEach(m => {
+  m.addEventListener("click", (e) => {
+    if (e.target === m) m.hidden = true;
+  });
+});
+
+// ---- Code 39 條碼 ----
+const CODE39_TABLE = {
+  "0":"nnnwwnwnn","1":"wnnwnnnnw","2":"nnwwnnnnw","3":"wnwwnnnnn","4":"nnnwwnnnw",
+  "5":"wnnwwnnnn","6":"nnwwwnnnn","7":"nnnwnnwnw","8":"wnnwnnwnn","9":"nnwwnnwnn",
+  "A":"wnnnnwnnw","B":"nnwnnwnnw","C":"wnwnnwnnn","D":"nnnnwwnnw","E":"wnnnwwnnn",
+  "F":"nnwnwwnnn","G":"nnnnnwwnw","H":"wnnnnwwnn","I":"nnwnnwwnn","J":"nnnnwwwnn",
+  "K":"wnnnnnnww","L":"nnwnnnnww","M":"wnwnnnnwn","N":"nnnnwnnww","O":"wnnnwnnwn",
+  "P":"nnwnwnnwn","Q":"nnnnnnwww","R":"wnnnnnwwn","S":"nnwnnnwwn","T":"nnnnwnwwn",
+  "U":"wwnnnnnnw","V":"nwwnnnnnw","W":"wwwnnnnnn","X":"nwnnwnnnw","Y":"wwnnwnnnn",
+  "Z":"nwwnwnnnn","-":"nwnnnnwnw",".":"wwnnnnwnn"," ":"nwwnnnwnn",
+  "$":"nwnwnwnnn","/":"nwnwnnnwn","+":"nwnnnwnwn","%":"nnnwnwnwn",
+  "*":"nwnnwnwnn"
+};
+function code39Svg(text) {
+  const narrow = 1.5, wide = 4, height = 60, gap = 1.5;
+  const code = "*" + String(text).toUpperCase() + "*";
+  const bars = [];
+  let x = 0;
+  for (const c of code) {
+    const pattern = CODE39_TABLE[c];
+    if (!pattern) continue;
+    for (let j = 0; j < 9; j++) {
+      const w = pattern[j] === "w" ? wide : narrow;
+      if (j % 2 === 0) bars.push({ x, w });
+      x += w;
+    }
+    x += gap;
+  }
+  const contentWidth = x;
+  // 守備: 內容寬度為 0 (空字串或全部字元都不在 CODE39_TABLE) 時回傳警示佔位 SVG
+  if (contentWidth <= 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 ${height}" preserveAspectRatio="none">` +
+           `<rect x="0" y="0" width="100" height="${height}" fill="#fee2e2"/>` +
+           `<text x="50" y="${height/2 + 4}" text-anchor="middle" font-size="12" fill="#dc2626">無法編碼</text></svg>`;
+  }
+  // viewBox = 實際內容寬度, preserveAspectRatio="none" 讓 CSS 設定的固定寬度強制撐滿
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${contentWidth.toFixed(1)} ${height}" preserveAspectRatio="none">`;
+  for (const b of bars) {
+    svg += `<rect x="${b.x.toFixed(1)}" y="0" width="${b.w}" height="${height}" fill="#000"/>`;
+  }
+  svg += "</svg>";
+  return svg;
+}
+
+function renderBarcodeContent(mode) {
+  const wrapper = document.getElementById("barcode-content");
+  if (!wrapper) return;
+  document.getElementById("barcode-count").textContent = library.length;
+  if (mode === "dense") {
+    // 緊湊模式: 格子排列
+    wrapper.innerHTML = '<div class="barcode-dense-grid">' + library.map(p => {
+      const bc = p.barcode || p.sku;
+      return `<div class="barcode-cell bc-item" data-bc-sku="${escapeHtml(p.sku)}">
+        <input type="checkbox" class="bc-check no-print" data-bc-toggle aria-label="列印">
+        <div class="shortcode">${escapeHtml(bc)}</div>
+        ${code39Svg(bc)}
+        <div class="sku">${escapeHtml(p.sku)}</div>
+        <div class="name">${escapeHtml(p.name || "")}</div>
+      </div>`;
+    }).join("") + '</div>';
+  } else {
+    // 分類本模式: 依分類分頁
+    const groups = groupByCategory(library);
+    wrapper.innerHTML = groups.map(g => {
+      const items = g.items.map(p => {
+        const bc = p.barcode || p.sku;
+        return `<div class="barcode-row bc-item" data-bc-sku="${escapeHtml(p.sku)}">
+          <input type="checkbox" class="bc-check no-print" data-bc-toggle aria-label="列印">
+          <div class="barcode-row-left"><div class="shortcode">${escapeHtml(bc)}</div></div>
+          <div class="barcode-row-mid">${code39Svg(bc)}</div>
+          <div class="barcode-row-right">
+            <div class="sku">${escapeHtml(p.sku)}</div>
+            <div class="name">${escapeHtml(p.name || "")}</div>
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="barcode-category">
+        <div class="barcode-category-header">
+          <span class="cat-emoji">${catIcon(g.name)}</span>
+          <span class="cat-name">${escapeHtml(g.name)}</span>
+          <span class="cat-count">${g.items.length} 個 SKU</span>
+        </div>
+        ${items}
+      </div>`;
+    }).join("");
+  }
+  updateBarcodeSelCount();
+}
+// 更新「將列印 N 個」計數
+function updateBarcodeSelCount() {
+  const el = document.getElementById("barcode-sel-count");
+  if (el) el.textContent = document.querySelectorAll("#barcode-content .bc-item.bc-sel").length;
+}
+
+function openBarcodePrintView() {
+  const view = document.getElementById("barcode-print-view");
+  const select = document.getElementById("barcode-layout-mode");
+  renderBarcodeContent(select.value);
+  view.hidden = false;
+}
+
+document.getElementById("barcode-layout-mode").addEventListener("change", (e) => {
+  renderBarcodeContent(e.target.value);
+});
+
+// 勾選要列印的 SKU (事件代理)
+document.getElementById("barcode-content").addEventListener("change", (e) => {
+  const cb = e.target.closest("input[data-bc-toggle]");
+  if (!cb) return;
+  const cell = cb.closest(".bc-item");
+  if (cell) cell.classList.toggle("bc-sel", cb.checked);
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-select-all").addEventListener("click", () => {
+  document.querySelectorAll("#barcode-content .bc-item").forEach(c => {
+    c.classList.add("bc-sel");
+    const cb = c.querySelector("input[data-bc-toggle]"); if (cb) cb.checked = true;
+  });
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-select-none").addEventListener("click", () => {
+  document.querySelectorAll("#barcode-content .bc-item").forEach(c => {
+    c.classList.remove("bc-sel");
+    const cb = c.querySelector("input[data-bc-toggle]"); if (cb) cb.checked = false;
+  });
+  updateBarcodeSelCount();
+});
+document.getElementById("barcode-print-go").addEventListener("click", () => {
+  const n = document.querySelectorAll("#barcode-content .bc-item.bc-sel").length;
+  if (n === 0) { showToast("請先勾選要列印的 SKU(或按「全選」)"); return; }
+  window.print();
+});
+
+document.getElementById("print-barcodes-btn").addEventListener("click", () => {
+  libModal.hidden = true;
+  openBarcodePrintView();
+});
+
+// === 自動產生流水號短碼 (F + 10 位數字, 固定 11 字元等寬) ===
+const SHORTCODE_PREFIX = "F";  // 固定前綴 (可改成其他單字母)
+const SHORTCODE_DIGITS = 10;   // 序號位數
+
+function generateShortcodes() {
+  // 依分類順序遍歷 (分類僅用於排序, 不影響編碼), 全庫共用一個遞增計數器
+  const result = []; // [{sku, oldBarcode, newBarcode, name, category, changed}]
+  const sortedLib = [...library].sort((a, b) => {
+    const ca = CATEGORY_ORDER.indexOf(a.category || "其他");
+    const cb = CATEGORY_ORDER.indexOf(b.category || "其他");
+    if (ca !== cb) return ca - cb;
+    return a.sku.localeCompare(b.sku);
+  });
+  let counter = 0;
+  for (const p of sortedLib) {
+    counter++;
+    const newBc = SHORTCODE_PREFIX + String(counter).padStart(SHORTCODE_DIGITS, "0");
+    result.push({
+      sku: p.sku,
+      oldBarcode: p.barcode || p.sku,
+      newBarcode: newBc,
+      name: p.name || "",
+      category: p.category || "其他",
+      changed: (p.barcode || p.sku) !== newBc,
+    });
+  }
+  return result;
+}
+
+document.getElementById("auto-shortcode-btn").addEventListener("click", () => {
+  const preview = generateShortcodes();
+  // 顯示預覽 + 確認對話框
+  let html = "<strong>分類短碼預覽：</strong>\n\n";
+  let lastCat = "";
+  for (const r of preview) {
+    if (r.category !== lastCat) {
+      html += "\n【" + r.category + "】\n";
+      lastCat = r.category;
+    }
+    const arrow = r.changed ? "→" : "=";
+    html += `  ${r.sku}  ${arrow}  ${r.newBarcode}\n`;
+  }
+  const changedCount = preview.filter(r => r.changed).length;
+  html += `\n編碼格式: ${SHORTCODE_PREFIX}+${SHORTCODE_DIGITS}位流水號 (共 ${SHORTCODE_DIGITS + 1} 字元, 等寬條碼)\n總共: ${preview.length} 個 SKU\n變更: ${changedCount} 個\n\n⚠ 套用後, 之前列印的條碼貼紙會全部失效, 需要重新列印!\n\n確定套用嗎? (此操作會覆蓋現有的所有自訂條碼)`;
+  if (!confirm(html)) return;
+  // 套用
+  for (const r of preview) {
+    const idx = library.findIndex(p => p.sku === r.sku);
+    if (idx >= 0) library[idx].barcode = r.newBarcode;
+  }
+  saveLibrary();
+  renderLibrary();
+  showToast(`✓ 已產生 ${preview.length} 個分類短碼`);
+});
+document.getElementById("barcode-close-btn").addEventListener("click", () => {
+  document.getElementById("barcode-print-view").hidden = true;
+});
+
+// ---- Init ----
+loadSettings();
+applyTheme(settings.theme || "koca");
+applyFontSize(settings.fontSize || "medium");
+applyGloveMode(!!settings.gloveMode);
+loadState();
+// 自動還原: 若主資料空但備份有, 還原 + 提示
+if (state.items.length === 0) {
+  const backup = tryRestoreFromBackup();
+  if (backup) {
+    state = backup;
+    // 補齊新欄位 (舊備份相容)
+    if (typeof state.scanMode === "undefined") state.scanMode = false;
+    if (typeof state.activeParcel === "undefined") state.activeParcel = null;
+    if (!Array.isArray(state.completedParcels)) state.completedParcels = [];
+    saveState();
+    const _savedDate = backup.savedAt ? new Date(backup.savedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "?";
+    setTimeout(() => showToast(`✓ 已從備份還原 ${backup.items.length} 個 SKU (備份於 ${_savedDate})`), 500);
+    console.log("[state] restored from backup", backup.items.length, "items, savedAt:", backup.savedAt);
+  }
+}
+loadLibrary();
+loadMenuQty();
+loadCollapsed();
+loadSpecMap();
+loadHistory();
+loadStock();
+loadStockTake();
+loadStockTakeHistory();
+loadKocaNameMap();   // 官網品名 → SKU 記憶對應表
+// 若上次離線時還在盤點中, 自動進盤點視圖
+if (stockTake) {
+  setTimeout(() => {
+    showStockTakeView();
+    setTimeout(() => showToast("↻ 上次的盤點還沒完成, 已自動繼續"), 800);
+  }, 300);
+}
+// 通路: 初始一律「請先選擇通路」(不自動沿用上次), 強迫每次明確選, 避免記錯通路 / 誤上傳到錯的 CSV
+currentPlatform = "";
+document.getElementById("platform-select").value = "";
+document.getElementById("platform-hint").textContent = "請先選擇通路, 再上傳對應的 CSV。";
+render();
+// 🖥 手機鏡像: 開機拉一次電腦主檔 + 每 60 秒保持最新 (主機自己不拉; 函式內自我判斷)
+setTimeout(() => fetchMasterMirror(true), 1200);
+setInterval(() => fetchMasterMirror(false), 5000); // 主檔鏡像背景輪詢: 5 秒 (付費方案額度充裕, 近即時)
+// 若上次離線前在房間模
+// 若上次離線前在房間模式, 自動恢復同步
+loadPendingEvents(); // 還原上次沒送出的事件 (重整/當機不掉刷), startSyncTimer 會自動補送
+if (state.roomMode && state.roomCode && settings.syncWorkerUrl) {
+  startSyncTimer();
+}
+renderRoomBadge();
+// 網路恢復時立刻補同步 (斷網復原不必等下一輪輪詢)
+window.addEventListener("online", () => {
+  if (state.roomMode) { _syncFailCount = 0; syncRoom(); }
+  renderRoomBadge();
+});
+window.addEventListener("offline", () => { _syncFailCount = 2; renderRoomBadge(); });
+// 網路狀態燈: 開機先畫一次 + 每 15 秒保險刷新 (事件之外的兜底)
+renderNetStatus();
+setInterval(renderNetStatus, 15000);
+// 每日自動備份 (3 秒後跑, 避免阻塞 init)
+setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
+// 資料安全: 此機未設定自動備份就提醒 (沒設 Discord = 資料只在本機, 換機/清快取會全沒)
+setTimeout(() => {
+  try {
+    const hasData = (typeof history !== "undefined" && history && history.length) || (state.items && state.items.length);
+    if (!settings.discordWebhook && hasData) {
+      showToast("⚠ 此機未設定自動備份,資料只存在本機!請到 ⚙ 設定 Discord 備份");
+    }
+  } catch (e) {}
+}, 4500);
+</script>
+</body>
+</html>
