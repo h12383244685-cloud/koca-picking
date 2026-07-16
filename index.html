@@ -3194,7 +3194,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v1.3 · 2026-07-16";
+const APP_VERSION = "v1.5 · 2026-07-16";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5707,13 +5707,14 @@ function kocaOrderShippable(o) {
     const shipped = ["handed_to_carrier", "in_transit", "arrived_store", "delivered"].includes(ful);
     return {
       ok: false,
+      blockType: shipped ? "shipped" : "not_ready", // shipped = 官網已出貨(可讓使用者選擇還是建清單)
       reason: shipped
         ? `這張單已經出貨了(狀態:${o.fulfillmentStatusLabel || ful})。\n\n不重複建立出貨清單。`
         : `出貨狀態是「${o.fulfillmentStatusLabel || o.fulfillmentStatus || "未知"}」,不是待出貨。\n\n不建立出貨清單。`,
     };
   }
   if (pay === "paid" || isCOD) return { ok: true, cod: isCOD && pay !== "paid" };
-  return { ok: false, reason: `這張單「尚未付款」。\n付款方式:${rawMethod || "未知"}\n付款狀態:${o.paymentStatus || "未知"}\n\n未付款的訂單不建立出貨清單,請先確認收款(貨到付款 COD 除外)。` };
+  return { ok: false, blockType: "unpaid", reason: `這張單「尚未付款」。\n付款方式:${rawMethod || "未知"}\n付款狀態:${o.paymentStatus || "未知"}\n\n未付款的訂單不建立出貨清單,請先確認收款(貨到付款 COD 除外)。` };
 }
 
 // 官網 items 只有 name + qty, 沒有穩定的 sku → 用商品名對 library
@@ -5836,12 +5837,22 @@ async function fetchKocaOrder(orderId, opts) {
     // ---- 擋單規則 ----
     const gate = kocaOrderShippable(data);
     if (!gate.ok) {
-      setKocaOrderStatus(
-        `🚫 <strong>此單不可出貨</strong><br>訂單 ${escapeHtml(data.orderId)}｜${escapeHtml(data.statusLabel || data.status || "")}<br>` +
-        escapeHtml(gate.reason).replace(/\n/g, "<br>"), "err");
       SOUND.scanError();
-      alert(`🚫 這張官網訂單不建立出貨清單\n\n訂單:${data.orderId}\n狀態:${data.statusLabel || data.status || "未知"}\n\n${gate.reason}`);
-      return false;
+      // 「官網狀態=已出貨」的單: 讓使用者「選擇」還是要建清單 (漏刷/多刷需要重新處理時)。
+      //   其他原因(未付款 / 已取消 / 狀態不明)維持硬擋。放行後仍會走下面的「App 重複出貨防呆」再把關一次。
+      if (gate.blockType === "shipped") {
+        if (!confirm(`⚠ 這張官網訂單「官網狀態顯示已出貨」\n\n訂單:${data.orderId}\n狀態:${data.statusLabel || data.status || ""}\n\n如果是漏刷 / 多刷需要重新處理, 可以還是建立出貨清單。\n\n確定要建立嗎?`)) {
+          setKocaOrderStatus(`🚫 已略過(官網狀態:已出貨)。訂單 ${escapeHtml(data.orderId)}。`, "err");
+          return false;
+        }
+        // 使用者選擇繼續 → 往下走建清單
+      } else {
+        setKocaOrderStatus(
+          `🚫 <strong>此單不可出貨</strong><br>訂單 ${escapeHtml(data.orderId)}｜${escapeHtml(data.statusLabel || data.status || "")}<br>` +
+          escapeHtml(gate.reason).replace(/\n/g, "<br>"), "err");
+        alert(`🚫 這張官網訂單不建立出貨清單\n\n訂單:${data.orderId}\n狀態:${data.statusLabel || data.status || "未知"}\n\n${gate.reason}`);
+        return false;
+      }
     }
 
     // ---- 重複出貨防呆: 這張單這個 App 出過了嗎? ----
@@ -5924,6 +5935,8 @@ function buildListFromKocaOrder(o, gate) {
       items.push({ sku: key, name: nameOf[key] || "", expected: totals[key], packed: 0 });
     }
   }
+  // 官網訂單: 商品連動 — 把連動規則的 trigger 商品(如投影機收納組)的子項(投影機主機)也展開進清單
+  _expandKocaBundles(items);
   // 必要商品 (自由計數)
   for (const p of library) {
     if (p.essential && !items.find(it => it.sku === p.sku)) {
@@ -6095,6 +6108,30 @@ function renderKocaOrderList(data) {
 //   切換 = 把目前這張快照進 suspended, 再把目標張從 suspended 載回 state。結算才逐張各自落帳。
 function kocaBatchActive() {
   return !!(state.kocaBatch && Array.isArray(state.kocaBatch.orderList) && state.kocaBatch.orderList.length > 0);
+}
+// 官網訂單建清單時: 把「連動規則(BUNDLE_RULES)的 trigger 商品」的子項也展開進清單。
+//   例: 訂單只有「投影機收納組(KPJ-40MV47-BAG)」→ 自動帶入子項「投影機主機(KPJ-40MV47)」。
+//   一般刷單模式下 checkBundleRule 不會自動補缺漏子項(只提醒), 所以官網建單時就先展開好, 清單/黃框才完整。
+function _expandKocaBundles(items) {
+  if (!Array.isArray(items) || typeof BUNDLE_RULES === "undefined") return items;
+  const additions = [];
+  for (const it of items) {
+    if (it.essential || it.unmapped) continue;
+    const rule = BUNDLE_RULES.find(r => r.trigger === it.sku);
+    if (!rule || !Array.isArray(rule.children)) continue;
+    for (const c of rule.children) {
+      const addQty = (c.qty || 1) * (it.expected || 0);
+      if (addQty <= 0) continue;
+      const existing = items.find(x => x.sku === c.sku) || additions.find(x => x.sku === c.sku);
+      if (existing) { existing.expected = (existing.expected || 0) + addQty; }
+      else {
+        const libP = library.find(p => p.sku === c.sku);
+        additions.push({ sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: addQty, packed: 0 });
+      }
+    }
+  }
+  for (const a of additions) items.push(a);
+  return items;
 }
 // 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
 function _prefillKocaActiveParcel(o) {
