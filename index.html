@@ -1601,6 +1601,11 @@ footer.summary-bar {
   </div>
 </header>
 
+<!-- 🧪 測試模式常駐警示條 (開著時整個 App 上方一直提醒, 避免誤用讓真實出貨不留紀錄) -->
+<div id="test-mode-banner" hidden style="position:sticky; top:0; z-index:9999; background:#b91c1c; color:#fff; text-align:center; font-weight:800; padding:8px 12px; font-size:0.85rem; letter-spacing:0.5px; box-shadow:0 2px 6px rgba(0,0,0,.3); cursor:pointer;">
+  🧪 測試模式中 — 出貨完成「不會留任何紀錄」!(點此關閉)
+</div>
+
 <!-- IMPORT VIEW: tabs for Excel paste vs my library -->
 <div id="import-view">
   <div id="resume-banner" class="resume-banner" hidden>
@@ -1677,13 +1682,6 @@ footer.summary-bar {
       <div id="koca-order-status" class="hint" style="margin-top:8px;"></div>
       <div id="koca-order-list" hidden></div>
       <div id="koca-order-map" hidden></div>
-    </div>
-
-    <!-- 預刷單確認: 出貨前先掃一遍, 偵測已出過的單 (防重複出貨) -->
-    <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🔍 預刷單確認(出貨前防重複)</div>
-      <p class="hint" style="margin-bottom:8px;">正式包貨前,先把要出的<strong>寄件單號(TW…)或官網單號</strong>刷一遍。系統會比對出貨紀錄(本機+雲端),<strong>已經出過的當場跳紅提醒</strong>,讓你先把重複單挑掉、不要白包。</p>
-      <button class="btn outline sm" id="prescan-open-btn" type="button" style="width:100%;">🔍 開啟預刷單確認</button>
     </div>
 
     <!-- 多人協作入口 -->
@@ -1785,6 +1783,13 @@ footer.summary-bar {
                      width: 20px; height: 20px; cursor: pointer; font-size: 0.875rem; line-height: 1;
                      padding: 0; display: flex; align-items: center; justify-content: center;"
               aria-label="清除搜尋">×</button>
+    </div>
+    <!-- 搜尋跳位導覽 (像瀏覽器 Ctrl+F: 多筆符合時可上一個/下一個循環切換) -->
+    <div id="hist-search-nav" hidden style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:6px 10px; background:var(--warn-bg,#fef3c7); border:1px solid var(--warn,#f59e0b); border-radius:8px;">
+      <span id="hist-search-nav-count" style="font-weight:700; font-size:0.8125rem; color:#92400e;">第 0 / 共 0 筆</span>
+      <span style="flex:1;"></span>
+      <button id="hist-search-prev" type="button" class="btn outline sm" style="padding:3px 12px;">▲ 上一個</button>
+      <button id="hist-search-next" type="button" class="btn outline sm" style="padding:3px 12px;">▼ 下一個</button>
     </div>
     <div class="filter-bar" id="history-filter-bar" style="margin-bottom: 10px;">
       <button data-hist-filter="all" class="active">全部 <span id="hist-cnt-all">0</span></button>
@@ -2122,7 +2127,14 @@ footer.summary-bar {
           <div class="card-desc">中止當前清單</div>
         </button>
       </div>
-      <button class="btn full outline" id="close-settings">關閉</button>
+      <label id="test-mode-toggle" style="display:flex; align-items:center; gap:10px; margin-top:14px; padding:12px 14px; border:2px solid var(--warn,#f59e0b); border-radius:10px; background:var(--warn-bg,#fef3c7); cursor:pointer;">
+        <input type="checkbox" id="test-mode-input" style="transform: scale(1.4);">
+        <div style="flex:1;">
+          <div style="font-weight:800; color:#92400e; font-size:0.92rem;">🧪 測試模式</div>
+          <div class="hint" style="font-size:0.7rem; margin:2px 0 0; color:#92400e;">開啟後「出貨完成」只做練習:<strong>不留任何出貨紀錄、不扣庫存、不回寫官網、不推雲端</strong>。⚠ 測試完一定要記得關掉!</div>
+        </div>
+      </label>
+      <button class="btn full outline" id="close-settings" style="margin-top:12px;">關閉</button>
       <div id="app-version" style="text-align:center; margin-top:10px; font-size:0.7rem; color:var(--text-soft);">版本 —</div>
     </div>
 
@@ -3092,22 +3104,6 @@ footer.summary-bar {
   </div>
 </div>
 
-<div class="modal-backdrop" id="prescan-modal" hidden>
-  <div class="modal">
-    <h2>🔍 預刷單確認</h2>
-    <p class="hint" style="margin-bottom:8px;">刷或貼上<strong>寄件單號(TW…)/官網單號</strong>,按 Enter 或「檢查」。已出過的會跳紅並叫一聲。<br>這裡只查詢、不會動到任何出貨紀錄。</p>
-    <div style="display:flex; gap:8px;">
-      <input type="text" id="prescan-input" placeholder="刷單號 / 貼上後按 Enter" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
-      <button class="btn sm" id="prescan-check-btn" type="button" style="white-space:nowrap;">檢查</button>
-    </div>
-    <div id="prescan-summary" style="margin-top:10px; font-size:0.8125rem; font-weight:700;"></div>
-    <div id="prescan-list" style="margin-top:8px; max-height:44vh; overflow-y:auto;"></div>
-    <div class="row" style="margin-top:12px; gap:8px;">
-      <button class="btn outline sm" id="prescan-clear" style="flex:1;">🗑 清空清單</button>
-      <button class="btn outline sm" id="prescan-close" style="flex:1;">關閉</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 
@@ -3198,7 +3194,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v0.8 · 2026-07-15";
+const APP_VERSION = "v1.3 · 2026-07-16";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3482,6 +3478,7 @@ let settings = {
   lastBackupDate: null,      // 上次備份日期 (YYYY-MM-DD)
   fontSize: "medium",        // "small" | "medium" | "large" | "xlarge"
   gloveMode: false,          // 戴手套模式
+  testMode: false,           // 🧪 測試模式: 出貨完成不留任何紀錄 / 不扣庫存 / 不回寫官網 / 不推雲端 (練習用)
   kocaOutboundEnabled: false, // 出貨完成後推送到 KOCA 庫存 API (預設關, 測試過再開)
   kocaFulfillEnabled: false,  // 🌐 出貨完成後回寫官網訂單 (標記已出貨 + 物流單號)。
                               // ⚠ 官網會據此「自動排程 7 天後開立電子發票」→ 預設關, 確認流程無誤再開。
@@ -5982,9 +5979,12 @@ function buildListFromKocaOrder(o, gate) {
     codNote,
     unmapped.length > 0 ? "err" : "ok");
 
+  _prefillKocaActiveParcel(o); saveState(); // 官網: 商品直接「已刷」進黃框(當前訂單), 同仁再刷包裝 + 手動完成此筆
   showToast(`✅ 官網訂單 ${o.orderId} 已建立清單`);
   SOUND.parcelFinish();
+  if (window.__homeOverride) window.__homeOverride = false; // ★ 跟其他建單入口一致: 建完直接切進撿貨頁, 不要停在匯入頁
   render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
   renderKocaUnmappedPanel();   // 有對不到的品項 → 跳出「指定一次就記住」的對應面板
   renderKocaBatchStrip();      // 更新「本批訂單」列
   if (!kocaBatchActive() || state.kocaBatch.orderList.length <= 1) maybeAutoCreateRoom("官網訂單"); // 批次第二張起不重複開房
@@ -6096,6 +6096,21 @@ function renderKocaOrderList(data) {
 function kocaBatchActive() {
   return !!(state.kocaBatch && Array.isArray(state.kocaBatch.orderList) && state.kocaBatch.orderList.length > 0);
 }
+// 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
+function _prefillKocaActiveParcel(o) {
+  const parcelId = (o && o.shipping && o.shipping.trackingNo) || (o && o.orderId) || "";
+  if (!parcelId) return;
+  startParcel(String(parcelId));
+  for (const it of (state.items || [])) {
+    if (it.essential) continue;   // 包材不預填 (留給同仁刷)
+    if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
+    const qty = it.expected || 0;
+    if (qty <= 0) continue;
+    it.packed = qty;                                                                    // 清單標記為已裝
+    state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + qty;   // 放進黃框
+  }
+  state.scanMode = true; // 展開裝箱掃描面板, 方便同仁接著刷包裝
+}
 function _kocaOrderMeta(o, gate) {
   return {
     recipient: (o && o.recipient && o.recipient.name) || "",
@@ -6171,6 +6186,19 @@ async function completeKocaBatch() {
   const _nowC = Date.now();
   if (_nowC - _lastCompleteAt < 1500) { console.warn("[batch] 忽略 1.5 秒內的重複完成"); return; }
   _lastCompleteAt = _nowC;
+  // 🧪 測試模式: 不結算、不留任何紀錄、不扣庫存, 只清空批次與清單
+  if (settings.testMode) {
+    state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, kocaBatch: null };
+    saveState();
+    try { localStorage.removeItem(STATE_BACKUP_KEY); } catch (e) {}
+    currentPlatform = "";
+    const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+    reportModal.hidden = true;
+    render();
+    SOUND.shipDone();
+    showToast("🧪 測試完成 — 未留任何紀錄(測試模式)");
+    return;
+  }
   const ids = state.kocaBatch.orderList.slice();
   // 完成防呆: 每張都要刷齊或標缺貨 (規範: 商品都要刷到, 除非標缺貨才放行)
   const notDone = ids.filter(id => !_kocaOrderDoneById(id));
@@ -8631,50 +8659,80 @@ function renderHistory() {
   }).join("");
 }
 
-// 出貨紀錄搜尋「跳位」: 輸入單號 → 自動展開(日期→類型→卡片)並捲到那筆單號 + 閃一下, 不用自己滑找。
-function jumpToHistoryMatch(q) {
-  q = (q || "").trim().toLowerCase();
+// 出貨紀錄搜尋「跳位」(像瀏覽器 Ctrl+F): 收集所有符合的單號 → 可用上一個/下一個循環切換, 每個都展開+捲到+閃一下。
+let _histSearchHits = [];   // [{ entryId, parcelId|null }]
+let _histSearchIdx = 0;
+let _histSearchQ = "";
+function buildHistSearchHits(q) {
+  _histSearchQ = (q || "").trim().toLowerCase();
+  _histSearchHits = [];
+  if (!_histSearchQ) return;
   const all = allHistory();
-  let hitEntry = null, hitParcelId = null;
-  if (q) {
-    // 優先對「寄件單號」(這是使用者最常搜的); 對到就記住是哪張單號, 好捲到那一列
-    for (const e of all) {
-      const p = (e.parcels || []).find(pp => String(pp.id || "").toLowerCase().includes(q));
-      if (p) { hitEntry = e; hitParcelId = p.id; break; }
+  // 先收「寄件單號」符合的 (可跨多筆紀錄, 每張符合的單號各一個 hit)
+  for (const e of all) {
+    for (const p of (e.parcels || [])) {
+      if (String(p.id || "").toLowerCase().includes(_histSearchQ)) _histSearchHits.push({ entryId: e.id, parcelId: p.id });
     }
-    // 沒對到單號 → 退而求其次, 對第一筆符合搜尋的卡片 (客戶名/商品/SKU 等)
-    if (!hitEntry) hitEntry = all.find(e => matchesHistorySearch(e, q));
   }
-  if (hitEntry) {
-    // 展開三層: 日期資料夾 → 類型子資料夾 → 卡片明細
-    const dKey = new Date(hitEntry.completedAt).toLocaleDateString("zh-TW");
-    const t = (hitEntry.orderType === "replacement" || hitEntry.orderType === "return" || hitEntry.orderType === "inbound") ? hitEntry.orderType : "normal";
+  // 完全沒有單號符合 → 退而求其次, 用「整筆符合」的卡片當 hit (客戶名/SKU/商品名等)
+  if (_histSearchHits.length === 0) {
+    for (const e of all) if (matchesHistorySearch(e, _histSearchQ)) _histSearchHits.push({ entryId: e.id, parcelId: null });
+  }
+}
+function renderHistSearchNav() {
+  const nav = document.getElementById("hist-search-nav");
+  const cnt = document.getElementById("hist-search-nav-count");
+  if (!nav) return;
+  if (!_histSearchQ || _histSearchHits.length === 0) { nav.hidden = true; return; }
+  nav.hidden = false;
+  if (cnt) cnt.textContent = `第 ${_histSearchIdx + 1} / 共 ${_histSearchHits.length} 筆`;
+}
+function gotoHistHit(idx) {
+  const n = _histSearchHits.length;
+  if (n === 0) return;
+  _histSearchIdx = ((idx % n) + n) % n; // 循環 (像瀏覽器搜尋, 到底回頭)
+  const hit = _histSearchHits[_histSearchIdx];
+  const e = allHistory().find(x => x.id === hit.entryId);
+  if (e) {
+    const dKey = new Date(e.completedAt).toLocaleDateString("zh-TW");
+    const t = (e.orderType === "replacement" || e.orderType === "return" || e.orderType === "inbound") ? e.orderType : "normal";
     if (_histOpenDays === null) _histOpenDays = new Set();
     _histOpenDays.add(dKey);
     _histOpenTypes.add(dKey + "::" + t);
-    hitEntry._expanded = true; // allHistory 回的是同一個物件參照, 設了 renderHistory 就會展開
+    e._expanded = true;
   }
   renderHistory();
-  if (!hitEntry) return;
-  // 重繪後捲到目標 + 閃一下 (單號列優先, 找不到就捲到整張卡片)
+  renderHistSearchNav();
   setTimeout(() => {
-    let el = null;
-    if (hitParcelId) {
-      const rows = document.querySelectorAll('#history-list [data-parcel-id]');
-      for (const r of rows) { if (String(r.getAttribute("data-parcel-id")).toLowerCase().includes(q)) { el = r; break; } }
+    const card = document.querySelector('#history-list [data-hist-card="' + hit.entryId + '"]');
+    let el = card;
+    if (card && hit.parcelId) {
+      const row = [...card.querySelectorAll('[data-parcel-id]')].find(r => r.getAttribute('data-parcel-id') === hit.parcelId);
+      if (row) el = row;
     }
-    if (!el) el = document.querySelector('#history-list [data-hist-card="' + hitEntry.id + '"]');
     if (el) {
       try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { try { el.scrollIntoView(); } catch (_) {} }
+      document.querySelectorAll('#history-list .hist-flash').forEach(x => x.classList.remove('hist-flash'));
       el.classList.add("hist-flash");
-      setTimeout(() => el.classList.remove("hist-flash"), 1900);
     }
   }, 80);
 }
+// 搜尋框變動時呼叫: 重新收集符合項並跳到第一個
+function jumpToHistoryMatch(q) {
+  buildHistSearchHits(q);
+  _histSearchIdx = 0;
+  if (_histSearchHits.length > 0) { gotoHistHit(0); }
+  else { renderHistory(); renderHistSearchNav(); }
+}
+document.getElementById("hist-search-prev").addEventListener("click", () => gotoHistHit(_histSearchIdx - 1));
+document.getElementById("hist-search-next").addEventListener("click", () => gotoHistHit(_histSearchIdx + 1));
+// 在搜尋框按 Enter → 下一個, Shift+Enter → 上一個 (跟瀏覽器搜尋一樣)
+document.getElementById("history-search").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && _histSearchHits.length > 0) { e.preventDefault(); gotoHistHit(_histSearchIdx + (e.shiftKey ? -1 : 1)); }
+});
 
-// ===== 預刷單確認: 出貨前先掃一遍, 比對出貨紀錄(本機+雲端)偵測「已出過」的單 (唯讀, 不動紀錄) =====
-let _prescanList = []; // { code, shipped:{completedAt,completedBy,type,matchType}|null, dupInList, at }
-// 從出貨紀錄找這個「寄件單號」或「官網訂單編號」有沒有出現過; 回最近一筆, 沒有回 null
+// ===== 過刷防呆共用: 從出貨紀錄(本機+雲端)找這個「寄件單號」或「官網訂單編號」有沒有出過 =====
+// 用於刷單當下的背景偵測 (見 processScan): 掃到以前出過的單就當場警告。回最近一筆, 沒有回 null。
 function findShippedByCode(code) {
   const c = String(code || "").trim().toUpperCase();
   if (!c) return null;
@@ -8689,63 +8747,6 @@ function findShippedByCode(code) {
 function _histTypeLabel(e) {
   return e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
 }
-function prescanCheck(raw) {
-  const code = extractParcelId(String(raw || "").trim()) || String(raw || "").trim();
-  if (!code) return;
-  const dupInList = _prescanList.some(x => x.code.toUpperCase() === code.toUpperCase());
-  const found = findShippedByCode(code);
-  _prescanList.unshift({
-    code,
-    shipped: found ? { completedAt: found.entry.completedAt, completedBy: found.entry.completedBy || "(未命名)", type: _histTypeLabel(found.entry), matchType: found.matchType } : null,
-    dupInList,
-    at: new Date().toISOString(),
-  });
-  if (found || dupInList) { SOUND.scanError(); } else { SOUND.scanSku(); }
-  renderPrescan();
-}
-function renderPrescan() {
-  const listEl = document.getElementById("prescan-list");
-  const sumEl = document.getElementById("prescan-summary");
-  if (!listEl) return;
-  const shippedCount = _prescanList.filter(x => x.shipped).length;
-  if (sumEl) sumEl.innerHTML = _prescanList.length
-    ? `共刷 ${_prescanList.length} 筆 · <span style="color:${shippedCount ? 'var(--danger)' : 'var(--success)'};">⚠ ${shippedCount} 筆已出過</span>`
-    : `<span style="color:var(--text-soft); font-weight:500;">還沒刷,先刷一筆試試。</span>`;
-  const _pad = n => String(n).padStart(2, "0");
-  listEl.innerHTML = _prescanList.map(x => {
-    if (x.shipped) {
-      const d = new Date(x.shipped.completedAt);
-      const when = `${d.getFullYear()}/${_pad(d.getMonth() + 1)}/${_pad(d.getDate())} ${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
-      return `<div style="border:1px solid var(--danger); background:var(--danger-bg); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:var(--danger);">⛔ ${escapeHtml(x.code)} 已出過!</div>
-        <div style="font-size:0.72rem; color:var(--danger); margin-top:2px;">${x.shipped.type} · ${when} · ${escapeHtml(x.shipped.completedBy)} <span style="color:var(--text-soft);">(比對到${x.shipped.matchType})</span></div>
-      </div>`;
-    }
-    if (x.dupInList) {
-      return `<div style="border:1px solid var(--warn,#b26b00); background:var(--warn-bg); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:#92400e;">⚠ ${escapeHtml(x.code)} 這次預刷已經刷過一次</div>
-      </div>`;
-    }
-    return `<div style="border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-      <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:var(--success);">✅ ${escapeHtml(x.code)} 沒出過</div>
-    </div>`;
-  }).join("");
-}
-document.getElementById("prescan-open-btn").addEventListener("click", () => {
-  document.getElementById("prescan-modal").hidden = false;
-  fetchCloudHistory(true); // 拉最新雲端紀錄, 別台出過的也偵測得到
-  renderPrescan();
-  setTimeout(() => { const i = document.getElementById("prescan-input"); if (i) i.focus(); }, 100);
-});
-document.getElementById("prescan-close").addEventListener("click", () => { document.getElementById("prescan-modal").hidden = true; });
-document.getElementById("prescan-clear").addEventListener("click", () => { _prescanList = []; renderPrescan(); const i = document.getElementById("prescan-input"); if (i) i.focus(); });
-document.getElementById("prescan-check-btn").addEventListener("click", () => {
-  const i = document.getElementById("prescan-input");
-  if (i && i.value.trim()) { prescanCheck(i.value); i.value = ""; i.focus(); }
-});
-document.getElementById("prescan-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); const v = e.target.value.trim(); if (v) { prescanCheck(v); e.target.value = ""; } }
-});
 
 // ---- 裝箱掃描模式 ----
 function toggleScanMode() {
@@ -9178,6 +9179,23 @@ function processScan(code) {
       }
     }, 50);
     return;
+  }
+
+  // 🛡 過刷防呆(背景自動, 融進正常刷單流程): 掃到的寄件單號若「以前已經出貨過」(比對出貨紀錄 本機+雲端),
+  //   當場跳警告擋一下。只在正常出貨(非補寄/退貨/入倉)、且不是目前正在處理/本清單已完成的單, 才檢查, 避免誤擋。
+  if (!state.replacementInfo && !state.returnInfo && !state.inboundInfo
+      && !(state.activeParcel && state.activeParcel.id === code)
+      && !(state.completedParcels || []).some(p => p.id === code)) {
+    const _shipped = findShippedByCode(code);
+    if (_shipped) {
+      SOUND.scanError();
+      const _sd = new Date(_shipped.entry.completedAt);
+      const _sp = n => String(n).padStart(2, "0");
+      const _swhen = `${_sd.getFullYear()}/${_sp(_sd.getMonth() + 1)}/${_sp(_sd.getDate())} ${_sp(_sd.getHours())}:${_sp(_sd.getMinutes())}`;
+      if (!confirm(`⛔ 這張單號「已經出過了」!\n\n單號:${code}\n上次出貨:${_swhen}\n出貨人員:${_shipped.entry.completedBy || "(未命名)"}\n類型:${_histTypeLabel(_shipped.entry)}(比對到${_shipped.matchType})\n\n再出一次就是【重複出貨】,客人會收到兩份。\n\n確定還要繼續開這張單嗎?`)) {
+        return; // 取消 → 擋下, 不開這張
+      }
+    }
   }
 
   // 房間模式: 檢查是否有別人在處理同一張 (3 分鐘內 active)
@@ -10096,14 +10114,16 @@ _historySearchInput.addEventListener("input", (e) => {
   clearTimeout(_historySearchDebounce);
   _historySearchDebounce = setTimeout(() => {
     historySearchQuery = v;
-    if (v && v.trim()) jumpToHistoryMatch(v); else renderHistory(); // 有輸入 → 展開並捲到那筆單號
+    jumpToHistoryMatch(v); // 收集所有符合並跳到第一個(可上/下一個循環切換); 空字串 → 清掉導覽列
   }, 150);
 });
 _historySearchClear.addEventListener("click", () => {
   _historySearchInput.value = "";
   historySearchQuery = "";
   _historySearchClear.hidden = true;
+  _histSearchHits = []; _histSearchQ = ""; // 清掉跳位導覽
   renderHistory();
+  renderHistSearchNav();
   _historySearchInput.focus();
 });
 
@@ -11406,6 +11426,32 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   if (swUrl) swUrl.value = settings.syncWorkerUrl || "";
   const myNm = document.getElementById("my-name-input");
   if (myNm) myNm.value = settings.myName || "";
+  { const _tm = document.getElementById("test-mode-input"); if (_tm) _tm.checked = !!settings.testMode; }
+});
+
+// 🧪 測試模式: 常駐警示條 + 開關
+function renderTestModeBanner() {
+  const b = document.getElementById("test-mode-banner");
+  if (b) b.hidden = !settings.testMode;
+}
+document.getElementById("test-mode-input").addEventListener("change", (e) => {
+  if (e.target.checked) {
+    if (!confirm("🧪 開啟測試模式?\n\n開啟後「出貨完成」只做練習:\n・不留任何出貨紀錄\n・不扣庫存\n・不回寫官網、不推雲端\n\n⚠ 測試完一定要記得關掉,否則真實出貨不會被記錄!")) {
+      e.target.checked = false;
+      return;
+    }
+    settings.testMode = true;
+  } else {
+    settings.testMode = false;
+  }
+  saveSettings();
+  renderTestModeBanner();
+  showToast(settings.testMode ? "🧪 已開啟測試模式(出貨不留存)" : "✓ 已關閉測試模式");
+});
+document.getElementById("test-mode-banner").addEventListener("click", () => {
+  document.getElementById("settings-modal").hidden = false;
+  showSettingsView("menu");
+  const _tm = document.getElementById("test-mode-input"); if (_tm) _tm.checked = !!settings.testMode;
 });
 
 // ===== 資料搬家 (匯出 / 匯入 全部 localStorage) =====
@@ -12572,6 +12618,22 @@ function actuallyCompleteShipping(opts) {
   const _nowC = Date.now();
   if (_nowC - _lastCompleteAt < 1500) { console.warn("[complete] 忽略 1.5 秒內的重複完成"); return; }
   _lastCompleteAt = _nowC;
+  // 🧪 測試模式: 完成流程照跑(清單清空、播完成音), 但【不存任何紀錄 / 不扣庫存 / 不回寫官網 / 不推雲端】
+  if (settings.testMode) {
+    const _wasInRoom = state.roomMode, _rc = state.roomCode;
+    if (_wasInRoom) { leaveRoom(true); closeRoomOnServer(_rc); }
+    state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, kocaBatch: null };
+    saveState();
+    try { localStorage.removeItem(STATE_BACKUP_KEY); } catch (e) {}
+    currentPlatform = "";
+    const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+    const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+    reportModal.hidden = true;
+    render();
+    SOUND.shipDone();
+    showToast("🧪 測試完成 — 未留任何紀錄(測試模式)");
+    return;
+  }
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   // 🔒 資料安全命脈 (規範一-1): 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失。此判斷不可移除。
@@ -12928,6 +12990,7 @@ loadSettings();
 applyTheme(settings.theme || "koca");
 applyFontSize(settings.fontSize || "medium");
 applyGloveMode(!!settings.gloveMode);
+renderTestModeBanner(); // 🧪 開機若測試模式開著, 顯示常駐警示條
 loadState();
 // 自動還原: 若主資料空但備份有, 還原 + 提示
 if (state.items.length === 0) {
