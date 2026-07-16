@@ -2109,6 +2109,11 @@ footer.summary-bar {
           <div class="card-title">出貨設定</div>
           <div class="card-desc">包材防呆 · 刷貨行為</div>
         </button>
+        <button class="settings-card" data-settings-view="timing">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6"/></svg></div>
+          <div class="card-title">包裹計時</div>
+          <div class="card-desc">一單通常包多久 · 平均/最快/最慢</div>
+        </button>
 
         <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">資料 / 其他</div>
         <a href="shipping.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
@@ -2498,6 +2503,13 @@ footer.summary-bar {
     </div>
 
     <!-- 子視圖: 取消出貨 -->
+    <div id="settings-view-timing" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">⏱ 包裹計時紀錄</h3>
+      <p class="hint" style="margin-bottom:10px;">每個包裹從「開單(刷寄件單號 / 拉官網單)」到「完成此筆」的時間,系統會自動記錄,讓你知道一單通常包多久。退貨/入倉不列入。</p>
+      <div id="timing-stats"></div>
+    </div>
+
     <div id="settings-view-danger" class="settings-subview" hidden>
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px; color: var(--danger);">⚠ 取消出貨</h3>
@@ -3194,7 +3206,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v1.6 · 2026-07-16";
+const APP_VERSION = "v2.0 · 2026-07-16";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3427,6 +3439,7 @@ let _cloudHistFetchedAt = 0; // 上次拉雲端時間 (節流)
 let cloudStocktake = [];    // 雲端共享盤點紀錄 (手機盤完電腦看得到)
 let _cloudStFetchedAt = 0;  // 上次拉雲端盤點時間 (節流)
 let historyFilter = "all"; // "all" | "normal" | "replacement" | "return" - 出貨紀錄篩選 (session only)
+let _histShowAll = false;  // 出貨紀錄分頁: false=只畫最近 N 筆(快); 按「顯示更早」才 true 畫全部
 let historyPlatformFilter = "all"; // 出貨紀錄: 依商家(通路)篩選 (上報用)
 let historyCarrierFilter = "all";  // 出貨紀錄: 依物流篩選 (上報用)
 let _histOpenDays = null;  // 出貨紀錄「日期資料夾」展開狀態 (null=未初始化, 預設今天展開)
@@ -4513,12 +4526,31 @@ function notifyStorageFull(label) {
   _storageErrorAt = now;
   try { showToast("⚠ 儲存空間可能已滿，資料未存檔！請到 ⚙ 備份並清理舊紀錄"); } catch(e){}
 }
+// 📦 儲存空間主動預警: 接近瀏覽器 localStorage 上限前就提醒 (避免真滿了 → 出貨存不進去)。純唯讀估算, 不刪任何資料。
+let _lastStorageCheck = 0;
+function checkStorageUsage() {
+  const now = Date.now();
+  if (now - _lastStorageCheck < 60000) return; // 每分鐘最多估一次 (估算要讀整包大字串, 不宜太頻繁)
+  _lastStorageCheck = now;
+  let chars = 0;
+  try { for (const k in localStorage) { if (Object.prototype.hasOwnProperty.call(localStorage, k)) chars += (localStorage[k] || "").length + k.length; } } catch (e) { return; }
+  const bytes = chars * 2; // UTF-16 ≈ 2 bytes/char (粗估)
+  if (bytes > 5 * 1024 * 1024 * 0.8) { // 超過約 5MB 上限的 8 成就提醒
+    try { showToast(`⚠ 本機儲存空間已用約 ${(bytes / 1024 / 1024).toFixed(1)}MB(接近上限),請到 ⚙ 匯出備份、或清掉舊出貨紀錄,以免之後出貨存不進去`); } catch (e) {}
+  }
+}
+let _lastStateBackupAt = 0;
 function saveState() {
   try {
-    localStorage.setItem(STATE_KEY, JSON.stringify(state));
-    // 同步備份 (只在 state.items 有資料時才備份, 避免空狀態覆蓋備份)
+    localStorage.setItem(STATE_KEY, JSON.stringify(state)); // 主存: 每次都寫 (資料安全)
+    // 同步備份 (只在 state.items 有資料時)。備份是「主資料被清空時的救命稻草」→ 節流 2.5 秒一次即可,
+    //   連刷時省下一次整包 stringify(state 含 completedParcels, 下午會變大)。主存仍每次寫, 不影響防丟。
     if (state.items && state.items.length > 0) {
-      localStorage.setItem(STATE_BACKUP_KEY, JSON.stringify({ ...state, savedAt: new Date().toISOString() }));
+      const _nowB = Date.now();
+      if (_nowB - _lastStateBackupAt > 2500) {
+        _lastStateBackupAt = _nowB;
+        localStorage.setItem(STATE_BACKUP_KEY, JSON.stringify({ ...state, savedAt: new Date().toISOString() }));
+      }
     }
     console.log("[state] saved", state.items.length, "items");
   } catch(e) { notifyStorageFull("saveState"); }
@@ -4827,6 +4859,7 @@ function appendHistory() {
     console.warn("[history] save FAILED, entry rolled back", entry.id);
   } else {
     console.log("[history] saved entry", entry.id, "items:", items.length);
+    checkStorageUsage(); // 紀錄變多後主動預警空間 (內部節流 1 分鐘一次)
   }
   return entry;
 }
@@ -6195,6 +6228,21 @@ function _kocaOrderDoneById(orderId) {
   const snap = state.kocaBatch && state.kocaBatch.suspended[orderId];
   return snap ? isKocaOrderItemsDone(snap.items) : false;
 }
+// 包材複查 (整張): 合併該張所有包裹(黃框+已結)的商品, 回傳「與主機建議不符」的包材 SKU 陣列 (無=[])
+function _kocaOrderPackagingWrongById(orderId) {
+  if (settings.packagingGuard === false) return [];
+  const merged = {};
+  const add = (its) => { for (const k in (its || {})) merged[k] = (merged[k] || 0) + its[k]; };
+  const src = (orderId === state.kocaOrderId)
+    ? { activeParcel: state.activeParcel, completedParcels: state.completedParcels }
+    : (state.kocaBatch && state.kocaBatch.suspended[orderId]);
+  if (!src) return [];
+  if (src.activeParcel) add(src.activeParcel.items);
+  for (const p of (src.completedParcels || [])) add(p.items);
+  const { expected } = expectedPackagingFor(merged);
+  if (expected.size === 0) return []; // 沒主機無法判斷
+  return Object.keys(merged).filter(sku => (merged[sku] > 0) && GOVERNED_PACKAGING.has(sku) && !expected.has(sku));
+}
 // 切到批次裡另一張 (它必須已在 suspended)
 function switchToKocaOrder(orderId) {
   if (!kocaBatchActive() || !orderId) return;
@@ -6221,12 +6269,19 @@ function switchToKocaOrder(orderId) {
 // 「完成總訂單」: 一次結算整批, 每張各自落一筆紀錄 / 各自扣庫存 / 各自回寫。
 async function completeKocaBatch() {
   if (!kocaBatchActive()) return;
+  // 🛡 共同包貨: 只讓開房者收尾 (批次也適用, 避免非開房者按到)
+  if (state.roomMode && !state.isRoomHost) {
+    alert("👥 共同包貨中,請由「開房的那台」按完成,避免重複結算。\n\n若真的要由這台收尾,請先「離開房間」再完成。");
+    return;
+  }
+  const _wasInRoomB = state.roomMode, _roomCodeB = state.roomCode; // 結算/測試完成後要關房 (比照單張出貨完成, 否則會留孤兒房間、同仁被留在舊房)
   // 🛡 防重複記帳: 1.5 秒內第二次一律忽略 (擋觸控雙擊/事件連發)
   const _nowC = Date.now();
   if (_nowC - _lastCompleteAt < 1500) { console.warn("[batch] 忽略 1.5 秒內的重複完成"); return; }
   _lastCompleteAt = _nowC;
   // 🧪 測試模式: 不結算、不留任何紀錄、不扣庫存, 只清空批次與清單
   if (settings.testMode) {
+    if (_wasInRoomB) { leaveRoom(true); closeRoomOnServer(_roomCodeB); } // 測試也把房收掉, 不留孤兒房間
     state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, kocaBatch: null };
     saveState();
     try { localStorage.removeItem(STATE_BACKUP_KEY); } catch (e) {}
@@ -6247,6 +6302,16 @@ async function completeKocaBatch() {
     if (notDone[0] !== state.kocaOrderId) switchToKocaOrder(notDone[0]); // 切到第一張沒完成的方便繼續刷
     alert(`⚠ 還有 ${notDone.length} 張沒完成(商品沒刷齊、也沒標缺貨):\n\n${names}\n\n請把它們刷完、或把刷不到的品項點「標記缺貨」放行,再按「完成總訂單」。`);
     return;
+  }
+  // 📦 包材複查: 完成總訂單前, 每張整單再檢查一次包材是否符合主機建議 (不強制擋, 確認後放行)
+  const pkgIssues = ids.map(id => ({ id, wrong: _kocaOrderPackagingWrongById(id) })).filter(x => x.wrong.length > 0);
+  if (pkgIssues.length > 0) {
+    SOUND.scanError();
+    const detail = pkgIssues.map(x => `${kocaOrderLabel(x.id)}: 用了 ${x.wrong.map(_pkgName).join("、")}`).join("\n");
+    if (!confirm(`⚠ 包材確認\n\n有 ${pkgIssues.length} 張的包材可能與主機建議不符:\n\n${detail}\n\n可能是刷錯,或本單另有需求。仍要完成總訂單嗎?`)) {
+      if (pkgIssues[0].id !== state.kocaOrderId) switchToKocaOrder(pkgIssues[0].id); // 切到第一張去檢查
+      return;
+    }
   }
   const fulfillNote = settings.kocaFulfillEnabled
     ? "\n\n⚠ 你已開啟「回寫官網」→ 每張都會標記官網已出貨並排電子發票。"
@@ -6278,8 +6343,10 @@ async function completeKocaBatch() {
       applyShipmentSideEffects(entry); // 扣庫存 / 回寫官網 / 推雲端 (只讀 entry, 不讀 state)
       settled++;
       delete batch.suspended[id];      // 這張已安全落帳 → 從批次移除, 避免重按時重複落帳
+    } else if (!entry && _lastHistorySaveOk) {
+      delete batch.suspended[id];      // 空清單(無商品可記, 非失敗) → 移除, 避免整批卡住結不掉
     } else {
-      failedIds.push(id);              // 存檔失敗 → 留在批次裡, 不清空 (資料安全)
+      failedIds.push(id);              // 真的存檔失敗 → 留在批次裡, 不清空 (資料安全)
     }
   }
   state = savedState;
@@ -6302,7 +6369,8 @@ async function completeKocaBatch() {
     return;
   }
 
-  // 全部結算成功 → 清空批次與清單
+  // 全部結算成功 → 關房(共同包貨) + 清空批次與清單
+  if (_wasInRoomB) { leaveRoom(true); closeRoomOnServer(_roomCodeB); } // 比照單張出貨完成: 收掉共同包貨房間
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, kocaBatch: null };
   saveState();
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
@@ -8259,7 +8327,14 @@ function enqueuePendingCloudHistory(entry) {
   if (!entry || !entry.id) return;
   pendingCloudHistory = pendingCloudHistory.filter(e => e && e.id !== entry.id);
   pendingCloudHistory.push(entry);
-  if (pendingCloudHistory.length > PENDING_CLOUD_HISTORY_MAX) pendingCloudHistory.shift();
+  if (pendingCloudHistory.length > PENDING_CLOUD_HISTORY_MAX) {
+    // ★ 不 shift! 佇列裡全是「還沒上雲」的, 丟最舊那筆 = 別台防呆對它永久失效。改成全數保留 + 大聲提示。
+    console.error("[cloud-history] 待補送佇列超過上限(離線太久?), 全數保留, 請盡快連網:", pendingCloudHistory.length);
+    if (typeof showToast === "function" && Date.now() - _cloudQueueToastAt > 20000) {
+      _cloudQueueToastAt = Date.now();
+      showToast("⚠ 大量出貨紀錄還沒上雲(離線太久?),請盡快連網,別台才擋得掉重複出貨");
+    }
+  }
   savePendingCloudHistory();
   console.warn("[cloud-history] 進補送佇列, 待網路恢復重推:", entry.id, "(佇列", pendingCloudHistory.length, "筆)");
   // 提示使用者「這筆暫時只在本機」(節流 20 秒, 避免整批連續失敗時洗版)
@@ -8536,6 +8611,13 @@ function renderHistory() {
     Object.entries(PLATFORMS).map(([k, v]) => [k, `${v.emoji || ""} ${v.customer || v.label}`.trim()])
   );
   PLATFORM_LABELS.unknown = "—";
+  // 📄 分頁: 沒搜尋時只先畫最近 HIST_RENDER_LIMIT 筆 (舊的用「顯示更早」展開)。搜尋時不截, 讓跳位找得到全部。
+  const HIST_RENDER_LIMIT = 200;
+  let _histTruncated = 0;
+  if (!q && !_histShowAll && displayed.length > HIST_RENDER_LIMIT) {
+    _histTruncated = displayed.length - HIST_RENDER_LIMIT;
+    displayed = displayed.slice(0, HIST_RENDER_LIMIT); // displayed 已新→舊 → 取最近 N 筆
+  }
   const _histCards = displayed.map(e => {
     const date = new Date(e.completedAt);
     const dateStr = date.toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -8697,6 +8779,9 @@ function renderHistory() {
       <div class="hist-day-body">${body}</div>
     </details>`;
   }).join("");
+  if (_histTruncated > 0) {
+    list.innerHTML += `<button type="button" id="hist-show-more" class="btn full outline" style="margin-top:12px;">顯示更早的 ${_histTruncated} 筆紀錄</button>`;
+  }
 }
 
 // 出貨紀錄搜尋「跳位」(像瀏覽器 Ctrl+F): 收集所有符合的單號 → 可用上一個/下一個循環切換, 每個都展開+捲到+閃一下。
@@ -8778,6 +8863,7 @@ function findShippedByCode(code) {
   if (!c) return null;
   const all = allHistory(); // 本機+雲端, 已新→舊排序
   for (const e of all) {
+    if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue; // 退貨/補寄/入倉不算「出過這張」(比照 kocaShippedMap, 避免噪音警告)
     if (e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
     const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c);
     if (p) return { entry: e, matchType: "寄件單號" };
@@ -9224,6 +9310,7 @@ function processScan(code) {
   // 🛡 過刷防呆(背景自動, 融進正常刷單流程): 掃到的寄件單號若「以前已經出貨過」(比對出貨紀錄 本機+雲端),
   //   當場跳警告擋一下。只在正常出貨(非補寄/退貨/入倉)、且不是目前正在處理/本清單已完成的單, 才檢查, 避免誤擋。
   if (!state.replacementInfo && !state.returnInfo && !state.inboundInfo
+      && state.kocaOrderId !== code
       && !(state.activeParcel && state.activeParcel.id === code)
       && !(state.completedParcels || []).some(p => p.id === code)) {
     const _shipped = findShippedByCode(code);
@@ -9357,6 +9444,7 @@ function finalizeActiveParcel(skipIfEmpty) {
     return;
   }
   ap.completedAt = new Date().toISOString();
+  if (ap.startedAt) { const _dur = new Date(ap.completedAt) - new Date(ap.startedAt); if (_dur >= 0) ap.durationMs = _dur; } // ⏱ 包裹計時: 開單(刷寄件單/拉官網單) → 完成
   ap.packedBy = settings.myName || "(本機)";
   state.completedParcels.push(ap);
   // 房間模式: 廣播此筆完成
@@ -9462,6 +9550,54 @@ function renderCompletedParcelsList() {
   ).join("");
 }
 
+// ⏱ 包裹計時: 格式化時長 + 從出貨紀錄算統計 (開單→完成)
+function fmtParcelDuration(ms) {
+  if (typeof ms !== "number" || ms < 0) return "—";
+  const s = Math.round(ms / 1000);
+  const m = Math.floor(s / 60), ss = s % 60;
+  if (m >= 60) { const h = Math.floor(m / 60); return `${h} 時 ${m % 60} 分`; }
+  return m > 0 ? `${m} 分 ${ss} 秒` : `${ss} 秒`;
+}
+function computeParcelTimingStats() {
+  const durs = [], recent = [];
+  for (const e of allHistory()) { // 已新→舊
+    if (e.orderType === "return" || e.orderType === "inbound") continue; // 退貨/入倉不算包貨時間
+    for (const p of (e.parcels || [])) {
+      let ms = (typeof p.durationMs === "number") ? p.durationMs
+             : ((p.startedAt && p.completedAt) ? (new Date(p.completedAt) - new Date(p.startedAt)) : null);
+      if (typeof ms === "number" && ms >= 0 && ms < 6 * 3600000) { // 排除異常(>6 小時, 可能忘了關/隔夜)
+        durs.push(ms);
+        if (recent.length < 20) recent.push({ id: p.id, ms, by: p.packedBy || "" });
+      }
+    }
+  }
+  if (durs.length === 0) return null;
+  const sorted = durs.slice().sort((a, b) => a - b);
+  const sum = durs.reduce((s, x) => s + x, 0);
+  return { count: durs.length, avg: sum / durs.length, median: sorted[Math.floor(sorted.length / 2)], fastest: sorted[0], slowest: sorted[sorted.length - 1], recent };
+}
+function renderTimingStats() {
+  const el = document.getElementById("timing-stats");
+  if (!el) return;
+  const s = computeParcelTimingStats();
+  if (!s) { el.innerHTML = `<div style="text-align:center; color:var(--text-soft); padding:24px;">還沒有包裹計時資料。<br>完成幾筆包貨後就會出現。</div>`; return; }
+  const stat = (label, ms, color) => `<div style="flex:1; min-width:88px; background:var(--bg); border-radius:10px; padding:10px 8px; text-align:center;">
+      <div style="font-size:0.7rem; color:var(--text-soft);">${label}</div>
+      <div style="font-size:1.02rem; font-weight:800; color:${color || 'var(--text)'};">${fmtParcelDuration(ms)}</div>
+    </div>`;
+  el.innerHTML = `
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+      ${stat("平均一單", s.avg, "var(--primary)")}${stat("中位數", s.median)}${stat("最快", s.fastest, "var(--success)")}${stat("最慢", s.slowest, "var(--danger)")}
+    </div>
+    <div class="hint" style="font-size:0.72rem; margin:4px 0 12px;">共 ${s.count} 個包裹(已排除超過 6 小時的異常/隔夜單)。</div>
+    <div style="font-weight:700; font-size:0.8rem; margin-bottom:4px;">最近 ${s.recent.length} 筆</div>
+    <div style="max-height:38vh; overflow-y:auto;">
+      ${s.recent.map(r => `<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; padding:5px 0; border-top:1px solid var(--border); font-size:0.78rem;">
+        <span style="font-family:ui-monospace,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.id)}${r.by ? ` <span style="color:var(--text-soft);">· ${escapeHtml(r.by)}</span>` : ""}</span>
+        <span style="font-weight:700; white-space:nowrap;">${fmtParcelDuration(r.ms)}</span>
+      </div>`).join("")}
+    </div>`;
+}
 function renderActiveParcel() {
   const wrapper = document.getElementById("active-parcel");
   const idEl = document.getElementById("active-parcel-id");
@@ -9620,7 +9756,7 @@ function render() {
   updateResumeBanner();
   if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); renderKocaBatchStrip(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
   else if (inMapping && !homeOverride) renderA1Mapping();
-  else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
+  else { renderMenu(); renderSpecMapList(); renderEssentialList(); if (currentTab === "history") renderHistory(); } // 出貨紀錄較重: 只在該分頁時才畫 (開機/其他頁略過, 縮短載入; 切到歷史頁的 handler 會自己畫)
 }
 
 function updateResumeBanner() {
@@ -9760,7 +9896,7 @@ function switchTab(t) {
   document.getElementById("tab-content-a1").hidden = (t !== "a1");
   document.getElementById("tab-content-history").hidden = (t !== "history");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
-  if (t === "history") { renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); } // 切到歷史: 先畫本機, 再強制拉雲端最新 (看得到別人剛刪的), 順手補推沒上雲的
+  if (t === "history") { _histShowAll = false; renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); } // 切到歷史: 回到只畫最近 N 筆; 先畫本機, 再強制拉雲端最新, 順手補推沒上雲的
   if (t === "inventory") renderInventory(); // 切到倉庫清冊時重新渲染
   // 手機鏡像: 切到商品庫/倉庫清冊時, 拉電腦主檔最新 (主機自己不拉)
   if (t === "menu" || t === "inventory") fetchMasterMirror(true);
@@ -10161,7 +10297,7 @@ _historySearchClear.addEventListener("click", () => {
   _historySearchInput.value = "";
   historySearchQuery = "";
   _historySearchClear.hidden = true;
-  _histSearchHits = []; _histSearchQ = ""; // 清掉跳位導覽
+  _histSearchHits = []; _histSearchQ = ""; _histShowAll = false; // 清掉跳位導覽 + 回到只畫最近 N 筆
   renderHistory();
   renderHistSearchNav();
   _historySearchInput.focus();
@@ -10177,6 +10313,7 @@ document.getElementById("hist-platform-filter").addEventListener("change", (e) =
 document.getElementById("hist-carrier-filter").addEventListener("change", (e) => { historyCarrierFilter = e.target.value; renderHistory(); });
 
 document.getElementById("history-list").addEventListener("click", (e) => {
+  if (e.target.closest("#hist-show-more")) { _histShowAll = true; renderHistory(); return; } // 分頁: 展開全部
   const tog = e.target.closest("button[data-hist-toggle]");
   if (tog) {
     const id = tog.dataset.histToggle;
@@ -11440,7 +11577,7 @@ const settingsModal = document.getElementById("settings-modal");
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
   // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
-  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger"].forEach(v => {
+  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger", "timing"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
@@ -11731,6 +11868,10 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
       refreshFontPicker();
       const _gm = document.getElementById("glove-mode-input");
       if (_gm) _gm.checked = !!settings.gloveMode;
+    }
+    if (card.dataset.settingsView === "timing") {
+      fetchCloudHistory(true); // 拉最新雲端紀錄, 算得到別台的包裹時長
+      renderTimingStats();
     }
     if (card.dataset.settingsView === "integration") {
       const _adb = document.getElementById("auto-daily-backup-input");
@@ -13092,6 +13233,7 @@ setInterval(renderNetStatus, 15000);
 setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
 // 出貨紀錄雲端補送: 開機若有積著沒上雲的紀錄, 稍後補推 (等 settings/網路就緒)
 setTimeout(() => { try { flushPendingCloudHistory(); } catch (e) {} }, 2500);
+setTimeout(() => { try { checkStorageUsage(); } catch (e) {} }, 5000); // 開機估一次儲存空間, 接近上限就提醒
 // 資料安全: 此機未設定自動備份就提醒 (沒設 Discord = 資料只在本機, 換機/清快取會全沒)
 setTimeout(() => {
   try {
