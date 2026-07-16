@@ -1556,6 +1556,28 @@ footer.summary-bar {
   display: flex; gap: 8px; margin: 12px;
 }
 .section-actions .btn { flex: 1; }
+
+/* 官方批次多單「本批訂單」列 */
+.koca-batch-strip { margin: 10px 12px 0; border: 1px solid var(--primary); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.kbatch-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--primary-light, rgba(232,74,2,.08)); border: 0; cursor: pointer; color: var(--text); text-align: left; }
+.kbatch-title { font-weight: 700; font-size: 0.875rem; }
+.kbatch-sub { margin-left: auto; font-size: 0.75rem; color: var(--text-soft); }
+.kbatch-caret { font-size: 0.75rem; color: var(--text-soft); }
+.kbatch-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; }
+.kbatch-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font-size: 0.8125rem; cursor: pointer; max-width: 100%; }
+.kbatch-chip.active { border-color: var(--primary); background: var(--primary-light, rgba(232,74,2,.1)); font-weight: 700; }
+.kbatch-chip.done { opacity: 0.72; }
+.kbatch-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.kbatch-chip-cur { font-size: 0.6875rem; color: var(--primary); font-weight: 700; }
+.koca-batch-strip .btn.full { margin: 8px 12px 12px; width: calc(100% - 24px); }
+
+/* 出貨紀錄搜尋跳位: 捲到目標後閃一下提示 */
+.hist-flash { animation: histFlash 1.8s ease; border-radius: 6px; }
+@keyframes histFlash {
+  0% { background: var(--warn-bg, #fef3c7); box-shadow: 0 0 0 2px var(--warn, #f59e0b); }
+  70% { background: var(--warn-bg, #fef3c7); box-shadow: 0 0 0 2px var(--warn, #f59e0b); }
+  100% { background: transparent; box-shadow: none; }
+}
 </style>
 </head>
 <body>
@@ -1655,6 +1677,13 @@ footer.summary-bar {
       <div id="koca-order-status" class="hint" style="margin-top:8px;"></div>
       <div id="koca-order-list" hidden></div>
       <div id="koca-order-map" hidden></div>
+    </div>
+
+    <!-- 預刷單確認: 出貨前先掃一遍, 偵測已出過的單 (防重複出貨) -->
+    <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🔍 預刷單確認(出貨前防重複)</div>
+      <p class="hint" style="margin-bottom:8px;">正式包貨前,先把要出的<strong>寄件單號(TW…)或官網單號</strong>刷一遍。系統會比對出貨紀錄(本機+雲端),<strong>已經出過的當場跳紅提醒</strong>,讓你先把重複單挑掉、不要白包。</p>
+      <button class="btn outline sm" id="prescan-open-btn" type="button" style="width:100%;">🔍 開啟預刷單確認</button>
     </div>
 
     <!-- 多人協作入口 -->
@@ -1856,6 +1885,8 @@ footer.summary-bar {
 
 <!-- PICKING VIEW: shown once a list is loaded -->
 <div id="picking-view" hidden>
+  <!-- 官方批次多單「本批訂單」列 (收合式; 只有官方刷單批次會顯示) -->
+  <div id="koca-batch-strip" class="koca-batch-strip" hidden></div>
   <!-- 當前訂單: 放在 picking-view 最上面, 釘在標題列正下方, 一進畫面就在最頂、捲動不跑 -->
   <div id="active-parcel" class="active-parcel" hidden>
     <button type="button" class="active-parcel-bar" id="active-parcel-bar" aria-expanded="true" title="點一下收合 / 展開明細">
@@ -3061,6 +3092,23 @@ footer.summary-bar {
   </div>
 </div>
 
+<div class="modal-backdrop" id="prescan-modal" hidden>
+  <div class="modal">
+    <h2>🔍 預刷單確認</h2>
+    <p class="hint" style="margin-bottom:8px;">刷或貼上<strong>寄件單號(TW…)/官網單號</strong>,按 Enter 或「檢查」。已出過的會跳紅並叫一聲。<br>這裡只查詢、不會動到任何出貨紀錄。</p>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="prescan-input" placeholder="刷單號 / 貼上後按 Enter" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
+      <button class="btn sm" id="prescan-check-btn" type="button" style="white-space:nowrap;">檢查</button>
+    </div>
+    <div id="prescan-summary" style="margin-top:10px; font-size:0.8125rem; font-weight:700;"></div>
+    <div id="prescan-list" style="margin-top:8px; max-height:44vh; overflow-y:auto;"></div>
+    <div class="row" style="margin-top:12px; gap:8px;">
+      <button class="btn outline sm" id="prescan-clear" style="flex:1;">🗑 清空清單</button>
+      <button class="btn outline sm" id="prescan-close" style="flex:1;">關閉</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 內建數字鍵盤 (繞過 iOS 藍牙鍵盤限制) -->
@@ -3150,7 +3198,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v0.2 · 2026-07-13";
+const APP_VERSION = "v0.8 · 2026-07-15";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3958,15 +4006,21 @@ function maybeAutoCreateRoom(reason) {
   createRoom(); // 會自己設 roomMode + 顯示 4 碼邀請碼 toast
 }
 
+// 房間請求一律帶 SPIDEY_KEY (Worker 已對房間端點上鎖; 沒帶會被 401 擋)
+function roomHeaders(extra) { return { ...(extra || {}), "X-Spidey-Key": settings.spideyKey || "" }; }
+// WebSocket / sendBeacon 無法設 header → 改用 ?key= 帶金鑰
+function roomKeyQS() { return "?key=" + encodeURIComponent(settings.spideyKey || ""); }
+
 async function createRoom() {
   if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return null; }
   if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return null; }
+  if (!settings.spideyKey) { showToast("⚠ 共同包貨需要先到 ⚙ 設定填 Spidey Key"); return null; }
   if (state.items.length === 0) { showToast("⚠ 請先上傳備貨清單"); return null; }
   try {
     const url = settings.syncWorkerUrl + "/api/room/create";
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: roomHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         myName: settings.myName,
         platform: currentPlatform || "a1",
@@ -4002,6 +4056,7 @@ async function createRoom() {
 async function joinRoom(code) {
   if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return false; }
   if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return false; }
+  if (!settings.spideyKey) { showToast("⚠ 共同包貨需要先到 ⚙ 設定填 Spidey Key"); return false; }
   code = (code || "").toUpperCase().trim();
   if (!/^[A-Z0-9]{4}$/.test(code)) { showToast("⚠ 邀請碼格式不對 (4 碼英數)"); return false; }
   // 防呆: 有還沒完成的本機進度 (刷到一半沒按完成) → 先提醒, 避免誤丟自己的單
@@ -4018,7 +4073,7 @@ async function joinRoom(code) {
   if (roomSocket) { try { roomSocket.onclose = null; roomSocket.close(); } catch (e) {} roomSocket = null; }
   try {
     const url = settings.syncWorkerUrl + "/api/room/" + code;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: roomHeaders() });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error === "not_found" ? "找不到此房間" : data.error);
     const room = data.room;
@@ -4073,7 +4128,7 @@ const WS_HEARTBEAT_MS = 25000;
 async function probeRoomClosedThenStop() {
   if (!state.roomMode || !state.roomCode || !settings.syncWorkerUrl) return;
   try {
-    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/room/" + state.roomCode);
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/room/" + state.roomCode, { headers: roomHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok || data.error === "not_found") {
       showToast("⚠ 房間已關閉, 離開房間");
@@ -4086,7 +4141,7 @@ async function probeRoomClosedThenStop() {
 
 function roomWsUrl() {
   const base = settings.syncWorkerUrl.replace(/\/$/, "").replace(/^http/i, "ws"); // https→wss, http→ws
-  return base + "/api/room/" + state.roomCode + "/ws";
+  return base + "/api/room/" + state.roomCode + "/ws" + roomKeyQS();
 }
 function wsSend(obj) {
   if (roomSocket && roomSocket.readyState === 1) {
@@ -4335,7 +4390,7 @@ function flushPendingEventsBeacon() {
   if (!state.roomCode || !settings.syncWorkerUrl) return;
   if (pendingEvents.length === 0) return;
   try {
-    const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync";
+    const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/sync" + roomKeyQS();
     const body = new Blob([JSON.stringify({
       myName: settings.myName,
       events: pendingEvents.slice(),
@@ -4356,7 +4411,7 @@ function notifyLeaveOnUnload() {
   // 2. 通知 Worker 我要離開了 (用 sendBeacon, 關頁也保證會送)
   if (state.roomMode && state.roomCode && settings.syncWorkerUrl && settings.myName) {
     try {
-      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave";
+      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave" + roomKeyQS();
       const body = JSON.stringify({ myName: settings.myName });
       if (navigator.sendBeacon) {
         navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
@@ -4382,7 +4437,7 @@ function leaveRoom(notifyServer) {
   // 先通知 Worker 移除此成員 (用 sendBeacon 保證會送, 不等回應)
   if (notifyServer && state.roomMode && state.roomCode && settings.syncWorkerUrl && settings.myName) {
     try {
-      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave";
+      const url = settings.syncWorkerUrl + "/api/room/" + state.roomCode + "/leave" + roomKeyQS();
       const body = JSON.stringify({ myName: settings.myName });
       if (navigator.sendBeacon) {
         navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
@@ -4491,6 +4546,7 @@ function loadState() {
         if (!state.roomMembers) state.roomMembers = {};
         if (!state.roomActiveParcels) state.roomActiveParcels = {};
         if (!state.myPacked) state.myPacked = {};
+        if (typeof state.kocaBatch === "undefined") state.kocaBatch = null; // 官方批次多單 (刷 KOCA 單號一次掛多張)
         console.log("[state] loaded from main:", state.items.length, "items,", state.completedParcels.length, "parcels", state.replacementInfo ? "(補寄)" : (state.manualMode ? "(手建)" : ""));
       }
     }
@@ -5760,6 +5816,8 @@ async function fetchKocaOrder(orderId, opts) {
   setKocaOrderStatus("⏳ 正在向官網查詢訂單…");
 
   try {
+    // B: 拉單前同步把雲端出貨紀錄拉最新, 否則跨裝置防呆 (kocaShippedMap) 會漏別台出過的單
+    const _cloudReady = fetchCloudHistory(true).catch(() => {});
     const url = settings.syncWorkerUrl.replace(/\/$/, "")
       + "/api/koca-order?orderId=" + encodeURIComponent(orderId)
       + "&key=" + encodeURIComponent(settings.spideyKey || "");
@@ -5791,6 +5849,7 @@ async function fetchKocaOrder(orderId, opts) {
 
     // ---- 重複出貨防呆: 這張單這個 App 出過了嗎? ----
     // 這道防線比官網狀態更可信 (官網待出貨池有大量說不清楚的舊單)。
+    await _cloudReady; // B: 先確保雲端紀錄載入完成, 別台出過的單才擋得到
     const already = kocaShippedMap()[data.orderId];
     if (already) {
       const when = fmtShippedWhen(already.completedAt);
@@ -5887,21 +5946,33 @@ function buildListFromKocaOrder(o, gate) {
   const psel = document.getElementById("platform-select");
   if (psel) psel.value = "koca";
 
-  // 已有未完成清單 → 走合併 modal
-  if (state.items.length > 0) {
-    // ⚠ 合併/取代路徑不設 kocaOrderId: 一張清單混了多張訂單就無法安全回寫官網 (會標錯單),
-    //   所以這種情況一律不自動回寫, 出完貨請自行到官網後台標記。
+  // 官方批次多單: 已有清單 + 目前是官方批次 → 收好目前這張, 直接開新的一張撿貨頁 (不走合併 modal)
+  if (state.items.length > 0 && kocaBatchActive() && currentPlatform === "koca") {
+    _suspendActiveKocaOrder();          // 目前這張快照進批次
+    _addKocaBatchOrder(o, gate);        // 新的一張加進批次
+    state.items = items;
+    state.loadedDate = new Date().toISOString().slice(0, 10);
+    state.completedParcels = [];
+    clearOrderModeFlags();
+    state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
+    state.kocaOrderId = o.orderId || null;
+    saveState();
+  } else if (state.items.length > 0) {
+    // 非官方批次 (例如蝦皮 CSV 清單) → 維持原本合併/取代 modal
+    // ⚠ 合併/取代路徑不設 kocaOrderId: 一張清單混了多張訂單就無法安全回寫官網 (會標錯單)。
     const r = showMergeModal(items);
     setKocaOrderStatus(`已載入官網訂單 ${escapeHtml(o.orderId)},請於上方選擇要「合併」或「取代」現有清單。<br><span style="color:var(--text-soft);">⚠ 合併多張單時<strong>不會自動回寫官網出貨狀態</strong>(避免標錯單),請自行到後台標記。</span>`);
     return r;
+  } else {
+    // 沒有清單 → 官方一律開新批次 (批次 of 1; 之後再刷別張會加進同一批)
+    state.items = items;
+    state.loadedDate = new Date().toISOString().slice(0, 10);
+    clearOrderModeFlags();
+    state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
+    state.kocaOrderId = o.orderId || null;   // 來源官網訂單 (方便對帳)
+    _startKocaBatch(o, gate);
+    saveState();
   }
-
-  state.items = items;
-  state.loadedDate = new Date().toISOString().slice(0, 10);
-  clearOrderModeFlags();
-  state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
-  state.kocaOrderId = o.orderId || null;   // 來源官網訂單 (方便對帳)
-  saveState();
 
   const codNote = gate && gate.cod ? '<br><strong style="color:#b26b00;">💰 貨到付款(COD):出貨時記得收款。</strong>' : "";
   setKocaOrderStatus(
@@ -5915,7 +5986,8 @@ function buildListFromKocaOrder(o, gate) {
   SOUND.parcelFinish();
   render();
   renderKocaUnmappedPanel();   // 有對不到的品項 → 跳出「指定一次就記住」的對應面板
-  maybeAutoCreateRoom("官網訂單");
+  renderKocaBatchStrip();      // 更新「本批訂單」列
+  if (!kocaBatchActive() || state.kocaBatch.orderList.length <= 1) maybeAutoCreateRoom("官網訂單"); // 批次第二張起不重複開房
   return true;
 }
 
@@ -5929,6 +6001,8 @@ async function fetchKocaPendingOrders() {
   if (btn) { btn.disabled = true; btn.textContent = "拉取中…"; }
   setKocaOrderStatus("⏳ 正在拉取待出貨訂單…");
   try {
+    // B: 同步把雲端出貨紀錄拉最新, 讓列表能正確標出「別台已出過」的單
+    const _cloudReady = fetchCloudHistory(true).catch(() => {});
     const url = settings.syncWorkerUrl.replace(/\/$/, "")
       + "/api/koca-orders?limit=100&key=" + encodeURIComponent(settings.spideyKey || "");
     const res = await fetch(url, { cache: "no-store" });
@@ -5938,6 +6012,7 @@ async function fetchKocaPendingOrders() {
       SOUND.scanError();
       return;
     }
+    await _cloudReady; // 確保雲端紀錄就緒再渲染 (renderKocaOrderList 內用 kocaShippedMap 標記已出過)
     renderKocaOrderList(data);
   } catch (e) {
     console.error("[koca-orders]", e);
@@ -6013,6 +6088,209 @@ function renderKocaOrderList(data) {
       }).join("")}
     </div>`;
 }
+
+// ============ 官方批次多單 (刷 KOCA 單號: 一次掛多張, 最後一起結算, 每張各自落帳) ============
+// 資料模型: 目前正在包的那張 = state.items / state.completedParcels / state.kocaOrderId (沿用既有欄位,
+//   所有掃描計數的既有邏輯不用改)。其他暫存的張放 state.kocaBatch.suspended[orderId]。
+//   切換 = 把目前這張快照進 suspended, 再把目標張從 suspended 載回 state。結算才逐張各自落帳。
+function kocaBatchActive() {
+  return !!(state.kocaBatch && Array.isArray(state.kocaBatch.orderList) && state.kocaBatch.orderList.length > 0);
+}
+function _kocaOrderMeta(o, gate) {
+  return {
+    recipient: (o && o.recipient && o.recipient.name) || "",
+    statusLabel: (o && o.statusLabel) || "",
+    cod: !!(gate && gate.cod),
+  };
+}
+function _startKocaBatch(o, gate) {
+  state.kocaBatch = { suspended: {}, orderList: [o.orderId], meta: { [o.orderId]: _kocaOrderMeta(o, gate) }, collapsed: false };
+}
+function _addKocaBatchOrder(o, gate) {
+  if (!state.kocaBatch) { _startKocaBatch(o, gate); return; }
+  if (!state.kocaBatch.orderList.includes(o.orderId)) state.kocaBatch.orderList.push(o.orderId);
+  state.kocaBatch.meta[o.orderId] = _kocaOrderMeta(o, gate);
+}
+function kocaOrderLabel(id) {
+  const m = state.kocaBatch && state.kocaBatch.meta && state.kocaBatch.meta[id];
+  return (m && m.recipient) ? `${m.recipient}(${id})` : id;
+}
+// 目前這張官網單快照進 suspended (含收尾 activeParcel)。不清 state, 由呼叫端決定接下來載入誰。
+function _suspendActiveKocaOrder() {
+  if (!state.kocaOrderId || !state.kocaBatch) return;
+  if (state.activeParcel) finalizeActiveParcel(true);
+  state.kocaBatch.suspended[state.kocaOrderId] = {
+    items: (state.items || []).map(it => ({ ...it })),
+    completedParcels: (state.completedParcels || []).map(p => ({ ...p })),
+  };
+}
+// 找出批次裡符合掃到號碼的正式 orderId (不分大小寫); 沒有回 null
+function findKocaBatchOrderId(scanned) {
+  if (!kocaBatchActive()) return null;
+  const up = String(scanned || "").toUpperCase();
+  if (String(state.kocaOrderId || "").toUpperCase() === up) return state.kocaOrderId;
+  return state.kocaBatch.orderList.find(id => String(id).toUpperCase() === up) || null;
+}
+// 一張官網單「刷齊了嗎」: 非包材品項全部 packed>=expected 或 已標缺貨
+function isKocaOrderItemsDone(items) {
+  return (items || []).filter(it => !it.essential && it.expected > 0)
+    .every(it => it.missing || (it.packed || 0) >= it.expected);
+}
+function _kocaOrderDoneById(orderId) {
+  if (orderId === state.kocaOrderId) return isKocaOrderItemsDone(state.items);
+  const snap = state.kocaBatch && state.kocaBatch.suspended[orderId];
+  return snap ? isKocaOrderItemsDone(snap.items) : false;
+}
+// 切到批次裡另一張 (它必須已在 suspended)
+function switchToKocaOrder(orderId) {
+  if (!kocaBatchActive() || !orderId) return;
+  if (orderId === state.kocaOrderId) { showToast("已經在這張了"); return; }
+  const snap = state.kocaBatch.suspended[orderId];
+  if (!snap) return;
+  _suspendActiveKocaOrder();
+  state.items = (snap.items || []).map(it => ({ ...it }));
+  state.completedParcels = (snap.completedParcels || []).map(p => ({ ...p }));
+  state.activeParcel = null;
+  state.scanMode = true;
+  state.manualMode = false; state.replacementInfo = null; state.returnInfo = null; state.inboundInfo = null;
+  state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
+  state.kocaOrderId = orderId;
+  delete state.kocaBatch.suspended[orderId];
+  currentPlatform = "koca";
+  const psel = document.getElementById("platform-select"); if (psel) psel.value = "koca";
+  saveState();
+  render();
+  const meta = (state.kocaBatch.meta && state.kocaBatch.meta[orderId]) || {};
+  showToast("↔ 已切到 " + (meta.recipient || orderId));
+  SOUND.parcelFinish();
+}
+// 「完成總訂單」: 一次結算整批, 每張各自落一筆紀錄 / 各自扣庫存 / 各自回寫。
+async function completeKocaBatch() {
+  if (!kocaBatchActive()) return;
+  // 🛡 防重複記帳: 1.5 秒內第二次一律忽略 (擋觸控雙擊/事件連發)
+  const _nowC = Date.now();
+  if (_nowC - _lastCompleteAt < 1500) { console.warn("[batch] 忽略 1.5 秒內的重複完成"); return; }
+  _lastCompleteAt = _nowC;
+  const ids = state.kocaBatch.orderList.slice();
+  // 完成防呆: 每張都要刷齊或標缺貨 (規範: 商品都要刷到, 除非標缺貨才放行)
+  const notDone = ids.filter(id => !_kocaOrderDoneById(id));
+  if (notDone.length > 0) {
+    const names = notDone.map(kocaOrderLabel).join("、");
+    SOUND.scanError();
+    if (notDone[0] !== state.kocaOrderId) switchToKocaOrder(notDone[0]); // 切到第一張沒完成的方便繼續刷
+    alert(`⚠ 還有 ${notDone.length} 張沒完成(商品沒刷齊、也沒標缺貨):\n\n${names}\n\n請把它們刷完、或把刷不到的品項點「標記缺貨」放行,再按「完成總訂單」。`);
+    return;
+  }
+  const fulfillNote = settings.kocaFulfillEnabled
+    ? "\n\n⚠ 你已開啟「回寫官網」→ 每張都會標記官網已出貨並排電子發票。"
+    : "";
+  if (!confirm(`完成總訂單:一次結算 ${ids.length} 張官網單。\n每張各自存一筆出貨紀錄、各自扣庫存${settings.kocaFulfillEnabled ? "、各自回寫官網" : ""}(不會併成一筆)。${fulfillNote}\n\n確定?`)) return;
+
+  // 全部進 suspended, 統一從 snapshot 逐張結算
+  _suspendActiveKocaOrder();
+  const batch = state.kocaBatch;
+  const savedState = state;
+  const savedDate = state.loadedDate;
+  let settled = 0; const failedIds = [];
+  currentPlatform = "koca";
+  for (const id of ids) {
+    const snap = batch.suspended[id];
+    if (!snap) continue;
+    // 用一個乾淨的暫時 state 跑 appendHistory (它讀 state.items / completedParcels / kocaOrderId)
+    state = {
+      items: (snap.items || []).map(it => ({ ...it })),
+      completedParcels: (snap.completedParcels || []).map(p => ({ ...p })),
+      filter: "all", loadedDate: savedDate || null, scanMode: false, activeParcel: null,
+      appendLevel: 1, continuationOf: null, priorKocaPushed: null,
+      manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null,
+      kocaOrderId: id, roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, myPacked: {},
+    };
+    const entry = appendHistory(); // 存一筆紀錄 (失敗會 rollback + _lastHistorySaveOk=false)
+    if (entry && _lastHistorySaveOk) {
+      applyShipmentSideEffects(entry); // 扣庫存 / 回寫官網 / 推雲端 (只讀 entry, 不讀 state)
+      settled++;
+      delete batch.suspended[id];      // 這張已安全落帳 → 從批次移除, 避免重按時重複落帳
+    } else {
+      failedIds.push(id);              // 存檔失敗 → 留在批次裡, 不清空 (資料安全)
+    }
+  }
+  state = savedState;
+  batch.orderList = ids.filter(id => failedIds.includes(id));
+
+  if (failedIds.length > 0) {
+    // 還有沒結成功的 → 載回第一張繼續, 絕不清空 (資料安全命脈)
+    state.kocaBatch = batch;
+    const rid = failedIds[0];
+    const rsnap = batch.suspended[rid] || { items: [], completedParcels: [] };
+    state.items = (rsnap.items || []).map(it => ({ ...it }));
+    state.completedParcels = (rsnap.completedParcels || []).map(p => ({ ...p }));
+    state.activeParcel = null; state.kocaOrderId = rid; state.scanMode = true;
+    delete batch.suspended[rid];
+    saveState();
+    reportModal.hidden = true;
+    render();
+    SOUND.scanError();
+    alert(`⚠ ${settled} 張已結算,但有 ${failedIds.length} 張存檔失敗(可能儲存空間已滿)。\n\n沒結成功的仍留在批次裡、沒有遺失。\n請到 ⚙ 匯出備份或清掉舊出貨紀錄,再按一次「完成總訂單」。`);
+    return;
+  }
+
+  // 全部結算成功 → 清空批次與清單
+  state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, kocaBatch: null };
+  saveState();
+  try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
+  currentPlatform = "";
+  const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+  const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+  reportModal.hidden = true;
+  render();
+  SOUND.shipDone();
+  showToast(`✓ 總訂單完成:${settled} 張各自已結算並存紀錄`);
+  backupSoon("完成總訂單");
+}
+
+// 「本批訂單」列 (收合式): 顯示本批每張單 + 完成狀態, 點一張切過去, 底部「完成總訂單」
+function renderKocaBatchStrip() {
+  const el = document.getElementById("koca-batch-strip");
+  if (!el) return;
+  if (!kocaBatchActive()) { el.hidden = true; el.innerHTML = ""; return; }
+  const b = state.kocaBatch;
+  const list = b.orderList;
+  const doneCount = list.filter(id => _kocaOrderDoneById(id)).length;
+  const collapsed = !!b.collapsed;
+  el.hidden = false;
+  let html = `<button type="button" class="kbatch-head" data-kbatch-toggle>
+      <span class="kbatch-title">📦 本批 ${list.length} 張官網單</span>
+      <span class="kbatch-sub">✅ ${doneCount}/${list.length} 完成</span>
+      <span class="kbatch-caret">${collapsed ? "▸" : "▾"}</span>
+    </button>`;
+  if (!collapsed) {
+    html += `<div class="kbatch-body">` + list.map(id => {
+      const meta = b.meta[id] || {};
+      const active = id === state.kocaOrderId;
+      const done = _kocaOrderDoneById(id);
+      return `<button type="button" class="kbatch-chip${active ? " active" : ""}${done ? " done" : ""}" data-kbatch-go="${escapeHtml(id)}">
+          <span class="kbatch-chip-icon">${done ? "✅" : "🟠"}</span>
+          <span class="kbatch-chip-name">${escapeHtml(meta.recipient || id)}${meta.cod ? " 💰" : ""}</span>
+          ${active ? '<span class="kbatch-chip-cur">← 包裝中</span>' : ""}
+        </button>`;
+    }).join("") + `</div>
+      <button type="button" class="btn full" id="koca-batch-complete-btn" style="margin-top:8px; background:var(--success);">✓ 完成總訂單 · 結算 ${list.length} 張</button>`;
+  }
+  el.innerHTML = html;
+}
+(function wireKocaBatchStrip(){
+  const el = document.getElementById("koca-batch-strip");
+  if (!el) return;
+  el.addEventListener("click", (e) => {
+    if (e.target.closest("[data-kbatch-toggle]")) {
+      if (state.kocaBatch) { state.kocaBatch.collapsed = !state.kocaBatch.collapsed; saveState(); renderKocaBatchStrip(); }
+      return;
+    }
+    const chip = e.target.closest("[data-kbatch-go]");
+    if (chip) { switchToKocaOrder(chip.getAttribute("data-kbatch-go")); return; }
+    if (e.target.closest("#koca-batch-complete-btn")) { completeKocaBatch(); return; }
+  });
+})();
 
 // 對不到 SKU 的官網品項: 讓使用者當場指定對應商品, 指定後永遠記住 (kocaNameMap)
 function renderKocaUnmappedPanel() {
@@ -7637,7 +7915,8 @@ function renderErpHelper() {
   const e = _erpList[_erpIdx];
   const keyed = _erpKeyedIds.has(e.id);
   const d = new Date(e.completedAt);
-  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  // 日期 + 時間 (時分秒): 兩筆重複的完成單會顯示幾乎相同的秒數, 一眼看得出是同一次的雙胞胎, 避免鍵兩次
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
   const customer = (PLATFORMS[e.platform] && PLATFORMS[e.platform].customer) || PLATFORM_TO_CUSTOMER[e.platform] || e.platform || "";
   const typeLabel = e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "manual" ? "手建" : "一般"));
   const lines = (e.items || []).filter(it => !it.essential && (it.packed || 0) > 0);
@@ -8223,7 +8502,7 @@ function renderHistory() {
           const _isShopee = _car === "shopee" || _car === "shopee_order";
           const _carLabel = _isShopee ? "🛒 蝦皮" : (_car ? (CARRIER_LABELS[_car] || "其他物流") : "其他物流");
           const _carTag = `<span style="background:${_isShopee ? 'var(--warn-bg)' : 'var(--primary-light)'}; color:${_isShopee ? '#92400e' : 'var(--text-soft)'}; font-size: 0.6rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; white-space: nowrap;">${_carLabel}</span>`;
-          detail += `<div class="row-line" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 5px 0 3px; border-top: 1px solid var(--border, #e5e0d8);">
+          detail += `<div class="row-line" data-parcel-id="${escapeHtml(p.id)}" style="display:flex; justify-content:space-between; align-items:center; gap: 6px; padding: 5px 0 3px; border-top: 1px solid var(--border, #e5e0d8);">
             <span style="font-family: ui-monospace, monospace; font-size: 0.75rem; font-weight: 700;">${escapeHtml(p.id)}${_carTag}${byTag}</span>
             <span style="display:flex; gap: 2px;">${makeTrackingButtonsHtml(p.id, { size: "normal" })}</span>
           </div>`;
@@ -8283,7 +8562,7 @@ function renderHistory() {
       detail += `</div>`;
     }
     return `
-      <div class="history-item ${isPartial ? 'partial' : ''}">
+      <div class="history-item ${isPartial ? 'partial' : ''}" data-hist-card="${e.id}">
         <div class="history-item-header">
           <div class="history-item-date">${dateStr}${e.appendLevel && e.appendLevel > 1 ? ` <span style="background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">追加(${e.appendLevel})</span>` : ''}${e.orderType === "replacement" ? ` <span style="background: var(--warn-bg); color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📮 補寄</span>` : ''}${e.orderType === "return" ? ` <span style="background: var(--success-bg); color: #166534; padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📥 退貨</span>` : ''}${e.orderType === "manual" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">📝 手建</span>` : ''}${e.orderType === "inbound" ? ` <span style="background: var(--primary-light); color: var(--primary); padding: 1px 8px; border-radius: 8px; font-size: 0.6875rem; margin-left: 4px;">🏭 進貨</span>` : ''}</div>${e.orderType === "replacement" && e.replacementInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #92400e;">${e.replacementInfo.customerName ? `👤 ${escapeHtml(e.replacementInfo.customerName)} · ` : ""}${e.replacementInfo.customerPhone ? `📱 ${escapeHtml(e.replacementInfo.customerPhone)} · ` : ""}原因: ${escapeHtml(e.replacementInfo.reason || "")}${e.replacementInfo.note ? " · " + escapeHtml(e.replacementInfo.note) : ""}</div>` : ''}${e.orderType === "return" && e.returnInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: #166534;">${e.returnInfo.customerName ? `👤 ${escapeHtml(e.returnInfo.customerName)} · ` : ""}${e.returnInfo.customerPhone ? `📱 ${escapeHtml(e.returnInfo.customerPhone)} · ` : ""}原因: ${escapeHtml(e.returnInfo.reason || "")}${e.returnInfo.originalOrderNo ? " · 原單 " + escapeHtml(e.returnInfo.originalOrderNo) : ""}${e.returnInfo.note ? " · " + escapeHtml(e.returnInfo.note) : ""}</div>` : ''}${e.orderType === "inbound" && e.inboundInfo ? `<div class="hint" style="font-size: 0.6875rem; margin-top: 2px; color: var(--primary);">📋 進貨單 ${escapeHtml(e.inboundInfo.orderNo || "")}${e.inboundInfo.note ? " · " + escapeHtml(e.inboundInfo.note) : ""}</div>` : ''}
           <div class="history-item-platform">${PLATFORM_LABELS[e.platform] || e.platform}</div>
@@ -8351,6 +8630,122 @@ function renderHistory() {
     </details>`;
   }).join("");
 }
+
+// 出貨紀錄搜尋「跳位」: 輸入單號 → 自動展開(日期→類型→卡片)並捲到那筆單號 + 閃一下, 不用自己滑找。
+function jumpToHistoryMatch(q) {
+  q = (q || "").trim().toLowerCase();
+  const all = allHistory();
+  let hitEntry = null, hitParcelId = null;
+  if (q) {
+    // 優先對「寄件單號」(這是使用者最常搜的); 對到就記住是哪張單號, 好捲到那一列
+    for (const e of all) {
+      const p = (e.parcels || []).find(pp => String(pp.id || "").toLowerCase().includes(q));
+      if (p) { hitEntry = e; hitParcelId = p.id; break; }
+    }
+    // 沒對到單號 → 退而求其次, 對第一筆符合搜尋的卡片 (客戶名/商品/SKU 等)
+    if (!hitEntry) hitEntry = all.find(e => matchesHistorySearch(e, q));
+  }
+  if (hitEntry) {
+    // 展開三層: 日期資料夾 → 類型子資料夾 → 卡片明細
+    const dKey = new Date(hitEntry.completedAt).toLocaleDateString("zh-TW");
+    const t = (hitEntry.orderType === "replacement" || hitEntry.orderType === "return" || hitEntry.orderType === "inbound") ? hitEntry.orderType : "normal";
+    if (_histOpenDays === null) _histOpenDays = new Set();
+    _histOpenDays.add(dKey);
+    _histOpenTypes.add(dKey + "::" + t);
+    hitEntry._expanded = true; // allHistory 回的是同一個物件參照, 設了 renderHistory 就會展開
+  }
+  renderHistory();
+  if (!hitEntry) return;
+  // 重繪後捲到目標 + 閃一下 (單號列優先, 找不到就捲到整張卡片)
+  setTimeout(() => {
+    let el = null;
+    if (hitParcelId) {
+      const rows = document.querySelectorAll('#history-list [data-parcel-id]');
+      for (const r of rows) { if (String(r.getAttribute("data-parcel-id")).toLowerCase().includes(q)) { el = r; break; } }
+    }
+    if (!el) el = document.querySelector('#history-list [data-hist-card="' + hitEntry.id + '"]');
+    if (el) {
+      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { try { el.scrollIntoView(); } catch (_) {} }
+      el.classList.add("hist-flash");
+      setTimeout(() => el.classList.remove("hist-flash"), 1900);
+    }
+  }, 80);
+}
+
+// ===== 預刷單確認: 出貨前先掃一遍, 比對出貨紀錄(本機+雲端)偵測「已出過」的單 (唯讀, 不動紀錄) =====
+let _prescanList = []; // { code, shipped:{completedAt,completedBy,type,matchType}|null, dupInList, at }
+// 從出貨紀錄找這個「寄件單號」或「官網訂單編號」有沒有出現過; 回最近一筆, 沒有回 null
+function findShippedByCode(code) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) return null;
+  const all = allHistory(); // 本機+雲端, 已新→舊排序
+  for (const e of all) {
+    if (e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
+    const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c);
+    if (p) return { entry: e, matchType: "寄件單號" };
+  }
+  return null;
+}
+function _histTypeLabel(e) {
+  return e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
+}
+function prescanCheck(raw) {
+  const code = extractParcelId(String(raw || "").trim()) || String(raw || "").trim();
+  if (!code) return;
+  const dupInList = _prescanList.some(x => x.code.toUpperCase() === code.toUpperCase());
+  const found = findShippedByCode(code);
+  _prescanList.unshift({
+    code,
+    shipped: found ? { completedAt: found.entry.completedAt, completedBy: found.entry.completedBy || "(未命名)", type: _histTypeLabel(found.entry), matchType: found.matchType } : null,
+    dupInList,
+    at: new Date().toISOString(),
+  });
+  if (found || dupInList) { SOUND.scanError(); } else { SOUND.scanSku(); }
+  renderPrescan();
+}
+function renderPrescan() {
+  const listEl = document.getElementById("prescan-list");
+  const sumEl = document.getElementById("prescan-summary");
+  if (!listEl) return;
+  const shippedCount = _prescanList.filter(x => x.shipped).length;
+  if (sumEl) sumEl.innerHTML = _prescanList.length
+    ? `共刷 ${_prescanList.length} 筆 · <span style="color:${shippedCount ? 'var(--danger)' : 'var(--success)'};">⚠ ${shippedCount} 筆已出過</span>`
+    : `<span style="color:var(--text-soft); font-weight:500;">還沒刷,先刷一筆試試。</span>`;
+  const _pad = n => String(n).padStart(2, "0");
+  listEl.innerHTML = _prescanList.map(x => {
+    if (x.shipped) {
+      const d = new Date(x.shipped.completedAt);
+      const when = `${d.getFullYear()}/${_pad(d.getMonth() + 1)}/${_pad(d.getDate())} ${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
+      return `<div style="border:1px solid var(--danger); background:var(--danger-bg); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:var(--danger);">⛔ ${escapeHtml(x.code)} 已出過!</div>
+        <div style="font-size:0.72rem; color:var(--danger); margin-top:2px;">${x.shipped.type} · ${when} · ${escapeHtml(x.shipped.completedBy)} <span style="color:var(--text-soft);">(比對到${x.shipped.matchType})</span></div>
+      </div>`;
+    }
+    if (x.dupInList) {
+      return `<div style="border:1px solid var(--warn,#b26b00); background:var(--warn-bg); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:#92400e;">⚠ ${escapeHtml(x.code)} 這次預刷已經刷過一次</div>
+      </div>`;
+    }
+    return `<div style="border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+      <div style="font-family:ui-monospace,monospace; font-weight:700; font-size:0.8rem; color:var(--success);">✅ ${escapeHtml(x.code)} 沒出過</div>
+    </div>`;
+  }).join("");
+}
+document.getElementById("prescan-open-btn").addEventListener("click", () => {
+  document.getElementById("prescan-modal").hidden = false;
+  fetchCloudHistory(true); // 拉最新雲端紀錄, 別台出過的也偵測得到
+  renderPrescan();
+  setTimeout(() => { const i = document.getElementById("prescan-input"); if (i) i.focus(); }, 100);
+});
+document.getElementById("prescan-close").addEventListener("click", () => { document.getElementById("prescan-modal").hidden = true; });
+document.getElementById("prescan-clear").addEventListener("click", () => { _prescanList = []; renderPrescan(); const i = document.getElementById("prescan-input"); if (i) i.focus(); });
+document.getElementById("prescan-check-btn").addEventListener("click", () => {
+  const i = document.getElementById("prescan-input");
+  if (i && i.value.trim()) { prescanCheck(i.value); i.value = ""; i.focus(); }
+});
+document.getElementById("prescan-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); const v = e.target.value.trim(); if (v) { prescanCheck(v); e.target.value = ""; } }
+});
 
 // ---- 裝箱掃描模式 ----
 function toggleScanMode() {
@@ -8653,9 +9048,15 @@ function processScan(code) {
     library.some(p => (p.barcode || "").toUpperCase() === _rawUpper || (p.sku || "").toUpperCase() === _rawUpper) ||
     (state.items || []).some(it => (it.sku || "").toUpperCase() === _rawUpper) // 今日清單裡的 SKU 也算商品
   );
-  // ★ 官網訂單自動偵測: 「還沒有清單」時掃到 KOCA 開頭的單號 → 直接去官網拉單建清單。
-  //   已有清單時, KOCA 碼維持原本語意 (官方通路的包裹單號), 不影響包貨流程。
-  if (!_isKnownProduct && /^KOCA[A-Z0-9]{8,}$/i.test(_rawForSku) && (!state.items || state.items.length === 0)) {
+  // ★ 官方批次多單: 掃到「已經在本批裡」的官網單號 → 直接切到那張 (不重拉)。
+  if (!_isKnownProduct && /^KOCA[A-Z0-9]{8,}$/i.test(_rawForSku) && kocaBatchActive()) {
+    const existing = findKocaBatchOrderId(_rawForSku);
+    if (existing) { switchToKocaOrder(existing); return; }
+  }
+  // ★ 官網訂單自動偵測: 「還沒有清單」或「官方批次進行中」時掃到 KOCA 開頭的單號 → 去官網拉單。
+  //   官方一律進批次: 沒清單時開新批次; 批次中則加一張並切過去。非官方(有蝦皮等清單)時 KOCA 碼維持原意。
+  if (!_isKnownProduct && /^KOCA[A-Z0-9]{8,}$/i.test(_rawForSku) &&
+      ((!state.items || state.items.length === 0) || (kocaBatchActive() && currentPlatform === "koca"))) {
     fetchKocaOrder(_rawForSku);
     return;
   }
@@ -9159,7 +9560,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); renderKocaBatchStrip(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderEssentialList(); renderHistory(); }
 }
@@ -9695,7 +10096,7 @@ _historySearchInput.addEventListener("input", (e) => {
   clearTimeout(_historySearchDebounce);
   _historySearchDebounce = setTimeout(() => {
     historySearchQuery = v;
-    renderHistory();
+    if (v && v.trim()) jumpToHistoryMatch(v); else renderHistory(); // 有輸入 → 展開並捲到那筆單號
   }, 150);
 });
 _historySearchClear.addEventListener("click", () => {
@@ -12161,11 +12562,16 @@ document.getElementById("close-report").addEventListener("click", () => reportMo
 async function closeRoomOnServer(code) {
   if (!settings.syncWorkerUrl || !code) return;
   try {
-    await fetch(settings.syncWorkerUrl + "/api/room/" + code + "/close", { method: "POST" });
+    await fetch(settings.syncWorkerUrl + "/api/room/" + code + "/close", { method: "POST", headers: roomHeaders() });
   } catch(e) { console.warn("[room] close failed", e); }
 }
+let _lastCompleteAt = 0; // 防連發: 觸控螢幕一次 tap 可能送出兩個 click → 兩筆重複紀錄
 function actuallyCompleteShipping(opts) {
   opts = opts || {};
+  // 🛡 防重複記帳: 1.5 秒內第二次完成一律忽略 (擋觸控雙擊/事件連發; 換下一位客人間隔遠大於此, 不受影響)
+  const _nowC = Date.now();
+  if (_nowC - _lastCompleteAt < 1500) { console.warn("[complete] 忽略 1.5 秒內的重複完成"); return; }
+  _lastCompleteAt = _nowC;
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   // 🔒 資料安全命脈 (規範一-1): 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失。此判斷不可移除。
@@ -12201,6 +12607,15 @@ function actuallyCompleteShipping(opts) {
   render();
   SOUND.shipDone();
   showToast("✓ 本次出貨完成，已存入紀錄");
+  // 結算副作用 (扣庫存 / 退貨入倉 / webhook / 回寫官網 / 推雲端): 抽成共用函式,
+  //   讓「完成總訂單」批次結算能逐張呼叫同一套邏輯 (見 applyShipmentSideEffects)。
+  applyShipmentSideEffects(entry);
+  // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
+  backupSoon("出貨完成");
+}
+// 結算一筆出貨的副作用: 自動扣庫存 / 退貨入倉 / 進貨入倉 / webhook / KOCA 回寫 / 推雲端。
+// ★ 只讀傳入的 entry, 不讀全域 state → 單張「出貨完成」與「完成總訂單」批次逐張都用這一套, 保證一致。
+function applyShipmentSideEffects(entry) {
   // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
   if (entry && settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement" && entry.orderType !== "inbound") {
     let deducted = 0;
@@ -12263,10 +12678,10 @@ function actuallyCompleteShipping(opts) {
   pushKocaFulfill(entry);
   // 雲端共享出貨紀錄: 全類型都推一筆上雲, 讓所有人在出貨紀錄看到同一份
   pushHistoryToCloud(entry);
-  // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
-  backupSoon("出貨完成");
 }
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
+  // 官方批次多單: 這顆改走「完成總訂單」(逐張各自結算), 不單獨結目前這張, 避免拆散批次
+  if (kocaBatchActive()) { reportModal.hidden = true; completeKocaBatch(); return; }
   // 防重複完成: 共同包貨時只讓「開房者」收尾, 避免兩台各存一筆紀錄 + 各扣一次庫存
   if (state.roomMode && !state.isRoomHost) {
     alert("👥 共同包貨中,請由「開房的那台」按完成出貨,避免重複扣帳。\n\n如果真的要由這台收尾,請先到房間狀態「離開房間」再完成。");
