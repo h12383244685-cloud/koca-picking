@@ -3194,7 +3194,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v1.5 · 2026-07-16";
+const APP_VERSION = "v1.6 · 2026-07-16";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6170,10 +6170,12 @@ function kocaOrderLabel(id) {
 // 目前這張官網單快照進 suspended (含收尾 activeParcel)。不清 state, 由呼叫端決定接下來載入誰。
 function _suspendActiveKocaOrder() {
   if (!state.kocaOrderId || !state.kocaBatch) return;
-  if (state.activeParcel) finalizeActiveParcel(true);
+  // ★ 切換時「不」自動結案黃框 — 連未結的當前訂單(activeParcel)一起快照保留。
+  //   完成必須由使用者主動(回刷單號 or 手點「完成此筆」), 切走再切回黃框還在, 不會被系統偷偷結掉。
   state.kocaBatch.suspended[state.kocaOrderId] = {
     items: (state.items || []).map(it => ({ ...it })),
     completedParcels: (state.completedParcels || []).map(p => ({ ...p })),
+    activeParcel: state.activeParcel ? { ...state.activeParcel, items: { ...(state.activeParcel.items || {}) } } : null,
   };
 }
 // 找出批次裡符合掃到號碼的正式 orderId (不分大小寫); 沒有回 null
@@ -6202,7 +6204,7 @@ function switchToKocaOrder(orderId) {
   _suspendActiveKocaOrder();
   state.items = (snap.items || []).map(it => ({ ...it }));
   state.completedParcels = (snap.completedParcels || []).map(p => ({ ...p }));
-  state.activeParcel = null;
+  state.activeParcel = snap.activeParcel ? { ...snap.activeParcel, items: { ...(snap.activeParcel.items || {}) } } : null; // 還原未結的黃框
   state.scanMode = true;
   state.manualMode = false; state.replacementInfo = null; state.returnInfo = null; state.inboundInfo = null;
   state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null;
@@ -6265,7 +6267,8 @@ async function completeKocaBatch() {
     state = {
       items: (snap.items || []).map(it => ({ ...it })),
       completedParcels: (snap.completedParcels || []).map(p => ({ ...p })),
-      filter: "all", loadedDate: savedDate || null, scanMode: false, activeParcel: null,
+      filter: "all", loadedDate: savedDate || null, scanMode: false,
+      activeParcel: snap.activeParcel ? { ...snap.activeParcel, items: { ...(snap.activeParcel.items || {}) } } : null, // 未結的黃框 → appendHistory 會收尾進紀錄, 商品不遺失
       appendLevel: 1, continuationOf: null, priorKocaPushed: null,
       manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null,
       kocaOrderId: id, roomMode: false, roomCode: null, roomMembers: {}, roomActiveParcels: {}, myPacked: {},
@@ -6286,10 +6289,10 @@ async function completeKocaBatch() {
     // 還有沒結成功的 → 載回第一張繼續, 絕不清空 (資料安全命脈)
     state.kocaBatch = batch;
     const rid = failedIds[0];
-    const rsnap = batch.suspended[rid] || { items: [], completedParcels: [] };
+    const rsnap = batch.suspended[rid] || { items: [], completedParcels: [], activeParcel: null };
     state.items = (rsnap.items || []).map(it => ({ ...it }));
     state.completedParcels = (rsnap.completedParcels || []).map(p => ({ ...p }));
-    state.activeParcel = null; state.kocaOrderId = rid; state.scanMode = true;
+    state.activeParcel = rsnap.activeParcel ? { ...rsnap.activeParcel, items: { ...(rsnap.activeParcel.items || {}) } } : null; state.kocaOrderId = rid; state.scanMode = true;
     delete batch.suspended[rid];
     saveState();
     reportModal.hidden = true;
