@@ -1780,6 +1780,7 @@ footer.summary-bar {
         <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
         <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
         <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
+        <button class="btn sm" id="open-biz-report-btn" style="flex:1; min-width: 70px; background: var(--primary);">📋 營運報表</button>
         <button class="btn outline sm" id="open-return-analysis-btn" style="flex:1; min-width: 70px;">🔁 退貨</button>
       </div>
     </details>
@@ -3145,6 +3146,28 @@ footer.summary-bar {
 </div>
 
 <!-- Final report modal -->
+<!-- 📋 營運報表 modal (報備 / 叫貨估算用) -->
+<div class="modal-backdrop" id="biz-report-modal" hidden>
+  <div class="modal" style="max-width: 680px;">
+    <h2>📋 營運報表</h2>
+    <p class="hint" style="font-size:0.72rem; margin-bottom:8px;">彙總<strong>本機+雲端(所有人)</strong>的出貨紀錄。選好起訖日期 → 一頁看完 → 匯出 CSV 交報備 / 估算叫貨。商品明細附「日均、30天預估」,叫貨照著抓。</p>
+    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+      <input type="date" id="biz-start" style="flex:1; min-width:130px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);">
+      <span style="color:var(--text-soft);">〜</span>
+      <input type="date" id="biz-end" style="flex:1; min-width:130px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);">
+    </div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="btn outline sm" data-biz-quick="thismonth">本月</button>
+      <button class="btn outline sm" data-biz-quick="lastmonth">上月</button>
+      <button class="btn outline sm" data-biz-quick="7">近7天</button>
+      <button class="btn outline sm" data-biz-quick="30">近30天</button>
+      <button class="btn sm" id="biz-export-csv" style="margin-left:auto; background:var(--success);">📤 匯出 CSV</button>
+    </div>
+    <div id="biz-report-body" style="min-height:100px; max-height:62vh; overflow-y:auto;"></div>
+    <button class="btn full outline" id="biz-close" style="margin-top:10px;">關閉</button>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="erp-helper-modal" hidden>
   <div class="modal" style="max-width: 540px;">
     <h2>⌨ ERP 鍵單輔助</h2>
@@ -3293,7 +3316,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v3.1 · 2026-07-22";
+const APP_VERSION = "v3.2 · 2026-07-23";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -7656,7 +7679,7 @@ function computePerformanceStats(range) {
     until = new Date(now.getFullYear(), now.getMonth(), 1);
   }
   const byPacker = {};
-  for (const entry of history) {
+  for (const entry of allHistory()) {   // 本機+雲端合併: 不然只看得到自己包的, 同事的都在雲端
     const ts = new Date(entry.completedAt);
     if (ts < cutoff) continue;
     if (range === "lastmonth" && ts >= until) continue;
@@ -7726,7 +7749,8 @@ function normalizePhone(p) {
 
 function aggregateCustomers() {
   const map = {};
-  for (const entry of history) {
+  for (const entry of allHistory()) {   // 本機+雲端合併: 同事那台記的補寄/退貨也要算進客戶風險
+
     let info = null, type = null;
     if (entry.replacementInfo) { info = entry.replacementInfo; type = "replacement"; }
     else if (entry.returnInfo) { info = entry.returnInfo; type = "return"; }
@@ -8043,7 +8067,7 @@ function computeTopSKUs(range) {
   }
   const totals = {};
   let orderCount = 0;
-  for (const entry of history) {
+  for (const entry of allHistory()) {   // 本機+雲端合併: 熱銷要算全公司出的, 不是只有這台
     if (entry.orderType === "return") continue; // 退貨不算銷售
     const ts = new Date(entry.completedAt);
     if (ts < cutoff) continue;
@@ -8331,6 +8355,8 @@ document.getElementById("open-perf-stats-btn").addEventListener("click", () => {
   document.getElementById("perf-stats-modal").hidden = false;
   renderPerfStats(_perfRange);
   document.querySelectorAll("#perf-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.perfRange === _perfRange));
+  // 拉最新雲端紀錄 → 到手後重畫 (否則只看得到這台包的)
+  fetchCloudHistory(true).then(() => { if (!document.getElementById("perf-stats-modal").hidden) renderPerfStats(_perfRange); }).catch(() => {});
 });
 document.getElementById("perf-stats-close").addEventListener("click", () => {
   document.getElementById("perf-stats-modal").hidden = true;
@@ -8350,6 +8376,7 @@ document.getElementById("open-customers-btn").addEventListener("click", () => {
   document.getElementById("customers-modal").hidden = false;
   document.getElementById("customers-search").value = "";
   renderCustomers("");
+  fetchCloudHistory(true).then(() => { if (!document.getElementById("customers-modal").hidden) renderCustomers(document.getElementById("customers-search").value); }).catch(() => {});
 });
 document.getElementById("customers-close").addEventListener("click", () => {
   document.getElementById("customers-modal").hidden = true;
@@ -8367,6 +8394,7 @@ document.getElementById("open-top-sku-btn").addEventListener("click", () => {
   document.getElementById("top-sku-modal").hidden = false;
   renderTopSKUs(_tskuRange);
   document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.tskuRange === _tskuRange));
+  fetchCloudHistory(true).then(() => { if (!document.getElementById("top-sku-modal").hidden) renderTopSKUs(_tskuRange); }).catch(() => {});
 });
 document.getElementById("top-sku-close").addEventListener("click", () => {
   document.getElementById("top-sku-modal").hidden = true;
@@ -8381,6 +8409,202 @@ document.getElementById("top-sku-range-bar").addEventListener("click", (e) => {
   document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
   renderTopSKUs(_tskuRange);
 });
+
+// ===== 📋 營運報表 (報備 / 叫貨估算) =====
+// 吃 allHistory() = 本機 + 雲端所有人。出庫件數「含補寄」(補寄也實際消耗庫存, 叫貨要算進去); 退貨另列(回庫)。
+function computeBizReport(startStr, endStr) {
+  const start = new Date(startStr + "T00:00:00");
+  const end = new Date(endStr + "T23:59:59.999");
+  const days = Math.max(1, Math.round((end - start) / 86400000));
+  const inRange = allHistory().filter(e => {
+    if (!e || e.orderType === "inbound") return false;
+    const t = new Date(e.completedAt);
+    return t >= start && t <= end;
+  });
+  const out = inRange.filter(e => e.orderType !== "return");
+  const rets = inRange.filter(e => e.orderType === "return");
+  const reps = inRange.filter(e => e.orderType === "replacement");
+
+  const byPlat = {}; let totalItems = 0, totalParcels = 0;
+  for (const e of out) {
+    const k = e.platform || "unknown";
+    if (!byPlat[k]) byPlat[k] = { entries: 0, parcels: 0, items: 0 };
+    const q = (e.items || []).filter(it => !it.essential).reduce((s, it) => s + (it.packed || 0), 0);
+    byPlat[k].entries++; byPlat[k].parcels += (e.parcels || []).length; byPlat[k].items += q;
+    totalItems += q; totalParcels += (e.parcels || []).length;
+  }
+  const bySku = {}, byPack = {};
+  for (const e of out) for (const it of (e.items || [])) {
+    if (!((it.packed || 0) > 0)) continue;
+    const tgt = it.essential ? byPack : bySku;
+    if (!tgt[it.sku]) tgt[it.sku] = { sku: it.sku, name: it.name || "", qty: 0 };
+    tgt[it.sku].qty += it.packed;
+  }
+  const _qtyOf = e => (e.items || []).filter(it => !it.essential).reduce((s, it) => s + (it.packed || 0), 0);
+  const _reasons = (arr, key) => { const m = {}; arr.forEach(e => { const r = (e[key] && e[key].reason) || "(未填)"; m[r] = (m[r] || 0) + 1; }); return m; };
+  const missBySku = {};
+  for (const e of out) for (const it of (e.items || [])) {
+    if (!it.missing) continue;
+    if (!missBySku[it.sku]) missBySku[it.sku] = { sku: it.sku, name: it.name || "", times: 0, shortQty: 0 };
+    missBySku[it.sku].times++;
+    missBySku[it.sku].shortQty += Math.max(0, (it.expected || 0) - (it.packed || 0));
+  }
+  return {
+    startStr, endStr, days,
+    orders: out.length, parcels: totalParcels, items: totalItems,
+    byPlat,
+    skus: Object.values(bySku).sort((a, b) => b.qty - a.qty),
+    packs: Object.values(byPack).sort((a, b) => b.qty - a.qty),
+    reps: { count: reps.length, qty: reps.reduce((s, e) => s + _qtyOf(e), 0), reasons: _reasons(reps, "replacementInfo") },
+    rets: { count: rets.length, qty: rets.reduce((s, e) => s + _qtyOf(e), 0), reasons: _reasons(rets, "returnInfo") },
+    missing: Object.values(missBySku).sort((a, b) => b.times - a.times),
+  };
+}
+
+let _bizData = null;
+function renderBizReport() {
+  const body = document.getElementById("biz-report-body");
+  const s = document.getElementById("biz-start").value, e = document.getElementById("biz-end").value;
+  if (!body) return;
+  if (!s || !e) { body.innerHTML = '<div class="hint" style="padding:14px;">請先選起訖日期</div>'; return; }
+  if (s > e) { body.innerHTML = '<div class="hint" style="padding:14px;">⚠ 起日不能晚於訖日</div>'; return; }
+  const d = computeBizReport(s, e);
+  _bizData = d;
+  const chip = (txt, warn) => `<span style="background:${warn ? 'var(--warn-bg)' : 'var(--primary-light)'}; color:${warn ? '#92400e' : 'var(--primary)'}; font-weight:800; padding:4px 12px; border-radius:999px; font-size:0.8rem;">${txt}</span>`;
+  const sec = t => `<div style="font-weight:800; font-size:0.85rem; margin:14px 0 6px; color:var(--primary);">${t}</div>`;
+  const TH = (t, right) => `<th style="text-align:${right ? 'right' : 'left'}; padding:5px 8px; font-size:0.68rem; color:var(--text-soft); border-bottom:1px solid var(--border); white-space:nowrap;">${t}</th>`;
+  const TD = (t, right, strong) => `<td style="text-align:${right ? 'right' : 'left'}; padding:5px 8px; font-size:0.78rem; border-bottom:1px solid var(--border); ${strong ? 'font-weight:700;' : ''}">${t}</td>`;
+
+  let html = `<div style="display:flex; flex-wrap:wrap; gap:6px;">
+    ${chip(`出貨 ${d.orders} 筆`)} ${chip(`包裹 ${d.parcels} 件`)} ${chip(`商品 ${d.items} 件`)}
+    ${chip(`共 ${d.days} 天 · 日均 ${(d.items / d.days).toFixed(1)} 件`, true)}
+  </div>`;
+
+  // 通路占比
+  html += sec("🛒 通路占比");
+  const platKeys = Object.keys(d.byPlat).sort((a, b) => d.byPlat[b].items - d.byPlat[a].items);
+  html += `<table style="width:100%; border-collapse:collapse;"><tr>${TH("通路")}${TH("單數", 1)}${TH("包裹", 1)}${TH("件數", 1)}${TH("件數占比", 1)}</tr>`;
+  platKeys.forEach(k => {
+    const p = d.byPlat[k];
+    const pct = d.items > 0 ? (p.items / d.items * 100).toFixed(1) + "%" : "—";
+    html += `<tr>${TD(escapeHtml((PLATFORMS[k] && PLATFORMS[k].label) || k))}${TD(p.entries, 1)}${TD(p.parcels, 1)}${TD(p.items, 1, 1)}${TD(pct, 1)}</tr>`;
+  });
+  html += `</table>`;
+
+  // 商品出貨明細 (全部 SKU) + 叫貨估算
+  html += sec(`📦 商品出貨明細(全部 ${d.skus.length} 個 SKU · 含補寄 · 附叫貨估算)`);
+  if (d.skus.length === 0) html += `<div class="hint">此區間沒有出貨商品</div>`;
+  else {
+    html += `<table style="width:100%; border-collapse:collapse;"><tr>${TH("SKU / 品名")}${TH("件數", 1)}${TH("日均", 1)}${TH("30天預估", 1)}</tr>`;
+    d.skus.forEach(it => {
+      const daily = it.qty / d.days;
+      html += `<tr>${TD(`<span style="font-family:ui-monospace,monospace; font-weight:700;">${escapeHtml(it.sku)}</span><br><span style="color:var(--text-soft); font-size:0.7rem;">${escapeHtml(it.name)}</span>`)}${TD(it.qty, 1, 1)}${TD(daily.toFixed(2), 1)}${TD(Math.ceil(daily * 30), 1, 1)}</tr>`;
+    });
+    html += `</table>`;
+  }
+
+  // 包材使用 (叫包材也要估)
+  if (d.packs.length > 0) {
+    html += sec("🧻 包材使用");
+    html += `<table style="width:100%; border-collapse:collapse;"><tr>${TH("SKU / 品名")}${TH("件數", 1)}${TH("日均", 1)}${TH("30天預估", 1)}</tr>`;
+    d.packs.forEach(it => {
+      const daily = it.qty / d.days;
+      html += `<tr>${TD(`<span style="font-family:ui-monospace,monospace; font-weight:700;">${escapeHtml(it.sku)}</span><br><span style="color:var(--text-soft); font-size:0.7rem;">${escapeHtml(it.name)}</span>`)}${TD(it.qty, 1, 1)}${TD(daily.toFixed(2), 1)}${TD(Math.ceil(daily * 30), 1, 1)}</tr>`;
+    });
+    html += `</table>`;
+  }
+
+  // 退貨 / 補寄
+  html += sec("↩️ 退貨 / 📮 補寄");
+  const rate = d.items > 0 ? (d.rets.qty / d.items * 100).toFixed(1) + "%" : "—";
+  const reasonsHtml = (m) => Object.entries(m).sort((a, b) => b[1] - a[1]).map(([r, n]) => `${escapeHtml(r)} ×${n}`).join("、") || "—";
+  html += `<table style="width:100%; border-collapse:collapse;">
+    <tr>${TH("類型")}${TH("筆數", 1)}${TH("件數", 1)}${TH("原因分布")}</tr>
+    <tr>${TD("退貨(佔出貨 " + rate + ")")}${TD(d.rets.count, 1)}${TD(d.rets.qty, 1, 1)}${TD(reasonsHtml(d.rets.reasons))}</tr>
+    <tr>${TD("補寄")}${TD(d.reps.count, 1)}${TD(d.reps.qty, 1, 1)}${TD(reasonsHtml(d.reps.reasons))}</tr>
+  </table>`;
+
+  // 缺貨紀錄
+  html += sec("⚠ 缺貨紀錄");
+  if (d.missing.length === 0) html += `<div class="hint">此區間沒有缺貨標記 🎉</div>`;
+  else {
+    html += `<table style="width:100%; border-collapse:collapse;"><tr>${TH("SKU / 品名")}${TH("發生次數", 1)}${TH("估計缺件", 1)}</tr>`;
+    d.missing.forEach(it => {
+      html += `<tr>${TD(`<span style="font-family:ui-monospace,monospace; font-weight:700; color:var(--danger);">${escapeHtml(it.sku)}</span><br><span style="color:var(--text-soft); font-size:0.7rem;">${escapeHtml(it.name)}</span>`)}${TD(it.times, 1, 1)}${TD(it.shortQty, 1)}</tr>`;
+    });
+    html += `</table>`;
+  }
+  body.innerHTML = html;
+}
+
+function exportBizCsv() {
+  if (!_bizData) { showToast("請先選好日期"); return; }
+  const d = _bizData;
+  const rows = [];
+  rows.push(["KOCA 營運報表", `${d.startStr} ~ ${d.endStr}`, `共 ${d.days} 天`]);
+  rows.push([]);
+  rows.push(["【出貨總覽】", "出貨筆數", "包裹數", "商品件數", "日均件數"]);
+  rows.push(["", d.orders, d.parcels, d.items, (d.items / d.days).toFixed(1)]);
+  rows.push([]);
+  rows.push(["【通路占比】", "單數", "包裹", "件數", "件數占比%"]);
+  Object.keys(d.byPlat).sort((a, b) => d.byPlat[b].items - d.byPlat[a].items).forEach(k => {
+    const p = d.byPlat[k];
+    rows.push([(PLATFORMS[k] && PLATFORMS[k].label) || k, p.entries, p.parcels, p.items, d.items > 0 ? (p.items / d.items * 100).toFixed(1) : ""]);
+  });
+  rows.push([]);
+  rows.push(["【商品出貨明細(含補寄)】SKU", "品名", "件數", "日均", "30天預估"]);
+  d.skus.forEach(it => rows.push([it.sku, it.name, it.qty, (it.qty / d.days).toFixed(2), Math.ceil(it.qty / d.days * 30)]));
+  rows.push([]);
+  rows.push(["【包材使用】SKU", "品名", "件數", "日均", "30天預估"]);
+  d.packs.forEach(it => rows.push([it.sku, it.name, it.qty, (it.qty / d.days).toFixed(2), Math.ceil(it.qty / d.days * 30)]));
+  rows.push([]);
+  const reasonsTxt = m => Object.entries(m).sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r}×${n}`).join("; ");
+  rows.push(["【退貨/補寄】類型", "筆數", "件數", "佔出貨%", "原因分布"]);
+  rows.push(["退貨", d.rets.count, d.rets.qty, d.items > 0 ? (d.rets.qty / d.items * 100).toFixed(1) : "", reasonsTxt(d.rets.reasons)]);
+  rows.push(["補寄", d.reps.count, d.reps.qty, "", reasonsTxt(d.reps.reasons)]);
+  rows.push([]);
+  rows.push(["【缺貨紀錄】SKU", "品名", "發生次數", "估計缺件"]);
+  d.missing.forEach(it => rows.push([it.sku, it.name, it.times, it.shortQty]));
+  const csv = "﻿" + rows.map(r => r.map(c => {
+    let sVal = String(c == null ? "" : c);
+    if (/^[=+\-@]/.test(sVal)) sVal = "'" + sVal;
+    return /[",\r\n]/.test(sVal) ? '"' + sVal.replace(/"/g, '""') + '"' : sVal;
+  }).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = u; a.download = `營運報表_${d.startStr}_${d.endStr}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(u);
+  showToast("✓ 已匯出營運報表 CSV");
+}
+
+function _bizSetRange(mode) {
+  const now = new Date();
+  const p = n => String(n).padStart(2, "0");
+  const fmtD = dd => `${dd.getFullYear()}-${p(dd.getMonth() + 1)}-${p(dd.getDate())}`;
+  let s, e;
+  if (mode === "thismonth") { s = new Date(now.getFullYear(), now.getMonth(), 1); e = now; }
+  else if (mode === "lastmonth") { s = new Date(now.getFullYear(), now.getMonth() - 1, 1); e = new Date(now.getFullYear(), now.getMonth(), 0); }
+  else { const n = Number(mode) || 7; s = new Date(now.getTime() - (n - 1) * 86400000); e = now; }
+  document.getElementById("biz-start").value = fmtD(s);
+  document.getElementById("biz-end").value = fmtD(e);
+}
+document.getElementById("open-biz-report-btn").addEventListener("click", () => {
+  _bizSetRange("thismonth");
+  document.getElementById("biz-report-modal").hidden = false;
+  renderBizReport();
+  fetchCloudHistory(true).then(() => { if (!document.getElementById("biz-report-modal").hidden) renderBizReport(); }).catch(() => {});
+});
+document.getElementById("biz-close").addEventListener("click", () => document.getElementById("biz-report-modal").hidden = true);
+document.getElementById("biz-report-modal").addEventListener("click", (e) => {
+  if (e.target.id === "biz-report-modal") { document.getElementById("biz-report-modal").hidden = true; return; }
+  const qk = e.target.closest("button[data-biz-quick]");
+  if (qk) { _bizSetRange(qk.dataset.bizQuick); renderBizReport(); }
+});
+document.getElementById("biz-start").addEventListener("change", renderBizReport);
+document.getElementById("biz-end").addEventListener("change", renderBizReport);
+document.getElementById("biz-export-csv").addEventListener("click", exportBizCsv);
 
 // ===== 補寄/退貨 modal 中即時客戶警告 =====
 function showCustomerRiskWarning(phone, hintElId) {
