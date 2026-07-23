@@ -3043,6 +3043,7 @@ footer.summary-bar {
       <option value="7天鑑賞期">7 天鑑賞期</option>
       <option value="其他">其他</option>
     </select>
+    <div id="ret-bin-hint" style="margin-top:6px; font-size:0.75rem; font-weight:700; padding:6px 10px; border-radius:8px;"></div>
 
     <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin: 12px 0 4px;">備註 (選填)</label>
     <textarea id="ret-note" placeholder="例如: 商品狀況、退款金額、客服對話紀錄"
@@ -3316,7 +3317,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v3.2 · 2026-07-23";
+const APP_VERSION = "v3.5 · 2026-07-23";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6282,9 +6283,13 @@ function _expandKocaBundles(items) {
 }
 // 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
 function _prefillKocaActiveParcel(o) {
-  const parcelId = (o && o.shipping && o.shipping.trackingNo) || (o && o.orderId) || "";
+  // 當前訂單(黃框)一律顯示 KOCA 訂單編號 (Kyle: 看黑貓宅配號會認不出是哪張單)。
+  // 物流單號(黑貓/超商)另存在 parcel.trackingNo → 回刷標籤條碼、過刷防呆兩邊都對得到。
+  const parcelId = (o && o.orderId) || (o && o.shipping && o.shipping.trackingNo) || "";
   if (!parcelId) return;
   startParcel(String(parcelId));
+  const _tn = (o && o.shipping && o.shipping.trackingNo) || "";
+  if (state.activeParcel && _tn && String(_tn) !== String(parcelId)) state.activeParcel.trackingNo = String(_tn);
   for (const it of (state.items || [])) {
     if (it.essential) continue;   // 包材不預填 (留給同仁刷)
     if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
@@ -6300,6 +6305,7 @@ function _kocaOrderMeta(o, gate) {
     recipient: (o && o.recipient && o.recipient.name) || "",
     statusLabel: (o && o.statusLabel) || "",
     cod: !!(gate && gate.cod),
+    trackingNo: (o && o.shipping && o.shipping.trackingNo) || "",  // 宅配/超商的物流單號: 回刷時刷標籤條碼也要對得到
   };
 }
 function _startKocaBatch(o, gate) {
@@ -6326,11 +6332,17 @@ function _suspendActiveKocaOrder() {
   };
 }
 // 找出批次裡符合掃到號碼的正式 orderId (不分大小寫); 沒有回 null
+// 也認「物流單號」(黑貓宅配 / 超商查詢碼, 存在 meta.trackingNo): 同仁回刷時刷的是標籤上的條碼, 不是 KOCA 單號
 function findKocaBatchOrderId(scanned) {
   if (!kocaBatchActive()) return null;
   const up = String(scanned || "").toUpperCase();
   if (String(state.kocaOrderId || "").toUpperCase() === up) return state.kocaOrderId;
-  return state.kocaBatch.orderList.find(id => String(id).toUpperCase() === up) || null;
+  const byId = state.kocaBatch.orderList.find(id => String(id).toUpperCase() === up);
+  if (byId) return byId;
+  return state.kocaBatch.orderList.find(id => {
+    const m = state.kocaBatch.meta && state.kocaBatch.meta[id];
+    return m && m.trackingNo && String(m.trackingNo).toUpperCase() === up;
+  }) || null;
 }
 // 一張官網單「刷齊了嗎」: 非包材品項全部 packed>=expected 或 已標缺貨
 function isKocaOrderItemsDone(items) {
@@ -8161,21 +8173,25 @@ function buildErpList() {
   }
   if (unkeyedOnly) list = list.filter(e => !_erpKeyedIds.has(e.id));
   _erpList = list;
-  _erpMergeKoca();
+  _erpMergeKoca();          // 官方出貨單: 同一天合併一張
+  _erpMergeReplacements();  // 補寄單: 同通路+同一天合併一張 (跟一般/手建的格式一樣: 單號全列 + 明細加總)
 }
-// 官方單在「鍵單畫面」合併成一張顯示 (只是顯示! 出貨紀錄本身仍各自一筆: 回寫官網/電子發票/重複出貨防呆都靠各自那筆, 不能動)
-// 為什麼: 官網批次每張各自落帳後, 鍵單變成 6 筆各 ×1, 對正航數量很難核; 合併後單號全列、數量加總, 跟其他通路一樣一筆搞定。
-function _erpMergeKoca() {
-  const isKocaOut = e => e.platform === "koca" && e.orderType !== "return" && e.orderType !== "replacement" && !e._merged;
-  const groups = new Map(); // 同一天(本地日期)的官方單一組
+// ===== 鍵單畫面合併引擎 =====
+// 只是「顯示」合併! 出貨紀錄本身仍各自一筆 (回寫官網/電子發票/重複出貨防呆都靠各自那筆, 不能動)。
+// pred=哪些要併, keyOf=分組鍵, idOf=合併卡穩定 id (商品打勾進度依它記), label=卡上徽章文字, orderType=合併卡類型。
+function _erpDayOf(e) {
+  const d = new Date(e.completedAt);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function _erpMergeGroups(pred, keyOf, idOf, labelOf, orderType) {
+  const groups = new Map();
   for (const e of _erpList) {
-    if (!isKocaOut(e)) continue;
-    const d = new Date(e.completedAt);
-    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (!groups.has(day)) groups.set(day, []);
-    groups.get(day).push(e);
+    if (!pred(e)) continue;
+    const k = keyOf(e);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
   }
-  for (const [day, ents] of groups) {
+  for (const [k, ents] of groups) {
     if (ents.length < 2) continue; // 只有一張就照原樣
     // 商品/包材依 SKU 加總 (顯示 ×總數); 缺貨任何一筆有標就帶上
     const bySku = new Map();
@@ -8191,10 +8207,11 @@ function _erpMergeKoca() {
     const latest = ents.reduce((a, b) => String(a.completedAt) > String(b.completedAt) ? a : b);
     const who = [...new Set(ents.map(x => x.completedBy).filter(Boolean))].join("、");
     const merged = {
-      id: "km::" + day,               // 穩定 id: 商品打勾進度 (erpLineDone) 依它記
+      id: idOf(k),
       _merged: true, _mergedIds: ents.map(x => x.id), _mergedCount: ents.length,
+      _mergedLabel: labelOf(k, ents),
       completedAt: latest.completedAt, completedBy: who,
-      platform: "koca", orderType: "normal",
+      platform: ents[0].platform, orderType,
       items: [...bySku.values()], parcels,
       summary: latest.summary,
     };
@@ -8202,6 +8219,26 @@ function _erpMergeKoca() {
     _erpList = _erpList.filter(e => !ents.includes(e));
     _erpList.splice(Math.min(firstIdx, _erpList.length), 0, merged);
   }
+}
+// 官方出貨單 (官網批次每張各自落帳 → 鍵單合回一張, 數量好核)
+function _erpMergeKoca() {
+  _erpMergeGroups(
+    e => e.platform === "koca" && e.orderType !== "return" && e.orderType !== "replacement" && !e._merged,
+    e => _erpDayOf(e),
+    day => "km::" + day,          // 沿用 v3.1 的 id 格式, 既有打勾進度不會消失
+    () => "🌐 官方",
+    "normal"
+  );
+}
+// 補寄單 (同通路+同一天合併: 例如 MOMO 補寄 6 張 → 一張卡, 不用按 6 次下一筆)
+function _erpMergeReplacements() {
+  _erpMergeGroups(
+    e => e.orderType === "replacement" && !e._merged,
+    e => (e.platform || "unknown") + "::" + _erpDayOf(e),
+    k => "rm::" + k,
+    (k, ents) => "📮 " + ((PLATFORMS[ents[0].platform] && PLATFORMS[ents[0].platform].label) || ents[0].platform || "") + " 補寄",
+    "replacement"
+  );
 }
 // 已鍵判斷: 合併卡 = 底下每一筆都鍵了才算鍵 (鍵入狀態永遠記在「真正的紀錄 id」上, 不記在合併卡上)
 function _erpIsKeyed(e) { return !!e && (e._merged ? e._mergedIds.every(id => _erpKeyedIds.has(id)) : _erpKeyedIds.has(e.id)); }
@@ -8230,7 +8267,7 @@ function renderErpHelper() {
   let html = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
     <span style="background:${keyed ? 'var(--success-bg)' : 'var(--warn-bg)'}; color:${keyed ? 'var(--success)' : '#92400e'}; font-size:0.72rem; font-weight:700; padding:2px 10px; border-radius:999px;">${keyed ? '✓ 已鍵入' : '未鍵入'}</span>
     <span style="font-size:0.72rem; color:var(--text-soft);">${typeLabel}${e.completedBy ? ' · ' + escapeHtml(e.completedBy) : ''}</span>
-    ${e._merged ? `<span style="background:var(--primary-light); color:var(--primary); font-size:0.72rem; font-weight:800; padding:2px 10px; border-radius:999px;">🌐 官方 ${e._mergedCount} 張合併(數量已加總)</span>` : ''}
+    ${e._merged ? `<span style="background:var(--primary-light); color:var(--primary); font-size:0.72rem; font-weight:800; padding:2px 10px; border-radius:999px;">${e._mergedLabel || "🌐 官方"} ${e._mergedCount} 張合併(數量已加總)</span>` : ''}
   </div>`;
   html += erpRow("日期", dateStr);
   html += erpRow("客戶", customer);
@@ -8243,7 +8280,15 @@ function renderErpHelper() {
   }
   parcels.forEach((p, i) => {
     const _pMiss = _missSkus.size && p.items && Object.keys(p.items).some(sku => _missSkus.has(sku));
-    html += erpRow(parcels.length > 1 ? `單號${i + 1}` : "寄件單號", p.id, _pMiss ? ' <span class="missing-badge">⚠缺</span>' : "");
+    // 這包裝了什麼: 直接列在單號下面 (逐包核對用; 總量核對看下方商品明細)
+    const _contents = Object.keys(p.items || {}).filter(s => (p.items[s] || 0) > 0)
+      .map(s => `${escapeHtml(s)} ×${p.items[s]}`).join("、");
+    const _track = (p.trackingNo && String(p.trackingNo) !== String(p.id))
+      ? `<br><span style="font-size:0.7rem; color:var(--text-soft); font-weight:500;">🚚 物流 ${escapeHtml(p.trackingNo)}</span>` : "";
+    const _suffix = (_pMiss ? ' <span class="missing-badge">⚠缺</span>' : "")
+      + _track
+      + (_contents ? `<br><span style="font-size:0.7rem; color:var(--text-soft); font-weight:500;">📦 ${_contents}</span>` : "");
+    html += erpRow(parcels.length > 1 ? `單號${i + 1}` : "寄件單號", p.id, _suffix);
   });
   const lineDoneCount = lines.filter(it => _erpLineDone.has(e.id + "::" + it.sku)).length;
   html += `<div style="font-size:0.75rem; color:var(--text-soft); margin:12px 0 2px;">商品明細 (${lineDoneCount}/${lines.length}) — 打進正航就點一下打勾</div>`;
@@ -8292,7 +8337,7 @@ function renderErpHelper() {
     const _pc = (en.parcels || []).length;
     const _firstId = (en.parcels && en.parcels[0] && en.parcels[0].id) ? String(en.parcels[0].id).slice(0, 10) : "";
     const _key = _erpIsKeyed(en) ? " ✓已鍵" : "";
-    if (en._merged) return `${_md} · ${_cust} ${en._mergedCount} 張合併${_pc ? " · " + _pc + "單" : ""}${_key}`;
+    if (en._merged) return `${_md} · ${en._mergedLabel || _cust} ${en._mergedCount} 張合併${_pc ? " · " + _pc + "單" : ""}${_key}`;
     return `${_md} ${_hm} · ${_cust}${_pc ? " · " + _pc + "單" : ""}${_firstId ? " · " + _firstId + "…" : ""}${_key}`;
   };
   const _prevBtn = document.getElementById("erp-prev");
@@ -9465,7 +9510,8 @@ function findShippedByCode(code) {
   for (const e of all) {
     if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue; // 退貨/補寄/入倉不算「出過這張」(比照 kocaShippedMap, 避免噪音警告)
     if (e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
-    const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c);
+    const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c
+      || (pp.trackingNo && String(pp.trackingNo).toUpperCase() === c)); // 物流單號(黑貓/超商)也算: 刷標籤條碼一樣要擋得住過刷
     if (p) return { entry: e, matchType: "寄件單號" };
   }
   return null;
@@ -9719,6 +9765,7 @@ function expectedPackagingFor(items) {
 // 檢查「剛刷的包材」是否符合本單建議; 回傳 {ok} 或 {ok:false, message}
 function checkPackagingMismatch(scannedSku) {
   if (settings.packagingGuard === false) return { ok: true };         // 使用者關閉防呆
+  if (state.returnInfo || state.inboundInfo) return { ok: true };     // 退貨拆包/進貨驗收不是在包貨 → 包材防呆不適用, 免得亂跳
   if (!GOVERNED_PACKAGING.has(scannedSku)) return { ok: true };       // 非規則管的包材, 不判斷
   if (!state.activeParcel || !state.activeParcel.items) return { ok: true };
   const { expected, reasons } = expectedPackagingFor(state.activeParcel.items);
@@ -9731,6 +9778,7 @@ function checkPackagingMismatch(scannedSku) {
 // 結案前整單複查 (不分刷的順序): 檢查當前 parcel 內的包材是否符合主機建議
 function checkActiveParcelPackaging() {
   if (settings.packagingGuard === false) return { ok: true };
+  if (state.returnInfo || state.inboundInfo) return { ok: true };  // 退貨/入倉不是在包貨 → 免複查
   if (!state.activeParcel || !state.activeParcel.items) return { ok: true };
   const items = state.activeParcel.items;
   const { expected, reasons } = expectedPackagingFor(items);
@@ -13318,12 +13366,23 @@ document.getElementById("repl-customer-phone").addEventListener("input", (e) => 
 });
 
 // 退貨確認 modal 事件
+// 退貨原因 → 入哪個倉 (要跟 applyShipmentSideEffects 的分倉邏輯一模一樣)
+function _retBinHint() {
+  const el = document.getElementById("ret-bin-hint");
+  if (!el) return;
+  const r = document.getElementById("ret-reason").value;
+  const bin = r === "商品瑕疵" ? "scrap" : (r === "商品故障" ? "repair" : "qty");
+  if (bin === "scrap")      { el.style.background = "var(--danger-bg)";  el.style.color = "var(--danger)"; el.textContent = "完成後商品會入 🗑 報廢倉(瑕疵品不回一般庫存)"; }
+  else if (bin === "repair"){ el.style.background = "#FEF3E2";           el.style.color = "#B4690E";       el.textContent = "完成後商品會入 🔧 檢修倉(修好後再手動移回一般倉)"; }
+  else                      { el.style.background = "var(--success-bg)"; el.style.color = "var(--success)";el.textContent = "完成後商品會入 📦 一般倉(良品直接回庫存)"; }
+}
 function openReturnModal(prefillId) {
   document.getElementById("ret-platform-select").value = currentPlatform || "";
   document.getElementById("ret-parcel-id").value = prefillId || "";
   document.getElementById("ret-customer-phone").value = "";
   document.getElementById("ret-reason").value = "7天鑑賞期";
   document.getElementById("ret-note").value = "";
+  _retBinHint();
   document.getElementById("return-order-modal").hidden = false;
   setTimeout(() => {
     const inp = document.getElementById(prefillId ? "ret-customer-phone" : "ret-parcel-id");
@@ -13470,6 +13529,9 @@ document.getElementById("inb-create").addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
   maybeAutoCreateRoom("入倉");
 });
+
+// 退貨原因變更 → 即時更新「會入哪個倉」提示
+document.getElementById("ret-reason").addEventListener("change", _retBinHint);
 
 // 退貨 - 客人手機即時風險查詢
 let _retPhoneDebounce = null;
