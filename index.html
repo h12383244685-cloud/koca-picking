@@ -160,6 +160,8 @@
 [data-theme="dark"] [style*="color: #166534"],
 [data-theme="dark"] [style*="color:#166534"] { color: var(--success) !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* ⚠ 勿刪這行的 !important: 工讀生模式的分頁鎖 / 危險設定卡片鎖全靠 hidden 隱藏,
+   而 .tab-bar button / .settings-card / .btn 各自帶 display, 沒有 !important 會蓋不過去 → 鎖失效。 */
 [hidden] { display: none !important; }
 html, body {
   margin: 0; padding: 0;
@@ -1628,6 +1630,10 @@ footer.summary-bar {
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 11h6M9 15h4"/></svg></span>
       <span class="tab-label">出貨紀錄</span>
     </button>
+    <button data-tab="logistics" id="tab-logistics">
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v9H3z"/><path d="M13 9h4l3 3v3h-7z"/><circle cx="7.5" cy="17.5" r="1.7"/><circle cx="16.5" cy="17.5" r="1.7"/></svg></span>
+      <span class="tab-label">物流</span>
+    </button>
     <button data-tab="inventory" id="tab-inventory">
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg></span>
       <span class="tab-label">倉庫清冊</span>
@@ -1651,9 +1657,10 @@ footer.summary-bar {
 
   <!-- Tab: 通路匯入 -->
   <div class="panel" id="tab-content-a1" hidden>
-    <h2>從通路後台匯入揀貨單</h2>
+    <h2 id="a1-page-title">從通路後台匯入揀貨單</h2>
+    <h2 id="a1-pos-title" hidden>🌐 官網出貨</h2>
 
-    <div style="background: var(--primary-light); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+    <div id="a1-csv-box" style="background: var(--primary-light); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
       <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:8px;">📥 上傳揀貨單 CSV(主要出貨流程)</div>
       <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
       <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
@@ -1702,6 +1709,8 @@ footer.summary-bar {
       </div>
     </div>
 
+    <!-- 進階建單/對應區 (工讀生 POS 模式整塊藏起來, 只留上面的官網單號入口) -->
+    <div id="a1-adv-sections">
     <!-- 其他建單方式 (收合) -->
     <details style="margin-top:6px;">
       <summary style="cursor:pointer; font-weight:600; font-size:0.85rem; color:var(--text-soft); padding:8px 2px;">＋ 其他建單方式(手動 / 補寄 / 退貨 / 入倉)</summary>
@@ -1749,6 +1758,7 @@ footer.summary-bar {
       <p class="hint" style="margin-bottom:6px;">標記為必要商品的 SKU 會自動加入每次的備貨清單，用幾個由你當下決定，不計入完成率。可在「📚 管理商品庫」修改。</p>
       <div id="essential-list" class="hint" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:6px 10px; background:#fafbfc;">尚無</div>
     </details>
+    </div><!-- /a1-adv-sections -->
   </div>
 
     <!-- Tab: 出貨紀錄 -->
@@ -1834,6 +1844,19 @@ footer.summary-bar {
       <button class="btn outline sm danger" id="clear-history-btn" style="flex: 0.6;">🗑</button>
     </div>
     <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">📤 摘要 = 每行一個 SKU 的彙總 · 📦 明細 = 每行一張寄件單裡的一個 SKU (含寄件編號)</p>
+  </div>
+
+  <!-- Tab: 物流總覽 -->
+  <div class="panel" id="tab-content-logistics" hidden>
+    <h2>🚚 物流總覽</h2>
+    <p class="hint" style="margin-bottom:10px;">這台 App 出過的官網單,現在到哪了。狀態直接跟官網拉(不必另外串綠界/黑貓)。<strong>異常</strong>和<strong>「貨到付款已送達=該收款」</strong>會特別標出來。點物流單號可開查詢頁。</p>
+    <div style="display:flex; gap:6px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+      <button class="btn outline sm" data-logi-days="1" style="padding:4px 12px;">今天</button>
+      <button class="btn outline sm" data-logi-days="3" style="padding:4px 12px;">近3天</button>
+      <button class="btn outline sm" data-logi-days="7" style="padding:4px 12px;">近7天</button>
+      <button class="btn sm" id="logi-refresh-btn" style="padding:4px 12px; margin-left:auto;">🔄 重新整理</button>
+    </div>
+    <div id="logistics-board"></div>
   </div>
 
     <!-- Tab: 倉庫清冊 -->
@@ -2092,6 +2115,16 @@ footer.summary-bar {
           <div class="card-title">外觀</div>
           <div class="card-desc">主題顏色 · 護眼</div>
         </button>
+        <button class="settings-card" data-settings-view="profile">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg></div>
+          <div class="card-title">我的暱稱</div>
+          <div class="card-desc">出貨紀錄會記是誰包的</div>
+        </button>
+        <button class="settings-card" data-settings-view="role">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/><circle cx="12" cy="15.5" r="1.4"/></svg></div>
+          <div class="card-title">裝置角色</div>
+          <div class="card-desc" id="role-card-desc">目前:管理員(全功能)</div>
+        </button>
 
         <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">進階</div>
         <button class="settings-card" data-settings-view="integration">
@@ -2115,11 +2148,16 @@ footer.summary-bar {
           <div class="card-desc">一單通常包多久 · 平均/最快/最慢</div>
         </button>
 
-        <div style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">資料 / 其他</div>
+        <div id="settings-sec-data" style="grid-column:1/-1; font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 -2px; letter-spacing:1px;">資料 / 其他</div>
         <a href="shipping.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
           <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10v8H3z"/><path d="M13 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg></div>
           <div class="card-title">宅配寄件紀錄</div>
           <div class="card-desc">補寄 / 宅配寄件登記 · 誰寄了、誰還沒寄</div>
+        </a>
+        <a href="scheduling.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/><path d="M8 14h3M13 14h3M8 17.5h3"/></svg></div>
+          <div class="card-title">訂單排程</div>
+          <div class="card-desc">各通路要出的單排起來 · 今天該出、逾期一眼看</div>
         </a>
         <button class="settings-card wide" data-settings-view="backup">
           <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-6h8v6"/></svg></div>
@@ -2147,6 +2185,35 @@ footer.summary-bar {
     <div id="settings-view-help" class="settings-subview" hidden>
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">📖 新手教學 / 懶人包</h3>
+
+      <!-- 工讀生 POS 極簡三步 (只在工讀生模式顯示) -->
+      <div id="help-helper-simple" hidden>
+        <p class="hint" style="margin-bottom:12px; font-size:0.85rem;">照這三步做就對了 👇</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; border:2px solid var(--primary); border-radius:12px; background:var(--primary-light);">
+            <div style="font-size:1.9rem; font-weight:900; color:var(--primary); line-height:1;">1</div>
+            <div><div style="font-weight:800; font-size:1.05rem;">🔍 掃單號</div>
+            <div style="font-size:0.92rem; color:var(--text); margin-top:3px; line-height:1.6;">用掃描槍掃 KOCA 單號(或用打的),按「拉取訂單」。商品會自動跑進<strong>黃色框框</strong>。</div></div>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; border:2px solid var(--primary); border-radius:12px; background:var(--primary-light);">
+            <div style="font-size:1.9rem; font-weight:900; color:var(--primary); line-height:1;">2</div>
+            <div><div style="font-weight:800; font-size:1.05rem;">📦 刷包裝</div>
+            <div style="font-size:0.92rem; color:var(--text); margin-top:3px; line-height:1.6;">照黃框裡的商品,一樣一樣刷條碼。數字自己會加,<strong>刷到全部打勾</strong>就對了。</div></div>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; border:2px solid var(--success); border-radius:12px; background:var(--success-bg);">
+            <div style="font-size:1.9rem; font-weight:900; color:var(--success); line-height:1;">3</div>
+            <div><div style="font-weight:800; font-size:1.05rem;">✅ 按完成</div>
+            <div style="font-size:0.92rem; color:var(--text); margin-top:3px; line-height:1.6;">全部刷完,按<strong>綠色的「完成」</strong>。就這樣!下一張再從第 1 步開始。</div></div>
+          </div>
+        </div>
+        <div style="margin-top:14px; padding:12px 14px; border-radius:10px; background:var(--warn-bg); color:#92400e; font-size:0.9rem; line-height:1.7;">
+          ⚠ 遇到<strong>紅字</strong>或<strong>跳出警告視窗</strong> → 先停下來,<strong>不要硬按</strong>,問一下負責人。<br>
+          💡 同一個商品要刷很多個:先打 <code>*5</code> 再刷,一次加 5。
+        </div>
+      </div>
+
+      <!-- 完整版 (管理員) -->
+      <div id="help-full">
       <p class="hint" style="margin-bottom:10px;">這個 App 是「出貨雙重確認」:刷寄件單 → 刷/點商品計數 → 出貨完成,避免漏裝、錯裝。點下面標題展開看。</p>
 
       <details style="margin-bottom:8px;" open>
@@ -2238,6 +2305,7 @@ footer.summary-bar {
           找不到答案就截圖回報。
         </div>
       </details>
+      </div><!-- /help-full -->
     </div>
 
     <!-- 子視圖: 盤點 -->
@@ -2355,8 +2423,7 @@ footer.summary-bar {
         <label style="display:block; font-size:0.75rem; color:var(--text-soft); margin-top:8px;">Worker URL</label>
         <input type="text" id="sync-worker-url-input" placeholder="https://koca-picking-sync.xxx.workers.dev" style="margin-bottom:6px;">
 
-        <label style="display:block; font-size:0.75rem; color:var(--text-soft);">我的暱稱 (其他人會看到)</label>
-        <input type="text" id="my-name-input" placeholder="例: 阿明 / A / Kyle" maxlength="20" style="margin-bottom:6px;">
+        <p class="hint" style="font-size:0.6875rem; margin:6px 0;">暱稱請到 <strong>⚙ 設定 → 👤 我的暱稱</strong> 設定(共同包貨時其他人會看到)。</p>
 
         <button class="btn outline sm full" id="sync-test-btn">📡 測試連線</button>
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8125rem; margin-top:10px;">
@@ -2508,6 +2575,26 @@ footer.summary-bar {
       <h3 style="margin: 0 0 8px;">⏱ 包裹計時紀錄</h3>
       <p class="hint" style="margin-bottom:10px;">每個包裹從「開單(刷寄件單號 / 拉官網單)」到「完成此筆」的時間,系統會自動記錄,讓你知道一單通常包多久。退貨/入倉不列入。</p>
       <div id="timing-stats"></div>
+    </div>
+
+    <div id="settings-view-profile" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">👤 我的暱稱</h3>
+      <p class="hint" style="margin-bottom:10px;">每一筆出貨紀錄都會記下<strong>是誰包的</strong>。沒填的話紀錄上只會寫「(未命名)」,之後要查是誰包的就查不到。共同包貨時其他人也會看到這個名字。</p>
+      <label style="display:block; font-size:0.75rem; color:var(--text-soft);">暱稱</label>
+      <input type="text" id="my-name-input" placeholder="例: 阿明 / A / Kyle" maxlength="20">
+      <p class="hint" style="font-size:0.6875rem; margin-top:6px;">改了立刻生效, 之後完成的出貨都會記這個名字。</p>
+    </div>
+
+    <div id="settings-view-role" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">🔒 裝置角色</h3>
+      <p class="hint" style="margin-bottom:10px;">把這台交給工讀生/新人用之前,切成「工讀生模式」——會弄壞資料的功能全部鎖起來,要 4 碼 PIN 才能切回管理員。</p>
+      <div id="role-status" style="margin-bottom:12px;"></div>
+      <button class="btn full" id="role-switch-btn">切換角色</button>
+      <p class="hint" style="font-size:0.6875rem; margin-top:10px; background:var(--warn-bg); color:#92400e; padding:8px; border-radius:6px;">
+        ⚠ 這是<strong>防手滑、防好奇</strong>用的鎖,不是防駭客。懂電腦的人用開發者工具還是繞得過去,重點是讓不熟的人不會誤觸。PIN 只存這台本機,忘記的話清除瀏覽器資料就會回到管理員(資料不會不見)。
+      </p>
     </div>
 
     <div id="settings-view-danger" class="settings-subview" hidden>
@@ -3206,7 +3293,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v2.0 · 2026-07-16";
+const APP_VERSION = "v3.1 · 2026-07-22";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3496,6 +3583,9 @@ let settings = {
   kocaFulfillEnabled: false,  // 🌐 出貨完成後回寫官網訂單 (標記已出貨 + 物流單號)。
                               // ⚠ 官網會據此「自動排程 7 天後開立電子發票」→ 預設關, 確認流程無誤再開。
   spideyKey: "",             // X-Spidey-Key: App→Worker 的來源驗證金鑰 (Worker 比對 env.SPIDEY_KEY)
+  deviceRole: "admin",       // 🔒 裝置角色: "admin"(管理員, 全功能) | "helper"(工讀生, 危險功能鎖起來)
+  adminPin: "",              // 🔒 切回管理員用的 4 碼 PIN (只存這台本機)。⚠ 這是「防手滑/防好奇」等級的軟鎖,
+                             //    不是資安機制 —— 懂開發者工具的人繞得過。工讀生情境足夠。
   docNoDate: null,           // doc_no 流水號的日期 (YYYYMMDD)
   docNoSeq: 0,               // 當日 doc_no 流水號
 };
@@ -6033,7 +6123,8 @@ function buildListFromKocaOrder(o, gate) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   renderKocaUnmappedPanel();   // 有對不到的品項 → 跳出「指定一次就記住」的對應面板
   renderKocaBatchStrip();      // 更新「本批訂單」列
-  if (!kocaBatchActive() || state.kocaBatch.orderList.length <= 1) maybeAutoCreateRoom("官網訂單"); // 批次第二張起不重複開房
+  // 官網訂單「不自動開房」: 商品已自動填進黃框(單人包最快)。兩人平行包時各自 solo 各自自動填, 房間(共享一份清單)
+  //   反而會讓加入者的畫面被接管、自動填失效。蝦皮 CSV / 手建單仍會自動開房(那種要一起刷很多件, 共同包貨才有幫助)。
   return true;
 }
 
@@ -6269,6 +6360,7 @@ function switchToKocaOrder(orderId) {
 // 「完成總訂單」: 一次結算整批, 每張各自落一筆紀錄 / 各自扣庫存 / 各自回寫。
 async function completeKocaBatch() {
   if (!kocaBatchActive()) return;
+  if (!requireNameOk()) return;   // 工讀生沒填暱稱 → 紀錄追不到人, 先擋
   // 🛡 共同包貨: 只讓開房者收尾 (批次也適用, 避免非開房者按到)
   if (state.roomMode && !state.isRoomHost) {
     alert("👥 共同包貨中,請由「開房的那台」按完成,避免重複結算。\n\n若真的要由這台收尾,請先「離開房間」再完成。");
@@ -6388,7 +6480,13 @@ async function completeKocaBatch() {
 function renderKocaBatchStrip() {
   const el = document.getElementById("koca-batch-strip");
   if (!el) return;
-  if (!kocaBatchActive()) { el.hidden = true; el.innerHTML = ""; return; }
+  const _finishBtn = document.getElementById("finish-btn");
+  if (!kocaBatchActive()) {
+    el.hidden = true; el.innerHTML = "";
+    if (_finishBtn) _finishBtn.style.display = ""; // 非批次: 還原下面的「產生備貨報告/完成出貨」
+    return;
+  }
+  if (_finishBtn) _finishBtn.style.display = "none"; // 官網批次: 藏下面那顆冗餘鈕, 完成只走上面綠色「完成總訂單」, 不讓人猶豫按哪顆
   const b = state.kocaBatch;
   const list = b.orderList;
   const doneCount = list.filter(id => _kocaOrderDoneById(id)).length;
@@ -6409,9 +6507,11 @@ function renderKocaBatchStrip() {
           <span class="kbatch-chip-name">${escapeHtml(meta.recipient || id)}${meta.cod ? " 💰" : ""}</span>
           ${active ? '<span class="kbatch-chip-cur">← 包裝中</span>' : ""}
         </button>`;
-    }).join("") + `</div>
-      <button type="button" class="btn full" id="koca-batch-complete-btn" style="margin-top:8px; background:var(--success);">✓ 完成總訂單 · 結算 ${list.length} 張</button>`;
+    }).join("") + `</div>`;
   }
+  // ⚠ 完成鈕一律顯示 (收合時也要): 官網單(含單張)一律走批次, 而批次時下面的 #finish-btn 已被藏,
+  //    若完成鈕跟著收合藏掉 → 收合後就沒有任何完成路徑, 使用者會卡死。收合只收客戶清單, 完成鈕留著。
+  html += `<button type="button" class="btn full" id="koca-batch-complete-btn" style="margin-top:8px; background:var(--success);">✓ 完成總訂單 · 結算 ${list.length} 張</button>`;
   el.innerHTML = html;
 }
 (function wireKocaBatchStrip(){
@@ -8037,7 +8137,50 @@ function buildErpList() {
   }
   if (unkeyedOnly) list = list.filter(e => !_erpKeyedIds.has(e.id));
   _erpList = list;
+  _erpMergeKoca();
 }
+// 官方單在「鍵單畫面」合併成一張顯示 (只是顯示! 出貨紀錄本身仍各自一筆: 回寫官網/電子發票/重複出貨防呆都靠各自那筆, 不能動)
+// 為什麼: 官網批次每張各自落帳後, 鍵單變成 6 筆各 ×1, 對正航數量很難核; 合併後單號全列、數量加總, 跟其他通路一樣一筆搞定。
+function _erpMergeKoca() {
+  const isKocaOut = e => e.platform === "koca" && e.orderType !== "return" && e.orderType !== "replacement" && !e._merged;
+  const groups = new Map(); // 同一天(本地日期)的官方單一組
+  for (const e of _erpList) {
+    if (!isKocaOut(e)) continue;
+    const d = new Date(e.completedAt);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(e);
+  }
+  for (const [day, ents] of groups) {
+    if (ents.length < 2) continue; // 只有一張就照原樣
+    // 商品/包材依 SKU 加總 (顯示 ×總數); 缺貨任何一筆有標就帶上
+    const bySku = new Map();
+    for (const en of ents) for (const it of (en.items || [])) {
+      if (!bySku.has(it.sku)) bySku.set(it.sku, { sku: it.sku, name: it.name || "", category: it.category || "其他", expected: 0, packed: 0, essential: !!it.essential, missing: false });
+      const m = bySku.get(it.sku);
+      m.expected += it.expected || 0; m.packed += it.packed || 0;
+      if (it.missing) m.missing = true;
+    }
+    // 單號全列 (舊→新, 跟包貨順序一致)
+    const parcels = [];
+    ents.slice().reverse().forEach(en => (en.parcels || []).forEach(p => parcels.push({ ...p })));
+    const latest = ents.reduce((a, b) => String(a.completedAt) > String(b.completedAt) ? a : b);
+    const who = [...new Set(ents.map(x => x.completedBy).filter(Boolean))].join("、");
+    const merged = {
+      id: "km::" + day,               // 穩定 id: 商品打勾進度 (erpLineDone) 依它記
+      _merged: true, _mergedIds: ents.map(x => x.id), _mergedCount: ents.length,
+      completedAt: latest.completedAt, completedBy: who,
+      platform: "koca", orderType: "normal",
+      items: [...bySku.values()], parcels,
+      summary: latest.summary,
+    };
+    const firstIdx = _erpList.findIndex(e => ents.includes(e));
+    _erpList = _erpList.filter(e => !ents.includes(e));
+    _erpList.splice(Math.min(firstIdx, _erpList.length), 0, merged);
+  }
+}
+// 已鍵判斷: 合併卡 = 底下每一筆都鍵了才算鍵 (鍵入狀態永遠記在「真正的紀錄 id」上, 不記在合併卡上)
+function _erpIsKeyed(e) { return !!e && (e._merged ? e._mergedIds.every(id => _erpKeyedIds.has(id)) : _erpKeyedIds.has(e.id)); }
 function erpRow(label, value, suffixHtml) {
   return `<div class="erp-field"><span class="erp-label">${label}</span><span class="erp-value">${escapeHtml(String(value))}${suffixHtml || ""}</span></div>`;
 }
@@ -8049,17 +8192,21 @@ function renderErpHelper() {
   if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1;
   if (_erpIdx < 0) _erpIdx = 0;
   const e = _erpList[_erpIdx];
-  const keyed = _erpKeyedIds.has(e.id);
+  const keyed = _erpIsKeyed(e);
   const d = new Date(e.completedAt);
   // 日期 + 時間 (時分秒): 兩筆重複的完成單會顯示幾乎相同的秒數, 一眼看得出是同一次的雙胞胎, 避免鍵兩次
-  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  // 合併卡是「整天彙總」, 秒數沒意義 → 顯示日期 + 彙總筆數
+  const dateStr = e._merged
+    ? `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}(${e._mergedCount} 筆彙總)`
+    : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
   const customer = (PLATFORMS[e.platform] && PLATFORMS[e.platform].customer) || PLATFORM_TO_CUSTOMER[e.platform] || e.platform || "";
   const typeLabel = e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "manual" ? "手建" : "一般"));
   const lines = (e.items || []).filter(it => !it.essential && (it.packed || 0) > 0);
   const parcels = (e.parcels || []);
-  let html = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+  let html = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
     <span style="background:${keyed ? 'var(--success-bg)' : 'var(--warn-bg)'}; color:${keyed ? 'var(--success)' : '#92400e'}; font-size:0.72rem; font-weight:700; padding:2px 10px; border-radius:999px;">${keyed ? '✓ 已鍵入' : '未鍵入'}</span>
     <span style="font-size:0.72rem; color:var(--text-soft);">${typeLabel}${e.completedBy ? ' · ' + escapeHtml(e.completedBy) : ''}</span>
+    ${e._merged ? `<span style="background:var(--primary-light); color:var(--primary); font-size:0.72rem; font-weight:800; padding:2px 10px; border-radius:999px;">🌐 官方 ${e._mergedCount} 張合併(數量已加總)</span>` : ''}
   </div>`;
   html += erpRow("日期", dateStr);
   html += erpRow("客戶", customer);
@@ -8108,7 +8255,7 @@ function renderErpHelper() {
     });
   }
   body.innerHTML = html;
-  if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpKeyedIds.has(x.id)).length}`;
+  if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpIsKeyed(x)).length}`;
   const markBtn = document.getElementById("erp-mark-keyed");
   if (markBtn) { markBtn.textContent = keyed ? "↩ 取消已鍵入" : "✓ 標示已鍵入 · 下一筆"; markBtn.style.background = keyed ? "var(--text-soft)" : "var(--success)"; }
   // 上一筆/下一筆 顯示「是哪張訂單」(通路·時間·單數·已鍵勾), 末端則灰掉提示
@@ -8120,7 +8267,8 @@ function renderErpHelper() {
     const _cust = (PLATFORMS[en.platform] && PLATFORMS[en.platform].customer) || PLATFORM_TO_CUSTOMER[en.platform] || en.platform || "";
     const _pc = (en.parcels || []).length;
     const _firstId = (en.parcels && en.parcels[0] && en.parcels[0].id) ? String(en.parcels[0].id).slice(0, 10) : "";
-    const _key = _erpKeyedIds.has(en.id) ? " ✓已鍵" : "";
+    const _key = _erpIsKeyed(en) ? " ✓已鍵" : "";
+    if (en._merged) return `${_md} · ${_cust} ${en._mergedCount} 張合併${_pc ? " · " + _pc + "單" : ""}${_key}`;
     return `${_md} ${_hm} · ${_cust}${_pc ? " · " + _pc + "單" : ""}${_firstId ? " · " + _firstId + "…" : ""}${_key}`;
   };
   const _prevBtn = document.getElementById("erp-prev");
@@ -8159,8 +8307,9 @@ document.getElementById("erp-date").addEventListener("change", () => { buildErpL
 document.getElementById("erp-date-all").addEventListener("click", () => { document.getElementById("erp-date").value = ""; buildErpList(); _erpIdx = 0; renderErpHelper(); });
 document.getElementById("erp-mark-keyed").addEventListener("click", () => {
   const e = _erpList[_erpIdx]; if (!e) return;
-  if (_erpKeyedIds.has(e.id)) { _erpKeyedIds.delete(e.id); saveErpKeyed(); renderErpHelper(); return; }
-  _erpKeyedIds.add(e.id); saveErpKeyed();
+  const ids = e._merged ? e._mergedIds : [e.id];  // 合併卡: 一次標/取消底下每一筆真實紀錄
+  if (_erpIsKeyed(e)) { ids.forEach(id => _erpKeyedIds.delete(id)); saveErpKeyed(); renderErpHelper(); return; }
+  ids.forEach(id => _erpKeyedIds.add(id)); saveErpKeyed();
   const unkeyedOnly = document.getElementById("erp-unkeyed-only").checked;
   if (unkeyedOnly) { buildErpList(); if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1; renderErpHelper(); if (_erpList.length === 0) showToast("全部鍵完了 🎉"); }
   else { if (_erpIdx < _erpList.length - 1) _erpIdx++; renderErpHelper(); }
@@ -8295,6 +8444,231 @@ function allHistory() {
   merged.sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
   return merged;
 }
+
+// ==================== 物流狀態 (純拉官網 fulfillmentStatus, 不碰綠界/黑貓) ====================
+// 官網已把物流狀態一路更新到「到店/已送達/異常」(已驗證: 拉已出貨的單會跳「已出貨」警告)。
+// 我們只用「這台 App 出過的官網單」(出貨紀錄裡的 kocaOrderId) 去官網查最新狀態, 不碰官網那 700 張狀態不明的舊單。
+const LOGISTICS_CACHE_KEY = "koca_logistics_v1";
+const LOGI_STATUS_TTL_MS = 90 * 1000; // 90 秒內不重複查同一單 (force 除外)
+const LOGI_META = {
+  pending:           { emoji: "🕐", label: "待處理",   group: "prep" },
+  label_created:     { emoji: "🏷️", label: "已建單",   group: "prep" },
+  handed_to_carrier: { emoji: "📮", label: "已交件",   group: "transit" },
+  in_transit:        { emoji: "🚚", label: "運送中",   group: "transit" },
+  arrived_store:     { emoji: "🏪", label: "到店待取", group: "transit" },
+  delivered:         { emoji: "✅", label: "已送達",   group: "done" },
+  exception:         { emoji: "⚠️", label: "配送異常", group: "alert" },
+  cancelled:         { emoji: "🚫", label: "已取消",   group: "alert" },
+  unknown:           { emoji: "❔", label: "狀態未知", group: "prep" },
+};
+const _logiMeta = (s) => LOGI_META[s] || LOGI_META.unknown;
+const LOGI_GROUP_ORDER = ["alert", "transit", "done", "prep"];
+const LOGI_GROUP_META = {
+  alert:   { emoji: "⚠️", label: "需要處理 (異常 / 取消)",   color: "var(--danger)" },
+  transit: { emoji: "🚚", label: "運送中 / 到店待取",       color: "var(--primary)" },
+  done:    { emoji: "✅", label: "已送達",                  color: "var(--success)" },
+  prep:    { emoji: "🕐", label: "準備中 (建單 / 交件前)",   color: "var(--text-soft)" },
+};
+const _isCodMethod = (m) => /COD/i.test(String(m || "")) || /貨到付款/.test(String(m || ""));
+
+let _logiCache = {};
+function loadLogisticsCache() {
+  try { const s = localStorage.getItem(LOGISTICS_CACHE_KEY); if (s) { const o = JSON.parse(s); if (o && typeof o === "object") _logiCache = o; } }
+  catch (e) { console.warn("[logistics] cache load fail", e); }
+}
+function saveLogisticsCache() {
+  try { localStorage.setItem(LOGISTICS_CACHE_KEY, JSON.stringify(_logiCache)); }
+  catch (e) { console.warn("[logistics] cache save fail", e); }
+}
+
+// 輕量查單: 只拿物流/狀態欄位, 不建清單、不動 state、不碰重複出貨防呆。唯讀 GET。
+async function fetchKocaStatus(orderId, opts) {
+  opts = opts || {};
+  orderId = String(orderId || "").trim();
+  if (!orderId) return { ok: false, error: "no_order" };
+  if (!settings.syncWorkerUrl || !settings.spideyKey) return { ok: false, error: "no_config" };
+  const cached = _logiCache[orderId];
+  if (!opts.force && cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < LOGI_STATUS_TTL_MS) return { ok: true, ...cached, cached: true };
+  try {
+    const url = settings.syncWorkerUrl.replace(/\/$/, "")
+      + "/api/koca-order?orderId=" + encodeURIComponent(orderId)
+      + "&key=" + encodeURIComponent(settings.spideyKey || "");
+    const res = await fetch(url, { cache: "no-store" });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) return { ok: false, error: (data && data.error) || "fetch_failed", orderId };
+    const rec = {
+      status: data.fulfillmentStatus || "unknown",
+      statusLabel: data.fulfillmentStatusLabel || (data.shipping && data.shipping.status) || "",
+      carrier: (data.shipping && data.shipping.carrier) || "",
+      trackingNo: (data.shipping && data.shipping.trackingNo) || "",
+      trackingUrl: (data.shipping && data.shipping.trackingUrl) || "",
+      eta: data.estimatedDeliveryDate || "",
+      paymentMethod: data.paymentMethod || "",
+      recipientName: (data.recipient && data.recipient.name) || "",
+      fetchedAt: Date.now(),
+    };
+    _logiCache[orderId] = rec;
+    saveLogisticsCache();
+    return { ok: true, ...rec };
+  } catch (e) {
+    console.warn("[logistics] fetch fail", orderId, e);
+    return { ok: false, error: "fetch_failed", orderId };
+  }
+}
+
+// 併發上限跑 (預設 4 條線, 免得一次打太多官網)
+async function _mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
+    while (i < items.length) { const idx = i++; try { out[idx] = await fn(items[idx], idx); } catch (e) { out[idx] = null; } }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+// 從出貨紀錄挑出「這台 App 出過的官網單」, 近 N 天, 同單號取最新一筆 (退貨/補寄/進貨不算)
+function collectShippedKocaOrders(days) {
+  const all = allHistory();
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+  const byOrder = new Map();
+  for (const e of all) {
+    if (!e || e.platform !== "koca" || !e.kocaOrderId) continue;
+    if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue;
+    const t = Date.parse(e.completedAt);
+    if (!(t >= cutoff)) continue;
+    const prev = byOrder.get(e.kocaOrderId);
+    if (!prev || Date.parse(prev.completedAt) < t) byOrder.set(e.kocaOrderId, e);
+  }
+  return Array.from(byOrder.values())
+    .map(e => ({ orderId: e.kocaOrderId, completedAt: e.completedAt, completedBy: e.completedBy || "" }))
+    .sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
+}
+
+// ===== 今日物流總覽 (設定 → 物流總覽) =====
+let _logiDays = 1;      // 1 = 今天(近1天) / 3 / 7
+let _logiLoading = false;
+
+function openLogisticsView() {
+  loadLogisticsCache();
+  renderLogisticsBoard();           // 先用快取畫一版 (瞬間有東西看)
+  refreshLogisticsStatuses(false);  // 再背景拉最新
+}
+
+async function refreshLogisticsStatuses(force) {
+  if (_logiLoading) return;
+  if (!settings.syncWorkerUrl || !settings.spideyKey) { renderLogisticsBoard(); return; }
+  const orders = collectShippedKocaOrders(_logiDays);
+  if (orders.length === 0) { renderLogisticsBoard(); return; }
+  _logiLoading = true;
+  renderLogisticsBoard();
+  let done = 0;
+  try {
+    await _mapLimit(orders, 4, async (o) => {
+      await fetchKocaStatus(o.orderId, { force });
+      done++;
+      const p = document.getElementById("logi-progress");
+      if (p) p.textContent = `更新中… ${done}/${orders.length}`;
+      return true;
+    });
+  } finally {
+    // 一定要放掉旗標: 否則中途拋錯會讓 _logiLoading 永遠卡 true, 物流總覽從此不再更新 (要重開 App 才好)
+    _logiLoading = false;
+    renderLogisticsBoard();
+  }
+}
+
+function updateLogiDayButtons() {
+  document.querySelectorAll("button[data-logi-days]").forEach(b => {
+    const on = Number(b.dataset.logiDays) === _logiDays;
+    b.style.background = on ? "var(--primary)" : "var(--surface)";
+    b.style.color = on ? "#fff" : "var(--text)";
+    b.style.borderColor = on ? "var(--primary)" : "var(--border)";
+  });
+}
+
+function renderLogisticsBoard() {
+  const el = document.getElementById("logistics-board");
+  if (!el) return;
+  updateLogiDayButtons();
+
+  if (!settings.syncWorkerUrl || !settings.spideyKey) {
+    el.innerHTML = `<div class="hint" style="padding:14px; border:1px solid var(--border); border-radius:10px;">⚠ 尚未設定官網連線(Worker 網址 / 金鑰)。請先到 ⚙ 設定 → 外部整合 設好, 才能查物流狀態。</div>`;
+    return;
+  }
+  const orders = collectShippedKocaOrders(_logiDays);
+  if (orders.length === 0) {
+    el.innerHTML = `<div class="hint" style="padding:14px; border:1px solid var(--border); border-radius:10px;">近 ${_logiDays} 天沒有這台出過的官網單。</div>`;
+    return;
+  }
+
+  const groups = { alert: [], transit: [], done: [], prep: [] };
+  let unqueried = 0;
+  for (const o of orders) {
+    const c = _logiCache[o.orderId];
+    if (!c) { unqueried++; groups.prep.push({ ...o, _pending: true }); continue; }
+    groups[_logiMeta(c.status).group].push({ ...o, ...c });
+  }
+
+  const codBadge = (o) => !_isCodMethod(o.paymentMethod) ? "" :
+    (o.status === "delivered"
+      ? `<span style="background:var(--success-bg); color:var(--success); font-weight:800; padding:1px 8px; border-radius:999px; font-size:0.68rem;">💰 貨到付款·已送達 → 確認收款</span>`
+      : `<span style="background:var(--warn-bg); color:#92400e; font-weight:700; padding:1px 8px; border-radius:999px; font-size:0.68rem;">💰 貨到付款</span>`);
+
+  const card = (o) => {
+    const m = o._pending ? { emoji: "⏳", label: "尚未查詢" } : _logiMeta(o.status);
+    const track = o.trackingNo
+      ? (o.trackingUrl
+          ? `<a href="${escapeHtml(o.trackingUrl)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:underline;">${escapeHtml(o.carrier || "物流")} ${escapeHtml(o.trackingNo)} ↗</a>`
+          : `${escapeHtml(o.carrier || "物流")} ${escapeHtml(o.trackingNo)}`)
+      : "";
+    return `<div style="border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:7px; background:var(--surface);">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span style="font-weight:800; font-size:0.9rem;">${m.emoji} ${m.label}${o.statusLabel && o.statusLabel !== m.label ? ` <span style="color:var(--text-soft); font-weight:500; font-size:0.72rem;">(${escapeHtml(o.statusLabel)})</span>` : ""}</span>
+        ${codBadge(o)}
+      </div>
+      <div style="font-family:ui-monospace,monospace; font-size:0.78rem; margin-top:3px;">${escapeHtml(o.orderId)}</div>
+      ${o.recipientName ? `<div style="font-size:0.75rem; color:var(--text-soft);">👤 ${escapeHtml(o.recipientName)}</div>` : ""}
+      ${track ? `<div style="font-size:0.75rem; margin-top:2px;">🚚 ${track}</div>` : ""}
+      ${o.eta ? `<div style="font-size:0.7rem; color:var(--text-soft);">預計送達 ${escapeHtml(o.eta)}</div>` : ""}
+    </div>`;
+  };
+
+  const nAlert = groups.alert.length, nTransit = groups.transit.length, nDone = groups.done.length;
+  const codDue = groups.done.filter(o => _isCodMethod(o.paymentMethod)).length;
+  let html = `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+    <span style="background:var(--danger-bg); color:var(--danger); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">⚠ 異常 ${nAlert}</span>
+    <span style="background:var(--primary-light); color:var(--primary); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">🚚 在途 ${nTransit}</span>
+    <span style="background:var(--success-bg); color:var(--success); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">✅ 已送達 ${nDone}</span>
+    ${codDue ? `<span style="background:var(--warn-bg); color:#92400e; font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">💰 COD已送達 ${codDue}</span>` : ""}
+  </div>`;
+
+  for (const gk of LOGI_GROUP_ORDER) {
+    const arr = groups[gk];
+    if (!arr.length) continue;
+    const gm = LOGI_GROUP_META[gk];
+    const open = (gk === "alert" || gk === "transit") ? "open" : "";
+    html += `<details ${open} style="margin-bottom:10px;">
+      <summary style="cursor:pointer; font-weight:800; color:${gm.color}; padding:4px 0;">${gm.emoji} ${gm.label} · ${arr.length}</summary>
+      <div style="margin-top:6px;">${arr.map(card).join("")}</div>
+    </details>`;
+  }
+
+  if (_logiLoading) html += `<div id="logi-progress" class="hint" style="margin-top:6px;">更新中…</div>`;
+  el.innerHTML = html;
+}
+
+// 出貨紀錄卡片上的物流小徽章 (讀快取; 沒查過就給一顆查詢鈕)
+function _histLogiBadge(orderId) {
+  const c = _logiCache[orderId];
+  if (c) {
+    const m = _logiMeta(c.status);
+    const track = c.trackingUrl ? ` <a href="${escapeHtml(c.trackingUrl)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.68rem;">查詢↗</a>` : "";
+    return `<br><span style="display:inline-block; margin-top:4px; background:var(--primary-light); color:var(--primary); padding:1px 9px; border-radius:999px; font-size:0.68rem; font-weight:800;">${m.emoji} ${m.label}</span>${track} <button class="btn outline sm" data-hist-logi="${escapeHtml(orderId)}" style="padding:0 6px; font-size:0.64rem;">🔄</button>`;
+  }
+  return `<br><button class="btn outline sm" data-hist-logi="${escapeHtml(orderId)}" style="padding:1px 8px; font-size:0.68rem; margin-top:4px;">🚚 查物流狀態</button>`;
+}
+
 // ===== 出貨紀錄雲端補送佇列 =====
 // 斷網/伺服器出錯時, 出貨紀錄推雲端會失敗。以前只 console.warn 就放掉 → 那筆永遠上不了雲,
 // 別台看不到、跨裝置重複出貨防呆也擋不住。改成: 失敗就排進佇列(存本機),
@@ -8723,13 +9097,14 @@ function renderHistory() {
           ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
           ${isPartial ? `<br>⚠ ${e.summary.totalSku - e.summary.completedSku} 個 SKU 未完成` : ''}
           ${(() => { const miss = (e.items || []).filter(it => it.missing); return miss.length ? `<br><span style="color: var(--danger); font-weight: 700;">⚠ 缺貨 ${miss.length} 項: ${miss.map(it => escapeHtml(it.sku)).join("、")}</span>` : ''; })()}
+          ${(e.platform === "koca" && e.kocaOrderId && e.orderType !== "return" && e.orderType !== "replacement" && e.orderType !== "inbound") ? _histLogiBadge(e.kocaOrderId) : ''}
         </div>
         <div class="history-item-actions">
           <button class="btn outline sm" data-hist-toggle="${e.id}">${expanded ? '收起' : '展開明細'}</button>
           <button class="btn outline sm" data-hist-export="${e.id}">📦 明細</button>
           <button class="btn outline sm" data-hist-merge="${e.id}" style="color: var(--success); border-color: var(--success);">📥 追加</button>
-          <button class="btn outline sm" data-hist-edit="${e.id}">✏️ 修改</button>
-          <button class="btn outline sm danger" data-hist-delete="${e.id}">🗑</button>
+          ${isHelper() ? '' : `<button class="btn outline sm" data-hist-edit="${e.id}">✏️ 修改</button>
+          <button class="btn outline sm danger" data-hist-delete="${e.id}">🗑</button>`}
         </div>
         ${detail}
       </div>
@@ -8756,9 +9131,10 @@ function renderHistory() {
     const g = _groups[_gIdx[dKey]];
     g.entries.push(e); g.cards.push(_histCards[i]);
   });
-  const _TYPE_META = { normal: { emoji: "📦", label: "一般 / 手建" }, replacement: { emoji: "📮", label: "補寄" }, return: { emoji: "📥", label: "退貨" }, inbound: { emoji: "🏭", label: "進貨" } };
-  const _TYPE_ORDER = ["normal", "replacement", "return", "inbound"];
-  const _typeOf = e => (e.orderType === "replacement" || e.orderType === "return" || e.orderType === "inbound") ? e.orderType : "normal";
+  const _TYPE_META = { normal: { emoji: "📦", label: "一般 / 手建" }, koca: { emoji: "🌐", label: "官方" }, replacement: { emoji: "📮", label: "補寄" }, return: { emoji: "📥", label: "退貨" }, inbound: { emoji: "🏭", label: "進貨" } };
+  const _TYPE_ORDER = ["normal", "koca", "replacement", "return", "inbound"];
+  // 官網(官方通路)自己一格; 其餘照 orderType 分
+  const _typeOf = e => (e.orderType === "replacement" || e.orderType === "return" || e.orderType === "inbound") ? e.orderType : (e.platform === "koca" ? "koca" : "normal");
   list.innerHTML = _groups.map(g => {
     const n = g.entries.length;
     // 依類型把卡片分組 (補寄/退貨/進貨/一般), 每類一個可摺疊子資料夾, 預設收合 → 不再一長串
@@ -9886,7 +10262,15 @@ function bumpPickItem(idx, delta, options) {
 document.getElementById("tab-menu").addEventListener("click", () => switchTab("menu"));
 document.getElementById("tab-a1").addEventListener("click", () => switchTab("a1"));
 document.getElementById("tab-history").addEventListener("click", () => switchTab("history"));
+document.getElementById("tab-logistics").addEventListener("click", () => switchTab("logistics"));
 document.getElementById("tab-inventory").addEventListener("click", () => switchTab("inventory"));
+
+// 物流分頁: 日期切換 / 重新整理
+document.getElementById("tab-content-logistics").addEventListener("click", (e) => {
+  if (e.target.closest("#logi-refresh-btn")) { refreshLogisticsStatuses(true); return; }
+  const logiDayBtn = e.target.closest("button[data-logi-days]");
+  if (logiDayBtn) { _logiDays = Number(logiDayBtn.dataset.logiDays) || 1; openLogisticsView(); return; }
+});
 function switchTab(t) {
   currentTab = t;
   document.querySelectorAll(".tab-bar button").forEach(b => {
@@ -9895,8 +10279,10 @@ function switchTab(t) {
   document.getElementById("tab-content-menu").hidden = (t !== "menu");
   document.getElementById("tab-content-a1").hidden = (t !== "a1");
   document.getElementById("tab-content-history").hidden = (t !== "history");
+  document.getElementById("tab-content-logistics").hidden = (t !== "logistics");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
   if (t === "history") { _histShowAll = false; renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); } // 切到歷史: 回到只畫最近 N 筆; 先畫本機, 再強制拉雲端最新, 順手補推沒上雲的
+  if (t === "logistics") { fetchCloudHistory(true).then(() => openLogisticsView()).catch(() => openLogisticsView()); } // 切到物流: 先拉雲端紀錄(別台出的官網單也算), 再開總覽
   if (t === "inventory") renderInventory(); // 切到倉庫清冊時重新渲染
   // 手機鏡像: 切到商品庫/倉庫清冊時, 拉電腦主檔最新 (主機自己不拉)
   if (t === "menu" || t === "inventory") fetchMasterMirror(true);
@@ -10115,6 +10501,7 @@ document.getElementById("inventory-list").addEventListener("click", (e) => {
   showToast(`✓ ${sku} ${binName}改為 ${q.toLocaleString()}`);
 });
 document.getElementById("inv-import-btn").addEventListener("click", () => {
+  if (helperBlocked("匯入庫存")) return;
   document.getElementById("inv-import-file").click();
 });
 // ERP 對齊提醒 banner 的「🔄 對齊 ERP」= 觸發同一個匯入
@@ -10321,6 +10708,18 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     if (entry) { entry._expanded = !entry._expanded; renderHistory(); }
     return;
   }
+  // 出貨紀錄卡片的「查物流狀態」鈕: 跟官網拉一次最新狀態再重繪
+  const logiBtn = e.target.closest("button[data-hist-logi]");
+  if (logiBtn) {
+    const oid = logiBtn.dataset.histLogi;
+    if (!settings.syncWorkerUrl || !settings.spideyKey) { showToast("⚠ 請先到 ⚙ 設定 → 外部整合 設好官網連線"); return; }
+    logiBtn.disabled = true; logiBtn.textContent = "查詢中…";
+    fetchKocaStatus(oid, { force: true }).then(r => {
+      if (!r.ok) showToast(r.error === "order_not_found" ? "查無此單" : "查詢失敗, 請稍後再試");
+      renderHistory();
+    });
+    return;
+  }
   const exportBtn = e.target.closest("button[data-hist-export]");
   if (exportBtn) {
     const entry = allHistory().find(h => h.id === exportBtn.dataset.histExport); // 含雲端那筆
@@ -10382,9 +10781,10 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     return;
   }
   const editBtn = e.target.closest("button[data-hist-edit]");
-  if (editBtn) { openHistEdit(editBtn.dataset.histEdit); return; }
+  if (editBtn) { if (helperBlocked("修改出貨紀錄")) return; openHistEdit(editBtn.dataset.histEdit); return; }
   const del = e.target.closest("button[data-hist-delete]");
   if (del) {
+    if (helperBlocked("刪除出貨紀錄")) return;
     const id = del.dataset.histDelete;
     const entry = allHistory().find(h => h.id === id); // 可能是雲端來的
     if (!entry) return;
@@ -11029,6 +11429,7 @@ if (_menuExpandBtn) _menuExpandBtn.addEventListener("click", () => {
 // Library management
 const libModal = document.getElementById("lib-modal");
 document.getElementById("manage-lib-btn").addEventListener("click", () => {
+  if (helperBlocked("管理商品庫")) return;
   renderLibrary();
   libModal.hidden = false;
 });
@@ -11574,10 +11975,122 @@ document.getElementById("home-btn").addEventListener("click", () => {
 });
 
 const settingsModal = document.getElementById("settings-modal");
+// ==================== 🔒 裝置角色 (工讀生模式) ====================
+// 工讀生模式: 把「會弄壞資料」的功能藏起來, 並在處理程式再擋一層 (只藏 UI 不夠, 免得有路徑繞過)。
+// ⚠ 這是「防手滑 / 防好奇」的軟鎖, 不是資安機制 —— PIN 只存本機, 懂開發者工具的人繞得過。工讀生情境足夠。
+const HELPER_LOCKED_VIEWS = ["integration", "backup", "danger", "stocktake", "shipping"];
+function isHelper() { return settings.deviceRole === "helper"; }
+
+// 工讀生模式不給改的設定 → 強制回到安全值
+// (不動 isMasterDevice: 若這台本來是主機, 切來切去會把主檔連動悄悄弄壞; 藏起來不給改就好)
+function _forceHelperSafeSettings() {
+  if (!isHelper()) return;
+  let changed = false;
+  if (settings.packagingGuard !== true) { settings.packagingGuard = true; changed = true; }
+  if (settings.testMode) { settings.testMode = false; changed = true; }  // 最陰險: 真出貨卻不留紀錄
+  if (changed) saveSettings();
+}
+
+function applyRoleLock() {
+  const h = isHelper();
+  _forceHelperSafeSettings();
+  document.querySelectorAll("button[data-settings-view]").forEach(b => {
+    if (HELPER_LOCKED_VIEWS.includes(b.dataset.settingsView)) b.hidden = h;
+  });
+  document.querySelectorAll('a[href="shipping.html"], a[href="scheduling.html"]').forEach(a => { a.hidden = h; });
+  const byId = (id, hide) => { const el = document.getElementById(id); if (el) el.hidden = hide; };
+  byId("test-mode-toggle", h);   // 🧪 測試模式
+  byId("manage-lib-btn", h);     // 📚 管理商品庫 → 唯讀
+  byId("inv-import-btn", h);     // 📥 匯入庫存 CSV
+  byId("settings-sec-data", h);  // 「資料 / 其他」整區都藏了 → 標題也收掉, 免得留一個空標題
+  byId("help-helper-simple", !h);// 📖 教學: 工讀生只看極簡三步
+  byId("help-full", h);          //         管理員看完整版
+  const rc = document.getElementById("role-card-desc");
+  if (rc) rc.textContent = h ? "目前:工讀生模式 🔒" : "目前:管理員(全功能)";
+
+  // ===== POS 化: 工讀生只做官網單, 畫面砍到「只剩他該按的」=====
+  // 分頁只留「開始出貨 + 出貨紀錄」, 其餘(商品庫/物流/倉庫清冊)藏掉
+  const HELPER_TABS = ["a1", "history"];
+  document.querySelectorAll(".tab-bar button[data-tab]").forEach(b => {
+    b.hidden = h && !HELPER_TABS.includes(b.dataset.tab);
+  });
+  // 若工讀生正停在被藏的分頁上 → 拉回「開始出貨」
+  if (h && !HELPER_TABS.includes(currentTab)) { try { switchTab("a1"); } catch (e) {} }
+  // 開始出貨頁: 只留官網單號入口 (藏掉 CSV 上傳、通路下拉、共同包貨開房/加入)
+  byId("a1-page-title", h);   // 「從通路後台匯入揀貨單」標題 (工讀生看了會困惑)
+  byId("a1-pos-title", !h);   // 換成簡單的「🌐 官網出貨」
+  byId("a1-csv-box", h);      // 📥 CSV 上傳 + 通路下拉整塊
+  byId("a1-adv-sections", h); // 其他建單方式(手動/補寄/退貨/入倉) + 貼上CSV + 規格對應 + 必要商品
+  document.querySelectorAll(".room-entry").forEach(el => { el.hidden = h; });
+  // 大按鈕 (POS 觸控): 工讀生強制手套模式; 切回管理員還原成他自己的設定
+  applyGloveMode(h ? true : !!settings.gloveMode);
+  // 工讀生模式會強制關 testMode → 順手刷新「🧪 測試模式」警示條, 免得殘留顯示誤導 (實際已關卻還亮著)
+  if (typeof renderTestModeBanner === "function") renderTestModeBanner();
+}
+
+function renderRoleView() {
+  const box = document.getElementById("role-status");
+  const btn = document.getElementById("role-switch-btn");
+  if (!box || !btn) return;
+  if (isHelper()) {
+    box.innerHTML = `<div style="padding:12px; border-radius:10px; background:var(--warn-bg); color:#92400e; border:2px solid var(--warn,#f59e0b);">
+      <strong>🧑‍🎓 目前:工讀生模式</strong><br>
+      <span style="font-size:0.8rem;">刪/改紀錄、取消出貨、備份、庫存匯入、商品庫、測試模式、官網回寫、金鑰設定 —— 都已鎖起來。刷單、刷貨、完成出貨、看出貨紀錄照常(單筆物流狀態在紀錄裡就看得到)。</span>
+    </div>`;
+    btn.textContent = "🔓 切回管理員(需 PIN)";
+  } else {
+    box.innerHTML = `<div style="padding:12px; border-radius:10px; background:var(--success-bg); color:var(--success); border:2px solid var(--success);">
+      <strong>🖥 目前:管理員</strong><br>
+      <span style="font-size:0.8rem;">全部功能都開著。要把這台交給工讀生用之前, 請先切成工讀生模式。</span>
+    </div>`;
+    btn.textContent = "🧑‍🎓 切成工讀生模式";
+  }
+}
+
+function _switchRole() {
+  if (isHelper()) {
+    const pin = prompt("請輸入 4 碼 PIN 切回管理員:");
+    if (pin === null) return;
+    if (String(pin).trim() !== String(settings.adminPin)) { alert("❌ PIN 不對"); return; }
+    settings.deviceRole = "admin";
+    saveSettings(); applyRoleLock(); renderRoleView(); renderHistory();
+    showToast("🔓 已切回管理員");
+    return;
+  }
+  if (!/^\d{4}$/.test(String(settings.adminPin || ""))) {
+    const p1 = prompt("先設一組 4 碼 PIN(之後要切回管理員時輸入):");
+    if (p1 === null) return;
+    if (!/^\d{4}$/.test(String(p1).trim())) { alert("⚠ 請輸入 4 個數字"); return; }
+    const p2 = prompt("再輸入一次確認:");
+    if (p2 === null) return;
+    if (String(p2).trim() !== String(p1).trim()) { alert("⚠ 兩次不一樣, 請重來"); return; }
+    settings.adminPin = String(p1).trim();
+  }
+  if (!confirm("要把這台切成「工讀生模式」嗎?\n\n危險功能會全部鎖起來, 要用 PIN 才能切回管理員。")) return;
+  settings.deviceRole = "helper";
+  saveSettings(); applyRoleLock(); renderRoleView(); renderHistory();
+  showToast("🔒 已切成工讀生模式");
+}
+
+// 工讀生沒填暱稱 → 出貨紀錄查不到是誰包的 → 擋下
+function requireNameOk() {
+  if (!isHelper()) return true;
+  if ((settings.myName || "").trim()) return true;
+  alert("⚠ 請先設定你的暱稱\n\n⚙ 設定 → 👤 我的暱稱\n\n沒有暱稱的話, 出貨紀錄查不到是誰包的。");
+  return false;
+}
+
+// 工讀生模式擋下危險操作 (UI 已藏, 這是第二層保險)
+function helperBlocked(what) {
+  if (!isHelper()) return false;
+  showToast("🔒 工讀生模式不能" + (what || "做這個"));
+  return true;
+}
+
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
   // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
-  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger", "timing"].forEach(v => {
+  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger", "timing", "profile", "role"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
@@ -11586,6 +12099,7 @@ function showSettingsView(view) {
 document.getElementById("settings-btn").addEventListener("click", () => {
   settingsModal.hidden = false;
   showSettingsView("menu"); // 每次開啟回主選單
+  applyRoleLock();          // 🔒 工讀生模式: 每次開設定都重套一次(避免有路徑把卡片弄回來)
   // 載入當前設定到 UI
   document.getElementById("sound-enabled-input").checked = settings.soundEnabled;
   const _pg = document.getElementById("pkg-guard-input");
@@ -11862,6 +12376,8 @@ document.getElementById("room-leave-btn").addEventListener("click", () => {
 document.getElementById("settings-modal").addEventListener("click", (e) => {
   const card = e.target.closest("button[data-settings-view]");
   if (card) {
+    // 🔒 第二層防護: 工讀生就算(因某種原因)點到被鎖的卡片, 也一律擋下, 不只靠 hidden 藏
+    if (isHelper() && HELPER_LOCKED_VIEWS.includes(card.dataset.settingsView)) { showToast("🔒 工讀生模式不能開這個"); return; }
     showSettingsView(card.dataset.settingsView);
     if (card.dataset.settingsView === "theme") {
       refreshThemePicker();
@@ -11873,6 +12389,7 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
       fetchCloudHistory(true); // 拉最新雲端紀錄, 算得到別台的包裹時長
       renderTimingStats();
     }
+    if (card.dataset.settingsView === "role") renderRoleView();
     if (card.dataset.settingsView === "integration") {
       const _adb = document.getElementById("auto-daily-backup-input");
       if (_adb) _adb.checked = !!settings.autoDailyBackup;
@@ -11889,6 +12406,7 @@ document.getElementById("settings-modal").addEventListener("click", (e) => {
     showSettingsView("menu");
     return;
   }
+  if (e.target.closest("#role-switch-btn")) { _switchRole(); return; }
   // 💾 儲存設定: 設定其實每改一項就自動存了, 這顆給明確回饋 + 存一次 + 回設定首頁
   const saveBtn = e.target.closest(".settings-save-btn");
   if (saveBtn) {
@@ -12259,6 +12777,7 @@ if (_gmInp) {
 }
 document.getElementById("close-settings").addEventListener("click", () => settingsModal.hidden = true);
 document.getElementById("reset-btn").addEventListener("click", () => {
+  if (helperBlocked("取消出貨")) return;
   if (state.items.length === 0) { showToast("目前沒有備貨清單"); return; }
   const remaining = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
   let msg = "❗ 確定取消本次出貨?\n\n";
@@ -12741,6 +13260,7 @@ document.getElementById("merge-replace").addEventListener("click", doMergeReplac
 document.getElementById("merge-cancel").addEventListener("click", doMergeCancel);
 
 document.getElementById("finish-btn").addEventListener("click", () => {
+  if (!requireNameOk()) return;   // 工讀生沒填暱稱 → 紀錄追不到人, 先擋
   const _shipped = getShippedBySkuMap();
   // 報告計算: essential 商品另外處理, 不算進 done/miss/over
   const _normalItems = state.items.filter(it => !it.essential);
@@ -13194,6 +13714,16 @@ loadCollapsed();
 loadSpecMap();
 loadHistory();
 loadPendingCloudHistory(); // 還原上次沒推成功的出貨紀錄補送佇列
+loadLogisticsCache();      // 還原物流狀態快取 (出貨紀錄徽章立即有東西看)
+applyRoleLock();           // 🔒 開機就套用裝置角色 (工讀生模式: 危險功能藏起來)
+// 工讀生沒填暱稱 → 出貨紀錄會變「(未命名)」, 開機就提醒他去填
+if (isHelper() && !(settings.myName || "").trim()) {
+  setTimeout(() => {
+    alert("👋 請先設定你的暱稱\n\n⚙ 設定 → 👤 我的暱稱\n\n每筆出貨紀錄都會記下是誰包的, 沒填的話查不到。");
+    const _sb = document.getElementById("settings-btn"); if (_sb) _sb.click();
+    showSettingsView("profile");
+  }, 1200);
+}
 loadStock();
 loadStockTake();
 loadStockTakeHistory();
