@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>訂單排程</title>
+<style>
+  :root{
+    --primary:#E84A02; --primary-light:#fdebe0; --bg:#faf7f3; --card:#ffffff;
+    --text:#2b2520; --text-soft:#8a7e72; --border:#e8e1d8; --border2:#d8cfc4;
+    --success:#1f9d55; --success-bg:#e6f5ec; --warn:#b8860b; --warn-bg:#fbf3df; --danger:#d23b3b; --danger-bg:#fbe8e8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC",sans-serif;background:var(--bg);color:var(--text);
+       padding:calc(12px + env(safe-area-inset-top,0px)) 12px 40px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  header h1{font-size:1.25rem;margin:0;color:var(--primary);flex:1}
+  header a{font-size:.8rem;color:var(--text-soft);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+  label{display:block;font-size:.82rem;font-weight:700;margin:10px 0 4px}
+  label .req{color:var(--danger)}
+  input,select,textarea{width:100%;padding:10px;font-size:1rem;border:1px solid var(--border2);border-radius:9px;background:#fff;font-family:inherit}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .btn{border:0;border-radius:10px;padding:12px 14px;font-size:1rem;font-weight:700;cursor:pointer}
+  .btn.full{width:100%}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.ok{background:var(--success);color:#fff}
+  .btn.outline{background:#fff;border:1px solid var(--border2);color:var(--text)}
+  .btn.sm{padding:7px 11px;font-size:.82rem;border-radius:8px}
+  .btn.danger{background:#fff;border:1px solid var(--danger);color:var(--danger)}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;font-size:.85rem;margin:4px 0 10px}
+  .stat{background:var(--primary-light);color:var(--primary);font-weight:700;padding:6px 12px;border-radius:999px}
+  .stat.due{background:var(--warn-bg);color:var(--warn)}
+  .stat.late{background:var(--danger-bg);color:var(--danger)}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;padding:9px;border:1px solid var(--border2);background:#fff;border-radius:9px;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--text-soft)}
+  .tabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .plat-group{margin-bottom:10px;border:1px solid var(--border);border-radius:12px;background:#fff;overflow:hidden}
+  .plat-group summary{cursor:pointer;font-weight:800;font-size:.9rem;padding:10px 12px;background:var(--primary-light);color:var(--primary);list-style-position:inside}
+  .plat-group .g-body{padding:9px}
+  .rec{border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:9px;background:#fff}
+  .rec:last-child{margin-bottom:0}
+  .rec.shipped{opacity:.72}
+  .rec.late{border-color:var(--danger);background:var(--danger-bg)}
+  .rec-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .badge{font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:999px}
+  .b-pending{background:var(--warn-bg);color:var(--warn)}
+  .b-shipped{background:var(--success-bg);color:var(--success)}
+  .b-today{background:var(--primary-light);color:var(--primary)}
+  .b-late{background:var(--danger);color:#fff}
+  .b-future{background:#eee;color:var(--text-soft)}
+  .rec-main{font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:.95rem}
+  .rec-sub{font-size:.78rem;color:var(--text-soft);margin-top:2px;line-height:1.5}
+  .rec-act{display:flex;gap:6px;margin-top:8px}
+  .empty{text-align:center;color:var(--text-soft);padding:26px}
+  .kv{font-size:.75rem;color:var(--text-soft)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2b2520;color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span style="font-size:1.6rem">📅</span>
+    <h1>訂單排程</h1>
+    <a href="index.html">← 回出貨 App</a>
+  </header>
+
+  <!-- 新增 -->
+  <div class="card">
+    <div class="row">
+      <div><label>通路</label><select id="f-plat"></select></div>
+      <div><label>預定出貨日</label><input id="f-date" type="date"></div>
+    </div>
+    <label>訂單數量</label>
+    <input id="f-qty" type="number" inputmode="numeric" min="1" step="1" placeholder="例: 12">
+    <label>備註(選填)</label>
+    <input id="f-note" placeholder="例: 指定週五到貨 / 預購 8 月初出">
+    <button class="btn primary full" id="add-btn" style="margin-top:12px">＋ 排入(待出)</button>
+  </div>
+
+  <!-- 清單 -->
+  <div class="card">
+    <div class="stats" id="stats"></div>
+    <div class="tabs">
+      <button data-tab="pending" class="active">待出 <span id="c-pending">0</span></button>
+      <button data-tab="shipped">已出 <span id="c-shipped">0</span></button>
+      <button data-tab="all">全部 <span id="c-all">0</span></button>
+    </div>
+    <input id="search" placeholder="🔍 搜尋備註" style="margin-bottom:10px">
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button class="btn outline sm" id="exp-csv">📤 匯出 CSV</button>
+      <button class="btn outline sm" id="exp-json">💾 匯出備份</button>
+      <button class="btn outline sm" id="imp-json">📥 匯入備份</button>
+    </div>
+    <input type="file" id="imp-file" accept=".json" hidden>
+    <p class="kv" style="text-align:center;margin-top:12px">版本 <span id="ver">1.0</span> · 訂單排程(資料只存這台電腦)</p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const APP_VERSION="1.1";
+const KEY="koca_order_schedule_v1";
+const PLATS={shopee:"🛒 蝦皮",momo:"🛍 MOMO",coupang:"🅒 酷澎",koca:"🌐 官方",kol:"📣 KOL",meet:"🤝 面交",other:"📦 其他"};
+const PLAT_ORDER=["shopee","momo","coupang","koca","kol","meet","other"];
+
+let records=[], tab="pending", q="";
+const $=id=>document.getElementById(id);
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1800);}
+function load(){try{records=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){records=[]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(records))}catch(e){toast("⚠ 儲存失敗,空間可能已滿")}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function todayStr(){const d=new Date();const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
+function fmt(ts){if(!ts)return"";const d=new Date(ts);const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`}
+function fmtDate(s){if(!s)return"未定";const[y,m,d]=s.split("-");return `${Number(m)}/${Number(d)}`}
+
+// 下拉 + 預設日期
+$("f-plat").innerHTML=PLAT_ORDER.map(k=>`<option value="${k}">${PLATS[k]}</option>`).join("");
+$("f-date").value=todayStr();
+
+// 新增 (全部選填, 什麼都不填也能排)
+$("add-btn").addEventListener("click",()=>{
+  const qtyRaw=$("f-qty").value.trim();
+  const qty=qtyRaw?Math.max(1,Math.floor(Number(qtyRaw)||0)):null;  // 沒填=null(未填數量)
+  const rec={
+    id:Date.now()+"_"+Math.random().toString(36).slice(2,7),
+    createdAt:new Date().toISOString(),
+    platform:$("f-plat").value, qty,
+    note:$("f-note").value.trim(),
+    shipDate:$("f-date").value||todayStr(),
+    status:"pending", shippedAt:null
+  };
+  records.unshift(rec); save();
+  $("f-qty").value="";$("f-note").value="";
+  toast("✓ 已排入(待出)"); render();
+  $("f-qty").focus();
+});
+// Enter 直接排入
+$("f-qty").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("add-btn").click();}});
+
+// 清單操作
+$("list").addEventListener("click",e=>{
+  const ship=e.target.closest("[data-ship]"); const undo=e.target.closest("[data-undo]"); const del=e.target.closest("[data-del]");
+  if(ship){const r=records.find(x=>x.id===ship.dataset.ship);if(r){r.status="shipped";r.shippedAt=new Date().toISOString();save();render();toast("✓ 已標記出貨")}}
+  if(undo){const r=records.find(x=>x.id===undo.dataset.undo);if(r){r.status="pending";r.shippedAt=null;save();render();toast("已改回待出")}}
+  if(del){const r=records.find(x=>x.id===del.dataset.del);if(r&&confirm(`刪除這筆排程?\n\n${PLATS[r.platform]||r.platform} · ${r.qty?r.qty+" 張":"未填數量"} · ${fmtDate(r.shipDate)} 出`)){records=records.filter(x=>x.id!==r.id);save();render();toast("已刪除")}}
+});
+$("search").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render()});
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("active",x===b));render()}));
+
+function dateBadge(r){
+  if(r.status==="shipped")return"";
+  const t=todayStr();
+  if(r.shipDate<t)return `<span class="badge b-late">⚠ 逾期 ${fmtDate(r.shipDate)}</span>`;
+  if(r.shipDate===t)return `<span class="badge b-today">今天出</span>`;
+  return `<span class="badge b-future">${fmtDate(r.shipDate)} 出</span>`;
+}
+
+function render(){
+  const pend=records.filter(r=>r.status==="pending");
+  const ship=records.filter(r=>r.status==="shipped");
+  $("c-pending").textContent=pend.length;$("c-shipped").textContent=ship.length;$("c-all").textContent=records.length;
+  const t=todayStr();
+  const sumQ=arr2=>arr2.reduce((s,r)=>s+(r.qty||0),0);
+  const late=pend.filter(r=>r.shipDate<t);
+  const due=pend.filter(r=>r.shipDate===t);
+  let stats=`<span class="stat">待出 ${sumQ(pend)} 張</span><span class="stat due">今天該出 ${sumQ(due)} 張</span>`;
+  if(late.length)stats+=`<span class="stat late">⚠ 逾期未出 ${sumQ(late)} 張</span>`;
+  $("stats").innerHTML=stats;
+
+  let arr = tab==="pending"?pend : tab==="shipped"?ship : records.slice();
+  if(q) arr=arr.filter(r=>String(r.note||"").toLowerCase().includes(q));
+  if(arr.length===0){$("list").innerHTML='<div class="empty">📭 沒有排程</div>';return;}
+
+  // 依通路分組, 組內依預定出貨日排 (早的在上)
+  const groups={};
+  arr.forEach(r=>{(groups[r.platform]=groups[r.platform]||[]).push(r)});
+  const keys=PLAT_ORDER.filter(k=>groups[k]).concat(Object.keys(groups).filter(k=>!PLAT_ORDER.includes(k)));
+  $("list").innerHTML=keys.map(k=>{
+    const list=groups[k].slice().sort((a,b)=> a.shipDate<b.shipDate?-1:a.shipDate>b.shipDate?1:(a.createdAt<b.createdAt?1:-1));
+    const gLate=list.filter(r=>r.status==="pending"&&r.shipDate<t).length;
+    const items=list.map(r=>{
+      const isLate=r.status==="pending"&&r.shipDate<t;
+      const st=r.status==="shipped"?`<span class="badge b-shipped">✓ 已出 ${fmt(r.shippedAt)}</span>`:`<span class="badge b-pending">待出</span>`;
+      return `<div class="rec ${r.status==="shipped"?"shipped":""} ${isLate?"late":""}">
+        <div class="rec-top">${st}${dateBadge(r)}</div>
+        <div class="rec-main">${r.qty?`${r.qty} 張`:"(未填數量)"}</div>
+        <div class="rec-sub">排入 ${fmt(r.createdAt)}${r.note?`<br>備註:${esc(r.note)}`:""}</div>
+        <div class="rec-act">
+          ${r.status==="pending"?`<button class="btn ok sm" data-ship="${r.id}">✓ 標記出貨</button>`:`<button class="btn outline sm" data-undo="${r.id}">↩ 改回待出</button>`}
+          <button class="btn danger sm" data-del="${r.id}">🗑 刪除</button>
+        </div>
+      </div>`;
+    }).join("");
+    return `<details class="plat-group" open>
+      <summary>${PLATS[k]||esc(k)} · 共 ${sumQ(list)} 張(${list.length} 筆)${gLate?` <span class="badge b-late">逾期 ${gLate}</span>`:""}</summary>
+      <div class="g-body">${items}</div>
+    </details>`;
+  }).join("");
+}
+
+// 匯出 / 匯入
+$("exp-csv").addEventListener("click",()=>{
+  if(!records.length){toast("沒有資料");return;}
+  const PLAT_PLAIN={shopee:"蝦皮",momo:"MOMO",coupang:"酷澎",koca:"官方",kol:"KOL",meet:"面交",other:"其他"};
+  const head=["排入時間","通路","訂單數量","預定出貨日","狀態","出貨時間","備註"];
+  const rows=[head].concat(records.map(r=>[fmtFull(r.createdAt),PLAT_PLAIN[r.platform]||r.platform,r.qty==null?"":r.qty,r.shipDate||"",r.status==="shipped"?"已出":"待出",fmtFull(r.shippedAt),r.note||""]));
+  const csv="﻿"+rows.map(rw=>rw.map(c=>{let s=String(c==null?"":c);if(/^[=+\-@]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}).join(",")).join("\r\n");
+  dl(new Blob([csv],{type:"text/csv;charset=utf-8;"}),`訂單排程_${todayStr()}.csv`);
+});
+function fmtFull(ts){if(!ts)return"";const d=new Date(ts);const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+$("exp-json").addEventListener("click",()=>{dl(new Blob([JSON.stringify({_meta:{app:"訂單排程",version:APP_VERSION,exportedAt:new Date().toISOString()},records},null,2)],{type:"application/json"}),`訂單排程_備份_${todayStr()}.json`)});
+$("imp-json").addEventListener("click",()=>$("imp-file").click());
+$("imp-file").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);const inc=Array.isArray(d)?d:(d.records||[]);const ids=new Set(records.map(r=>r.id));let n=0;inc.forEach(r=>{if(r&&r.id&&!ids.has(r.id)){records.push(r);n++}});records.sort((a,b)=>a.createdAt<b.createdAt?1:-1);save();render();toast(`✓ 匯入 ${n} 筆`)}catch(err){toast("⚠ 檔案格式錯誤")}};rd.readAsText(f,"UTF-8");e.target.value="";});
+function dl(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u)}
+
+$("ver").textContent=APP_VERSION;
+load(); render();
+</script>
+</body>
+</html>
