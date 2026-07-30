@@ -3322,7 +3322,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v3.7 · 2026-07-29";
+const APP_VERSION = "v3.8 · 2026-07-29";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3736,9 +3736,18 @@ function undoLastAction() {
   hideUndoButton();
   if (a.type === "scan_sku") {
     const idx = state.items.findIndex(it => it.sku === a.sku);
-    if (idx >= 0) {
-      bumpPickItem(idx, -a.delta, { isUndo: true });
-      showToast(`↩ 已撤回 ${a.sku} ×${a.delta}`);
+    if (idx >= 0) bumpPickItem(idx, -a.delta, { isUndo: true });
+    // 連動帶出來的子項(套組主機等)一起撤掉, 否則撤了 trigger 子項卻殘留 → 多算
+    let childMsg = "";
+    if (Array.isArray(a.children) && a.children.length) {
+      for (const c of a.children) {
+        const ci = state.items.findIndex(it => it.sku === c.sku);
+        if (ci >= 0) bumpPickItem(ci, -c.delta, { isUndo: true });
+      }
+      childMsg = " + 連動子項";
+    }
+    if (idx >= 0 || childMsg) {
+      showToast(`↩ 已撤回 ${a.sku} ×${a.delta}${childMsg}`);
       SOUND.scanError();
     }
   }
@@ -5240,9 +5249,20 @@ function checkBundleRule(triggerIdx, deltaAdded) {
         if (recheckIdx >= 0) {
           bumpPickItem(recheckIdx, c.totalQty, { suppressBundle: true });
           addedCount++;
+          // 把連動子項掛到「剛剛那個 trigger 的 undo 動作」上, 之後按撤銷會一起撤 (避免子項殘留多算)
+          if (_lastAction && _lastAction.type === "scan_sku") {
+            (_lastAction.children = _lastAction.children || []).push({ sku: c.sku, delta: c.totalQty });
+          }
         }
       }
-      if (addedCount > 0) showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
+      if (addedCount > 0) {
+        showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
+        // 剛加完子項 → 刷新撤銷鈕(重置 5 秒倒數 + 更新文字), 讓「撤銷=trigger+套組」有足夠時間按
+        if (_lastAction && _lastAction.type === "scan_sku" && Array.isArray(_lastAction.children) && _lastAction.children.length) {
+          _lastAction.label = `${_lastAction.sku} ×${_lastAction.delta} + 套組`;
+          showUndoButton(_lastAction);
+        }
+      }
     }
   }, 50);
 }
@@ -5826,6 +5846,7 @@ function applyA1MappingToPickingList() {
 
   state.items = items;
   state.loadedDate = new Date().toISOString().slice(0, 10);
+  state.completedParcels = []; state.activeParcel = null; // 全新清單: 清掉可能殘留的舊出貨包裹, 免得舊出貨量被當成新清單的「已出貨」地板卡住減量
   clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新一般出貨清單
   saveState();
   pendingA1 = [];
@@ -5905,6 +5926,7 @@ function kocaShippedMap() {
   const hist = (typeof allHistory === "function") ? allHistory() : (typeof history !== "undefined" ? history : []);
   for (const e of (hist || [])) {
     if (!e || !e.kocaOrderId) continue;
+    if (state.continuationOf && e.id === state.continuationOf) continue; // 正在追加的原單暫留, 不算已出過
     // 退貨/補寄/入倉不算「出過這張單」
     if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue;
     const prev = m[e.kocaOrderId];
@@ -9527,6 +9549,7 @@ function findShippedByCode(code) {
   if (!c) return null;
   const all = allHistory(); // 本機+雲端, 已新→舊排序
   for (const e of all) {
+    if (state.continuationOf && e.id === state.continuationOf) continue; // 正在追加的原單: 還沒刪只是暫留, 不算「已出過」
     if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue; // 退貨/補寄/入倉不算「出過這張」(比照 kocaShippedMap, 避免噪音警告)
     if (e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
     const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c
@@ -10019,7 +10042,10 @@ function processScan(code) {
       if (state.activeParcel) finalizeActiveParcel(false);
       // 共同包貨(開房者): 存檔上一位但「不關房」, 待會建立下一位時會把房間清單整批換掉同步給同仁。
       const _keepRoom = state.roomMode && state.isRoomHost;
-      actuallyCompleteShipping(_keepRoom ? { keepRoom: true } : undefined); // 存檔目前這筆, 並清空 state
+      const _saveOk = actuallyCompleteShipping(_keepRoom ? { keepRoom: true } : undefined); // 存檔目前這筆, 並清空 state
+      // ★ 存檔失敗(例如空間滿): 這筆資料已被刻意保留在清單裡, 絕不能開下一張 → 否則下一張建立時的
+      //   「放棄目前清單?」確認會把這筆被保留的資料覆蓋掉, 違反「存檔失敗絕不遺失」。停在原地讓使用者處理。
+      if (_saveOk === false) return;
       if (_mode === "inbound") openInboundModal(code);
       else if (_mode === "replacement") openReplacementModal(code);
       else openReturnModal(code);
@@ -11216,18 +11242,10 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         state.priorKocaPushed = entryToRestore.kocaPushedItems || null;
         state.loadedDate = new Date().toISOString().slice(0, 10);
         saveState();
-        history = history.filter(h => h.id !== entryIdToMerge);
-        saveHistory();
-        // 雲端共享: 追加的是雲端那筆時, 也把雲端原始那筆移除 (避免之後完成後雲端同時有舊+新)
-        cloudHistory = cloudHistory.filter(h => h.id !== entryIdToMerge);
-        if (cloudHistoryEnabled() && entryToRestore.completedAt) {
-          fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/delete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
-            body: JSON.stringify({ id: entryIdToMerge, completedAt: entryToRestore.completedAt }),
-          }).catch(() => {});
-        }
-        console.log("[history-merge] restored entry", entryIdToMerge, "appendLevel=", state.appendLevel);
+        // ★【資料安全 / #2 修正】原紀錄「先不刪」, 留到追加完成、新紀錄存檔成功後才刪(見 actuallyCompleteShipping)。
+        //   若中途放棄追加, 原出貨憑證就不會遺失。追加期間這張原單以 state.continuationOf 標記,
+        //   重複出貨防呆(findShippedByCode / kocaShippedMap)會跳過它, 不會對「正在追加的原單」誤報已出過。
+        console.log("[history-merge] restored entry", entryIdToMerge, "(deferred delete)", "appendLevel=", state.appendLevel);
       }
 
       // 若無現有清單 → 當作普通匯入
@@ -13622,7 +13640,7 @@ function actuallyCompleteShipping(opts) {
   opts = opts || {};
   // 🛡 防重複記帳: 1.5 秒內第二次完成一律忽略 (擋觸控雙擊/事件連發; 換下一位客人間隔遠大於此, 不受影響)
   const _nowC = Date.now();
-  if (_nowC - _lastCompleteAt < 1500) { console.warn("[complete] 忽略 1.5 秒內的重複完成"); return; }
+  if (_nowC - _lastCompleteAt < 1500) { console.warn("[complete] 忽略 1.5 秒內的重複完成"); return false; }
   _lastCompleteAt = _nowC;
   // 🧪 測試模式: 完成流程照跑(清單清空、播完成音), 但【不存任何紀錄 / 不扣庫存 / 不回寫官網 / 不推雲端】
   if (settings.testMode) {
@@ -13638,14 +13656,14 @@ function actuallyCompleteShipping(opts) {
     render();
     SOUND.shipDone();
     showToast("🧪 測試完成 — 未留任何紀錄(測試模式)");
-    return;
+    return true;
   }
   // 存入歷史紀錄 (回傳剛存的 entry 給 webhook 使用)
   const entry = appendHistory();
   // 🔒 資料安全命脈 (規範一-1): 紀錄存檔失敗時, 絕不清空清單 / 不刪備份, 避免本批出貨永久消失。此判斷不可移除。
   if (entry && !_lastHistorySaveOk) {
     alert("⚠ 出貨紀錄存檔失敗（可能儲存空間已滿）。\n\n為避免資料遺失，本次清單不會被清空。\n請先到 ⚙ → 資料搬家/備份 匯出備份、或清掉舊出貨紀錄，再按一次「出貨完成」。");
-    return;
+    return false;   // ★ 換下一位客人時, 呼叫端要靠這個 false 判斷「存檔沒成功→別開下一張、別覆蓋這批」
   }
   console.log("[state] shipping completed, archived to history, clearing state");
   // 房間模式: 通知 server 歸檔房間 + 本機停止同步
@@ -13678,8 +13696,26 @@ function actuallyCompleteShipping(opts) {
   // 結算副作用 (扣庫存 / 退貨入倉 / webhook / 回寫官網 / 推雲端): 抽成共用函式,
   //   讓「完成總訂單」批次結算能逐張呼叫同一套邏輯 (見 applyShipmentSideEffects)。
   applyShipmentSideEffects(entry);
+  // 【#2 修正】追加完成、新紀錄已存檔成功 → 現在才刪掉原紀錄(本機+雲端)。
+  //   中途放棄追加就走不到這裡, 原出貨憑證保留, 不會遺失。(applyShipmentSideEffects 已先讀過原單算扣帳增量)
+  if (entry && entry.continuationOf) {
+    const priorId = entry.continuationOf;
+    const priorEntry = history.find(h => h.id === priorId) || cloudHistory.find(h => h.id === priorId);
+    history = history.filter(h => h.id !== priorId);
+    saveHistory();
+    cloudHistory = cloudHistory.filter(h => h.id !== priorId);
+    if (cloudHistoryEnabled() && priorEntry && priorEntry.completedAt) {
+      fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
+        body: JSON.stringify({ id: priorId, completedAt: priorEntry.completedAt }),
+      }).catch(() => {});
+    }
+    console.log("[history-merge] append committed → deleted original", priorId);
+  }
   // 資料安全: 每次出貨完成後自動備份完整資料到 Discord (節流 3 分鐘, 只要有設 webhook 就會跑)
   backupSoon("出貨完成");
+  return true;   // 完成且存檔成功
 }
 // 結算一筆出貨的副作用: 自動扣庫存 / 退貨入倉 / 進貨入倉 / webhook / KOCA 回寫 / 推雲端。
 // ★ 只讀傳入的 entry, 不讀全域 state → 單張「出貨完成」與「完成總訂單」批次逐張都用這一套, 保證一致。
@@ -13690,13 +13726,30 @@ function applyShipmentSideEffects(entry) {
     const lowStockSkus = [];
     const threshold = getLowStockThreshold();
     const now = new Date().toISOString();
+    // 【#1 修正】追加單只扣「增量」: 原單已扣過的量當基準, 避免把原本扣過的再扣一次 (主機被吃掉)。
+    //   原單(entry.continuationOf)追加期間仍留在 history(見 #2 修正), 直接取它記錄的實扣量 deductedItems;
+    //   舊資料沒 deductedItems 就退而用「原單 packed 視為已扣」。非追加單 priorDeducted 為空 → 照舊扣全額。
+    let priorDeducted = {};
+    if (entry.continuationOf) {
+      const orig = allHistory().find(h => h.id === entry.continuationOf);
+      if (orig) {
+        if (orig.deductedItems) priorDeducted = orig.deductedItems;
+        else for (const oit of (orig.items || [])) {
+          if (!oit.essential && !oit.unmapped && (oit.packed || 0) > 0) priorDeducted[oit.sku] = oit.packed;
+        }
+      }
+    }
+    const deductedNow = {}; // 本張「累計實扣量」, 存進 entry.deductedItems 供下次追加當基準
     for (const it of (entry.items || [])) {
       if (it.essential) continue;
       if (it.unmapped || String(it.sku || "").startsWith("__KOCA_UNMAPPED_")) continue; // 官網訂單未對應 SKU: 不扣帳 (假 SKU)
       if ((it.packed || 0) <= 0) continue;
+      deductedNow[it.sku] = it.packed; // 到本張為止累計應扣的量
       if (!stockMap[it.sku]) continue;
+      const inc = it.packed - (priorDeducted[it.sku] || 0); // 只扣增量
+      if (inc <= 0) continue; // 這些已在原單扣過 → 不重扣
       const beforeQty = stockMap[it.sku].qty || 0;
-      stockMap[it.sku].qty = Math.max(0, beforeQty - it.packed);
+      stockMap[it.sku].qty = Math.max(0, beforeQty - inc);
       stockMap[it.sku].updatedAt = now;
       deducted++;
       const afterQty = stockMap[it.sku].qty;
@@ -13706,6 +13759,9 @@ function applyShipmentSideEffects(entry) {
         lowStockSkus.push({ sku: it.sku, qty: afterQty, name: (libItem && libItem.name) || "" });
       }
     }
+    // 記錄本張累計實扣量到 history (追加基準)
+    entry.deductedItems = deductedNow;
+    if (Object.keys(deductedNow).length) saveHistory();
     if (deducted > 0) {
       saveStock();
       console.log(`[stock] auto-deducted ${deducted} SKU`);
