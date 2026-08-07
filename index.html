@@ -3322,7 +3322,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v4.2 · 2026-08-04";
+const APP_VERSION = "v4.4 · 2026-08-06";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6458,13 +6458,16 @@ async function completeKocaBatch() {
   }
   const ids = state.kocaBatch.orderList.slice();
   // 完成防呆: 每張都要刷齊或標缺貨 (規範: 商品都要刷到, 除非標缺貨才放行)
+  // ⚠ 以前這裡是死路 (alert 後 return, 一定要刷齊或標缺貨才放行) → 只寄部分品項的單被迫標假缺貨。
+  //   改成「提醒但可放行」: 沒刷到的就照實記 (紀錄會顯示未達 100%), 不強迫標缺貨。
   const notDone = ids.filter(id => !_kocaOrderDoneById(id));
   if (notDone.length > 0) {
     const names = notDone.map(kocaOrderLabel).join("、");
     SOUND.scanError();
-    if (notDone[0] !== state.kocaOrderId) switchToKocaOrder(notDone[0]); // 切到第一張沒完成的方便繼續刷
-    alert(`⚠ 還有 ${notDone.length} 張沒完成(商品沒刷齊、也沒標缺貨):\n\n${names}\n\n請把它們刷完、或把刷不到的品項點「標記缺貨」放行,再按「完成總訂單」。`);
-    return;
+    if (!confirm(`⚠ 還有 ${notDone.length} 張沒刷齊:\n\n${names}\n\n要「照現在的數量」結算嗎?\n\n確定 = 直接結算(沒刷到的就記為沒出)\n取消 = 回去繼續刷`)) {
+      if (notDone[0] !== state.kocaOrderId) switchToKocaOrder(notDone[0]); // 切到第一張沒完成的方便繼續刷
+      return;
+    }
   }
   // 📦 包材複查: 完成總訂單前, 每張整單再檢查一次包材是否符合主機建議 (不強制擋, 確認後放行)
   const pkgIssues = ids.map(id => ({ id, wrong: _kocaOrderPackagingWrongById(id) })).filter(x => x.wrong.length > 0);
@@ -6623,7 +6626,21 @@ function renderKocaUnmappedPanel() {
           </select>
         </div>`).join("")}
       <button class="btn sm" id="koca-map-apply-btn" type="button" style="margin-top:4px;">✓ 套用並記住對應</button>
+      <button class="btn outline sm" id="koca-map-skip-btn" type="button" style="margin-top:4px;">✕ 略過(從清單移除)</button>
+      <p class="hint" style="font-size:0.68rem; margin:6px 0 0;">不想現在對應就按「略過」——把它從清單移除,不會卡著結不了單(這張的其他商品照常刷、照常完成)。</p>
     </div>`;
+}
+// 略過: 把對不到的佔位品項從清單移除, 不強迫一定要選一個商品 (Kyle: 不要有強迫機制)
+function skipKocaUnmapped() {
+  const un = (state.items || []).filter(it => it.unmapped);
+  if (un.length === 0) return;
+  if (!confirm(`要略過 ${un.length} 個對不到的官網品項嗎?\n\n${un.map(it => "・" + it.name).join("\n")}\n\n會從這張清單移除(實體有出貨的話, 可以直接刷它的商品條碼加回來)。`)) return;
+  state.items = (state.items || []).filter(it => !it.unmapped);
+  saveState();
+  if (state.roomMode && typeof pushRoomListReset === "function") pushRoomListReset();
+  showToast(`✓ 已略過 ${un.length} 個未對應品項`);
+  render();
+  renderKocaUnmappedPanel();
 }
 
 function applyKocaNameMapping() {
@@ -6658,23 +6675,25 @@ function applyKocaNameMapping() {
       };
     }
     // ★ 連動補跑: 建清單時這個品項還是「對不到」, _expandKocaBundles 跳過了它 →
-    //   指定後若它是套組 trigger (如收納包=主機+濾芯), 這裡把子項補進清單, 否則會只剩收納包、少出主機。
+    //   指定後若它是套組 trigger (如收納包=主機+濾芯), 「詢問後」把子項補進清單。
+    //   ⚠ 一定要問, 不能自動加: 實際出現過「客人只買收納包(不含主機)」的官網單 —— 自動加會多送一台主機。
     const _rule = (typeof BUNDLE_RULES !== "undefined") ? BUNDLE_RULES.find(r => r.trigger === prod.sku) : null;
     if (_rule && Array.isArray(_rule.children)) {
       const _trigQty = it.expected || 0;
-      const _added = [];
-      for (const c of _rule.children) {
-        const addQty = (c.qty || 1) * _trigQty;
-        if (addQty <= 0) continue;
-        const ci = state.items.findIndex(x => x.sku === c.sku && !x.essential);
-        if (ci >= 0) state.items[ci].expected += addQty;
-        else {
-          const libC = library.find(p => p.sku === c.sku);
-          state.items.push({ sku: c.sku, name: (libC && libC.name) || c.name || c.sku, category: (libC && libC.category) || "其他", expected: addQty, packed: 0 });
+      const _childDesc = _rule.children.map(c => `${c.name || c.sku} ×${(c.qty || 1) * _trigQty}`).join("、");
+      if (_trigQty > 0 && confirm(`📦 套組連動\n\n「${prod.name}」通常會一起出:\n${_childDesc}\n\n這張單要一起加嗎?\n\n(客人只買「${prod.name}」本身 → 按取消)`)) {
+        for (const c of _rule.children) {
+          const addQty = (c.qty || 1) * _trigQty;
+          if (addQty <= 0) continue;
+          const ci = state.items.findIndex(x => x.sku === c.sku && !x.essential);
+          if (ci >= 0) state.items[ci].expected += addQty;
+          else {
+            const libC = library.find(p => p.sku === c.sku);
+            state.items.push({ sku: c.sku, name: (libC && libC.name) || c.name || c.sku, category: (libC && libC.category) || "其他", expected: addQty, packed: 0 });
+          }
         }
-        _added.push(`${c.name || c.sku} ×${addQty}`);
+        setTimeout(() => showToast(`📦 套組連動: 已加入 ${_childDesc}`), 400);
       }
-      if (_added.length) setTimeout(() => showToast(`📦 套組連動: 已加入 ${_added.join("、")}`), 400);
     }
     applied++;
   }
@@ -8348,7 +8367,7 @@ function renderErpHelper() {
   // 沒被刷進任何單號的缺貨(整個缺、沒裝)則用下方整筆橫幅提醒。
   const _missSkus = new Set((e.items || []).filter(it => it.missing).map(it => it.sku));
   if (_missSkus.size) {
-    const _missList = (e.items || []).filter(it => it.missing).map(it => escapeHtml(it.sku)).join("、");
+    const _missList = (e.items || []).filter(it => it.missing).map(it => escapeHtml(String(it.sku || "").startsWith("__KOCA_UNMAPPED_") ? (it.name || "未對應品項") : it.sku)).join("、");
     html += `<div style="background:var(--danger-bg); color:var(--danger); font-weight:700; font-size:0.82rem; padding:8px 10px; border-radius:8px; margin:8px 0;">⚠ 此筆含缺貨 ${_missSkus.size} 項:${_missList}<br><span style="font-weight:500; font-size:0.72rem;">鍵進正航時請依實際出貨數量調整</span></div>`;
   }
   parcels.forEach((p, i) => {
@@ -9451,7 +9470,7 @@ function renderHistory() {
           <strong>${e.summary.totalSku}</strong> SKU · 應出 <strong>${e.summary.totalExpected}</strong> · 已裝 <strong>${e.summary.totalPacked}</strong> · 完成率 <strong>${e.summary.completionRate}%</strong>
           ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
           ${isPartial ? `<br>⚠ ${_partialMiss || (e.summary.totalSku - e.summary.completedSku)} 個 SKU 未完成` : ''}
-          ${(() => { const miss = (e.items || []).filter(it => it.missing); return miss.length ? `<br><span style="color: var(--danger); font-weight: 700;">⚠ 缺貨 ${miss.length} 項: ${miss.map(it => escapeHtml(it.sku)).join("、")}</span>` : ''; })()}
+          ${(() => { const miss = (e.items || []).filter(it => it.missing); return miss.length ? `<br><span style="color: var(--danger); font-weight: 700;">⚠ 缺貨 ${miss.length} 項: ${miss.map(it => escapeHtml(String(it.sku || "").startsWith("__KOCA_UNMAPPED_") ? (it.name || "未對應品項") : it.sku)).join("、")}</span>` : ''; })()}
           ${(e.platform === "koca" && e.kocaOrderId && e.orderType !== "return" && e.orderType !== "replacement" && e.orderType !== "inbound") ? _histLogiBadge(e.kocaOrderId) : ''}
         </div>
         <div class="history-item-actions">
@@ -9979,6 +9998,35 @@ function processScan(code) {
       }
       return;
     } else {
+      // 官網單有「對不到」的品項時, 刷到實體商品條碼 → 先問是不是同一個商品 (綁定+記住品名)。
+      //   否則佔位品項一直卡著「應出 1 沒人出」, 結單被迫標缺貨, 紀錄變成假缺貨 (Kyle 實際遇到)。
+      if ((state.kocaOrderId || kocaBatchActive()) && !state.manualMode) {
+        const unIdx = state.items.findIndex(x => x.unmapped);
+        if (unIdx >= 0) {
+          const un = state.items[unIdx];
+          SOUND.scanError();
+          if (confirm(`此單有對不到的官網品項:\n「${un.name}」×${un.expected}\n\n你刷的「${matchedProd.sku} ${matchedProd.name || ""}」是同一個商品嗎?\n\n確定 = 對應起來並記住品名(下次自動認得)\n取消 = 當作額外加購商品刷入`)) {
+            kocaNameMap[normalizeProdName(un.name)] = matchedProd.sku;
+            saveKocaNameMap();
+            let tIdx;
+            const dup = state.items.findIndex((x, i) => i !== unIdx && x.sku === matchedProd.sku);
+            if (dup >= 0) {
+              state.items[dup].expected += (un.expected || 0);
+              state.items.splice(unIdx, 1);
+              tIdx = state.items.findIndex(x => x.sku === matchedProd.sku);
+            } else {
+              state.items[unIdx] = { sku: matchedProd.sku, name: matchedProd.name || un.name, category: matchedProd.category || "其他", expected: un.expected || 0, packed: 0 };
+              tIdx = unIdx;
+            }
+            SOUND.scanSku();
+            bumpPickItem(tIdx, _mul);
+            _scanMultiplier = 1; renderMultiplierBadge();
+            showToast(`🔗 已對應「${un.name}」→ ${matchedProd.sku}`);
+            renderKocaUnmappedPanel();
+            return;
+          }
+        }
+      }
       // 不在清單: 手建模式 OR 房間模式 OR 官網單 → 自動新增此 SKU (expected=0 自由計數)
       // 官網單放行原因 (Kyle): 客人可能需要多補商品(加購/補件), 不強制限制只能刷訂單上的東西。
       //   多刷的會以「額外商品」列在清單上(無應出量、自由計數), 出貨紀錄/扣庫存/ERP鍵單照常計入。
@@ -10021,27 +10069,23 @@ function processScan(code) {
     return true;
   }
   if (looksLikeSku(code)) {
+    // ⚠ 這裡以前是死路 (非手建模式只跳 alert 不給出路) → 補寄單號等「有 dash 的訂單號」完全刷不進來。
+    //   改成: 問一次要當商品還是當單號, 取消就往下繼續當寄件單號處理, 不擋死。
     SOUND.scanError();
-    setTimeout(() => {
-      const inManual = state.manualMode;
-      if (inManual) {
-        if (confirm(`⚠ 條碼「${code}」不在商品庫\n\n看起來是商品 SKU 但商品庫沒有它。\n\n要立即「加入商品庫 + 計入此訂單 ×1」嗎?\n\n(取消 = 不處理, 你可以稍後到「商品庫」頁補資料)`)) {
-          library.push({ sku: code, name: "(請補名稱)", category: "其他", barcode: "" });
-          saveLibrary();
-          state.items.push({ sku: code, name: "(請補名稱)", category: "其他", expected: 0, packed: 0 });
-          const newIdx = state.items.length - 1;
-          if (state.roomMode) {
-            queueRoomEvent("item_add", { sku: code, name: "(請補名稱)", category: "其他", expected: 0, essential: false });
-          }
-          bumpPickItem(newIdx, 1);
-          SOUND.scanSku();
-          showToast(`📝 已加入商品庫 + ${code} ×1`);
-        }
-      } else {
-        alert(`⚠ 條碼「${code}」不認識\n\n看起來像商品 SKU 但商品庫沒有, 且不像寄件單格式。\n\n處理方式:\n  1. 到「商品庫」頁面新增此 SKU 後再刷\n  2. 若這是寄件單號要用, 請手動輸入 (不用條碼掃)`);
+    if (confirm(`條碼「${code}」不在商品庫\n\n要當成【商品】加入商品庫 + 計入此訂單 ×1 嗎?\n\n確定 = 當商品加入\n取消 = 當成【寄件單號 / 訂單號】繼續(補寄單號等)`)) {
+      library.push({ sku: code, name: "(請補名稱)", category: "其他", barcode: "" });
+      saveLibrary();
+      state.items.push({ sku: code, name: "(請補名稱)", category: "其他", expected: 0, packed: 0 });
+      const newIdx = state.items.length - 1;
+      if (state.roomMode) {
+        queueRoomEvent("item_add", { sku: code, name: "(請補名稱)", category: "其他", expected: 0, essential: false });
       }
-    }, 50);
-    return;
+      bumpPickItem(newIdx, 1);
+      SOUND.scanSku();
+      showToast(`📝 已加入商品庫 + ${code} ×1`);
+      return;
+    }
+    // 取消 → 不擋, 往下當寄件單號 / 訂單號處理
   }
 
   // 🛡 過刷防呆(背景自動, 融進正常刷單流程): 掃到的寄件單號若「以前已經出貨過」(比對出貨紀錄 本機+雲端),
@@ -10715,6 +10759,7 @@ document.getElementById("platform-select").addEventListener("change", (e) => {
   // 「套用並記住對應」(面板是動態產生的, 用事件委派)
   document.getElementById("koca-order-map").addEventListener("click", (e) => {
     if (e.target && e.target.id === "koca-map-apply-btn") applyKocaNameMapping();
+    if (e.target && e.target.id === "koca-map-skip-btn") skipKocaUnmapped();
   });
   // 📋 今天要出的單
   const listBtn = document.getElementById("koca-order-list-btn");
