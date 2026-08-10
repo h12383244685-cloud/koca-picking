@@ -3322,7 +3322,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v4.4 · 2026-08-06";
+const APP_VERSION = "v4.6 · 2026-08-07";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5285,6 +5285,24 @@ function getShippedBySkuMap() {
   }
   return shipped;
 }
+// ===== 📍 儲位 (WMS 階段一) =====
+// 商品放在哪個櫃位。只存在商品庫 (library[].location) → 會跟著「主檔連動」自動同步到其他裝置, 不必另外做同步。
+// 格式不強制 (A-01-02-03 / A區3層 / 電腦桌下 都可以), 排序用純文字比大小。
+function locOf(sku) {
+  const p = library.find(x => x.sku === sku);
+  return (p && p.location) ? String(p.location).trim() : "";
+}
+// 排序鍵: 有設儲位的照儲位排, 沒設的一律排最後
+function locSortKey(sku) {
+  const l = locOf(sku);
+  return l ? l.toUpperCase() : "￿";
+}
+// 撿貨清單上的儲位小標籤
+function locChip(sku) {
+  const l = locOf(sku);
+  if (!l) return "";
+  return ` <span style="display:inline-block; background:var(--primary-light); color:var(--primary); font-weight:800; font-size:0.66rem; padding:1px 7px; border-radius:6px; font-family:ui-monospace,monospace; vertical-align:1px;">📍 ${escapeHtml(l)}</span>`;
+}
 function groupByCategory(items) {
   const groups = {};
   for (const it of items) {
@@ -5481,8 +5499,10 @@ function renderLibrary() {
           <div style="font-size:0.625rem; color:var(--text-soft); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap;">
             <span>條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>${customBc ? ' (自訂)' : ''}</span>
             <span>單價: <span style="font-family:monospace; color:${price > 0 ? 'var(--success)' : 'var(--danger)'};">$${price.toFixed(2)}</span></span>
+            <span>儲位: <span style="font-family:monospace; color:${p.location ? 'var(--primary)' : 'var(--text-soft)'};">${p.location ? escapeHtml(p.location) : "(未設)"}</span></span>
           </div>
         </div>
+        <button class="btn sm outline" data-lib-edit-loc="${idx}" title="編輯儲位(放在哪一櫃)">📍</button>
         <button class="btn sm outline" data-lib-edit-price="${idx}" title="編輯單價">💰</button>
         <button class="btn sm outline" data-lib-edit-bc="${idx}" title="編輯條碼">📇</button>
         <button class="btn sm outline" data-lib-toggle-essential="${idx}" title="標記為必要商品">${p.essential ? "★" : "☆"}</button>
@@ -5589,7 +5609,9 @@ function renderPicking() {
     const groups = groupByCategory(filtered);
     container.innerHTML = groups.map(g => {
       const collapsed = !!collapsedCats[g.name];
-      const itemsHtml = g.items.map(it => {
+      // 📍 分類內依儲位排序 (走同一條路線撿貨, 沒設儲位的排最後)。用副本排序, realIdx 靠物件比對不受影響。
+      const _sorted = g.items.slice().sort((a, b) => locSortKey(a.sku).localeCompare(locSortKey(b.sku)));
+      const itemsHtml = _sorted.map(it => {
         const realIdx = state.items.indexOf(it);
         const s = statusOf(it, shipped);
         if (it.essential) {
@@ -5600,7 +5622,7 @@ function renderPicking() {
           return `
         <div class="item status-${s}">
           <div class="item-info">
-            <div class="item-sku">${escapeHtml(it.sku)} <span class="essential-badge">📦 自由計數</span></div>
+            <div class="item-sku">${escapeHtml(it.sku)} <span class="essential-badge">📦 自由計數</span>${locChip(it.sku)}</div>
             <div class="item-name">${escapeHtml(it.name || "(無名稱)")}</div>
           </div>
           <div class="item-counter">
@@ -5651,7 +5673,7 @@ function renderPicking() {
         return `
         <div class="item status-${s}${(it.missing || it.unmapped) ? ' missing-flagged' : ''}">
           <div class="item-info">
-            <div class="item-sku">${it.unmapped ? '<span style="color:var(--danger);">(官網品項)</span>' : escapeHtml(it.sku)}${manualBadge}${it.unmapped ? ' <span class="missing-badge">⚠ 未對應 SKU</span>' : ''}${it.missing ? ' <span class="missing-badge">⚠ 缺貨</span>' : ''}</div>
+            <div class="item-sku">${it.unmapped ? '<span style="color:var(--danger);">(官網品項)</span>' : escapeHtml(it.sku)}${manualBadge}${it.unmapped ? ' <span class="missing-badge">⚠ 未對應 SKU</span>' : ''}${it.missing ? ' <span class="missing-badge">⚠ 缺貨</span>' : ''}${it.unmapped ? '' : locChip(it.sku)}</div>
             <div class="item-name">${escapeHtml(it.name || "(無名稱)")}</div>
             <button class="missing-toggle ${it.missing ? 'on' : ''}" data-missing-toggle data-idx="${realIdx}">${it.missing ? '✓ 已標缺貨' : '標記缺貨'}</button>
           </div>
@@ -5865,6 +5887,27 @@ function applyA1MappingToPickingList() {
 function _kocaDeliveryLabel(m) {
   if (!m) return "";
   return m === "home-delivery" ? "宅配" : (m === "store-pickup" ? "超商取貨" : String(m));
+}
+// 官網品名 → 規格對應表(specMap)的「多品項套組」拆法; 沒命中或只對到單一 SKU 回 null (走原本的 sku/品名比對)
+// 只認「拆成 2 個以上 SKU」的才算套組, 避免影響一般單品的既有行為。
+function _kocaSpecExpand(name, allowSingle) {
+  const minCount = allowSingle ? 1 : 2;   // 預設只認「拆成 2 個以上」的套組; allowSingle=單品比對也用(對不到時的最後手段)
+  if (!name || typeof specMap !== "object" || !specMap) return null;
+  const direct = specMap[name];
+  if (Array.isArray(direct) && direct.length >= minCount) return direct;
+  const n = normalizeProdName(name);
+  if (!n) return null;
+  let best = null, bestLen = 0;
+  for (const k in specMap) {
+    const v = specMap[k];
+    if (!Array.isArray(v) || v.length < minCount) continue;
+    const kn = normalizeProdName(String(k).replace(/^\[(品線|商品)\]\s*/, ""));
+    if (kn.length < 6) continue;                     // 太短的鍵不做包含比對, 避免誤中
+    if (kn === n || n.includes(kn)) {                 // 官網品名可能較長(含促銷字), 允許包含
+      if (kn.length > bestLen) { best = v; bestLen = kn.length; }  // 多筆命中取最精確(最長)的
+    }
+  }
+  return best;
 }
 // 金鑰只放在 Worker secret (KOCA_INTERNAL_API_KEY), 前端完全碰不到, 只帶 SPIDEY_KEY 打自家 Worker。
 
@@ -6081,15 +6124,42 @@ function buildListFromKocaOrder(o, gate) {
   const totals = {};     // sku -> qty
   const nameOf = {};     // sku -> 官網商品名 (對不到 library 時用)
   const unmapped = [];   // 對不到 SKU 的品項
+  const expandedNames = []; // 依規格對應表展開的套組品名 (給提示用)
+  const specExpandedSkus = new Set(); // 由規格對應表展開出來的 SKU: 已是完整拆解, 不可再被連動規則展開一次 (會變兩倍)
   orderItems.forEach((it, i) => {
     const qty = Math.max(0, Number(it.qty) || 0);
     if (qty <= 0) return;
+    // ★ 套組優先: 官網品名若命中「規格對應表」(specMap) 的多品項拆法 → 依表展開。
+    //   例:「Dusty MINI 1收納包及濾芯4組」= 主機×1 + 收納包×1 + 濾芯×4。
+    //   以前官網單只會「一個品名 → 一個 SKU」, 套組會只剩主機 (收納包/濾芯漏出), 連動也不會觸發
+    //   (連動 trigger 是收納包, 清單裡根本沒有它)。
+    const _expand = _kocaSpecExpand(it.name);
+    if (_expand) {
+      for (const m of _expand) {
+        const addQty = (m.qty || 1) * qty;
+        if (addQty <= 0) continue;
+        const p = library.find(x => x.sku === m.sku);
+        totals[m.sku] = (totals[m.sku] || 0) + addQty;
+        nameOf[m.sku] = (p && p.name) || m.sku;
+        specExpandedSkus.add(m.sku);
+      }
+      expandedNames.push(it.name);
+      return;
+    }
     // 官網若有回 sku 就直接用, 沒有才用商品名對
     let sku = (it.sku || "").trim();
     let prod = sku ? (library.find(p => p.sku === sku) || null) : null;
     if (!prod) {
       prod = matchSkuByName(it.name);
       if (prod) sku = prod.sku;
+    }
+    if (!prod) {
+      // 最後手段: 規格對應表的「單品」對應 (例:「Dusty MINI 1 一般版●預購」→ 主機) — 以前官網單完全沒用到這張表
+      const _single = _kocaSpecExpand(it.name, true);
+      if (_single && _single.length === 1) {
+        const _p = library.find(x => x.sku === _single[0].sku);
+        if (_p) { prod = _p; sku = _p.sku; }
+      }
     }
     if (!prod) {
       // 對不到 → 照建但標紅 (使用者選擇的策略)
@@ -6107,7 +6177,8 @@ function buildListFromKocaOrder(o, gate) {
   const items = [];
   for (const p of library) {
     if (totals[p.sku] > 0) {
-      items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0 });
+      // _fromSpec: 這個 SKU 是規格對應表拆出來的完整內容 → 下面的連動展開要跳過它, 否則子項會被加兩次
+      items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0, _fromSpec: specExpandedSkus.has(p.sku) });
     }
   }
   // 對不到 SKU 的品項 (標紅, 不能刷但看得到)
@@ -6168,8 +6239,10 @@ function buildListFromKocaOrder(o, gate) {
   }
 
   const codNote = gate && gate.cod ? '<br><strong style="color:#b26b00;">💰 貨到付款(COD):出貨時記得收款。</strong>' : "";
+  const expandNote = expandedNames.length
+    ? `<br><strong style="color:var(--primary);">📦 套組已展開:${escapeHtml(expandedNames.join("、"))}</strong>(依規格對應表拆成各別商品)` : "";
   setKocaOrderStatus(
-    `✅ 已建立官網出貨清單<br>訂單 <strong>${escapeHtml(o.orderId)}</strong>｜${escapeHtml(o.statusLabel || "")}｜共 ${items.filter(it => !it.essential).length} 個品項` +
+    `✅ 已建立官網出貨清單<br>訂單 <strong>${escapeHtml(o.orderId)}</strong>｜${escapeHtml(o.statusLabel || "")}｜共 ${items.filter(it => !it.essential).length} 個品項` + expandNote +
     (o.shipping && o.shipping.method ? `<br>配送:${escapeHtml(_kocaDeliveryLabel(o.shipping.method))}${o.shipping.storeInfo ? "・" + escapeHtml(o.shipping.storeInfo) : ""}` : "") +
     (o.recipient && o.recipient.name ? `<br>收件人:${escapeHtml(o.recipient.name)}` : "") +
     codNote,
@@ -6301,6 +6374,7 @@ function _expandKocaBundles(items) {
   const additions = [];
   for (const it of items) {
     if (it.essential || it.unmapped) continue;
+    if (it._fromSpec) continue; // 規格對應表已經拆好完整內容, 再展開一次會變兩倍 (買1組變主機2、濾芯8)
     const rule = BUNDLE_RULES.find(r => r.trigger === it.sku);
     if (!rule || !Array.isArray(rule.children)) continue;
     for (const c of rule.children) {
@@ -11964,6 +12038,23 @@ document.getElementById("bulk-import-btn").addEventListener("click", () => {
 })();
 document.getElementById("lib-items").addEventListener("click", (e) => {
   // 編輯 price
+  // 📍 編輯儲位 (WMS 階段一): 商品放在哪一櫃 — 撿貨清單會顯示並依此排序; 隨主檔連動同步到其他裝置
+  const editLoc = e.target.closest("button[data-lib-edit-loc]");
+  if (editLoc) {
+    const idx = parseInt(editLoc.dataset.libEditLoc, 10);
+    const p = library[idx];
+    if (!p) return;
+    const cur = p.location || "";
+    const v = prompt(`📍 「${p.sku}」放在哪一櫃?\n\n撿貨清單會顯示這個位置, 並依此排序(同分類內)。\n格式不限, 例如: A-01-02-03 / A區2層 / 電腦桌下\n\n(清空 = 取消設定)`, cur);
+    if (v === null) return;
+    const loc = String(v).trim();
+    if (loc) p.location = loc; else delete p.location;
+    saveLibrary();
+    renderLibrary();
+    if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
+    showToast(loc ? `📍 ${p.sku} → ${loc}` : `✓ 已清除 ${p.sku} 的儲位`);
+    return;
+  }
   const editPrice = e.target.closest("button[data-lib-edit-price]");
   if (editPrice) {
     const idx = parseInt(editPrice.dataset.libEditPrice, 10);
