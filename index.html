@@ -3322,7 +3322,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v5.0 · 2026-08-11";
+const APP_VERSION = "v5.1 · 2026-08-14";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3377,7 +3377,8 @@ const DEFAULT_SPEC_MAP = {
 const PRODUCT_LINE_RULES = [
   // ★ 濾芯規則一定要在主機規則「之前」: 濾芯名稱含「Dusty Lite 1」+「濾」, 先被濾芯規則攔下;
   //   主機名稱含「Dusty Lite 1」但不含「濾」, 落到下面主機規則。順序顛倒會把濾芯誤判成主機。
-  { all: ["Dusty Lite 1", "濾"], key: "Dusty Lite 1 濾芯" },
+  // not: 排除字 —— 商品名稱出現這些字就不算命中。防「主機 + 贈濾芯」這種促銷名被誤判成濾芯。
+  { all: ["Dusty Lite 1", "濾"], not: ["贈", "加購", "送", "附"], key: "Dusty Lite 1 濾芯" },
   { all: ["Dusty Lite 1"],        key: "Dusty Lite 1 主機" },
   { all: ["Cloudy Lite 1"],       key: "Cloudy Lite 1" },
 ];
@@ -3646,7 +3647,7 @@ async function doDailyBackupIfNeeded(force, silent) {
     const reason = silent ? "auto-change" : (force ? "manual" : "auto-daily");
     const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString(), type: reason } };
     let count = 0;
-    for (const k of BACKUP_KEYS) {
+    for (const k of backupKeys()) {
       const v = localStorage.getItem(k);
       if (v !== null) { dump[k] = v; count++; }
     }
@@ -4127,6 +4128,9 @@ function queueRoomEvent(type, data) {
 // 只由開房者呼叫 (避免兩台搶著換); 設 _pendingListReset 讓自己的回廣播不要把本機清單再洗一次。
 function pushRoomListReset() {
   if (!state.roomMode) return;
+  // 🔒 只有房主能重設全房清單。註解一直寫「只由開房者呼叫」但程式沒有真的擋:
+  //   同仁那台若走到這條路徑, 會把房主的清單整批洗掉, 連別人刷到一半的 packed 都被覆蓋。
+  if (!state.isRoomHost) { console.warn("[room] 非房主, 略過 reset_list"); return; }
   state._pendingListReset = true;
   queueRoomEvent("reset_list", {
     items: (state.items || []).map(it => ({
@@ -4265,6 +4269,11 @@ async function joinRoom(code) {
     state.roomMembers = room.members || {};
     state.roomActiveParcels = room.activeParcels || {};
     state._lastSeenRoomVer = room.version || 0; // 省一次多餘的整包同步
+    // ⚠ 一定要跟著房間目前的 listVersion 對齊, 並清掉殘值。
+    //   沒對齊的話, 加入後第一次廣播就會被判定成「清單換人了」→ 把剛拿到的清單再洗一次;
+    //   _pendingListReset 若殘留上一個房間的 true, 又會反過來讓真正的重設被忽略。
+    state._lastListVersion = room.listVersion || 0;
+    state._pendingListReset = false;
     state.roomLastSyncAt = new Date().toISOString();
     state.myPacked = {}; // 新加入房間 → 我的貢獻歸零
     state.loadedDate = new Date().toISOString().slice(0, 10);
@@ -4300,11 +4309,16 @@ async function probeRoomClosedThenStop() {
   try {
     const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/room/" + state.roomCode, { headers: roomHeaders() });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok || data.error === "not_found") {
+    // 🔒【掉數防線】只有伺服器「明確說這個房間不存在」才算關閉。
+    //   舊版 `!res.ok || !data.ok` 太寬: 401(金鑰打錯)、429、500、502、Worker 冷啟動逾時、回傳非 JSON,
+    //   全都會被當成房間關閉 → 直接離房 → 還沒送出去的刷貨事件跟著被清掉。
+    //   Worker 掛五秒鐘就掉一批數, 這種錯誤最難查, 因為現場只看到「房間關閉了」。
+    if (res.status === 404 || data.error === "not_found") {
       showToast("⚠ 房間已關閉, 離開房間");
       leaveRoom(false);   // 停止重連 + 清房間狀態 (可繼續單機)
       return true;
     }
+    if (!res.ok) console.warn("[room] 探測回", res.status, "— 不是 not_found, 視為暫時性問題, 繼續重連");
   } catch (e) { /* 網路問題, 當作仍在線, 繼續重連 */ }
   return false;
 }
@@ -4617,6 +4631,15 @@ function leaveRoom(notifyServer) {
       }
       console.log("[room] 已通知 Worker 離開房間");
     } catch(e) { console.warn("[room] leave notify failed", e); }
+  }
+  // 🔒【掉數防線】離房前先把還沒送出去的刷貨事件盡力補送一次。
+  //   舊版無條件 pendingEvents = [] —— 而 probeRoomClosedThenStop() 誤判時也會走到這裡,
+  //   等於「Worker 抖一下 → 自動離房 → 剛剛刷的數量直接蒸發」。事件有 id, Worker 會去重, 重送是安全的。
+  const _lostEvents = pendingEvents.length;
+  if (_lostEvents > 0) {
+    try { flushPendingEventsBeacon(); } catch (e) { console.warn("[room] 離房前補送失敗", e); }
+    console.warn(`[room] 離房時尚有 ${_lostEvents} 筆待送事件, 已嘗試補送`);
+    setTimeout(() => showToast(`⚠ 離開房間時有 ${_lostEvents} 筆刷貨尚未同步, 已嘗試補送。請跟其他人核對數量`, 7000), 300);
   }
   state.roomMode = false;
   state.isRoomHost = false; // 離房重置, 避免殘值
@@ -5128,16 +5151,29 @@ function parseA1CSV(text) {
   const clean = (s) => (s || "").replace(/^\ufeff/, "").replace(/\ufeff/g, "").trim();
 
   const items = [];
+  // 🔒【漏出貨防線】被丟掉的資料列一定要數出來。舊版三個條件(欄位數<6、序號非純數字、規格空白)
+  //   都是 continue 靜默跳過, 一列不見了畫面上完全看不出來 → 那個商品應出 0 件, 直接漏出。
+  const skipped = [];
   for (const r of rows) {
-    if (!r || r.length < 6) continue;
+    if (!r || r.length < 6) {
+      if (r && r.join("").trim()) skipped.push({ why: "欄位數不足", raw: r.join(",").slice(0, 60) });
+      continue;
+    }
     const sn = clean(r[0]);
-    if (!/^\d+$/.test(sn)) continue;
+    // 序號放寬: A1「揀貨單合併列印」在一張訂單含多個商品時, 續行的序號欄常常留空或寫成 1-2 / 1.2。
+    // 只擋掉明顯不是資料的列(表頭「序號」、「合計」等), 空白與子編號都放行。
+    if (sn && !/^\d+([-.]\d+)?$/.test(sn)) continue;
     const productName = clean(r[2]); // 商品名稱
     const spec = clean(r[4]);
     const qty = parseFloat(clean(r[5]).replace(/,/g, ""));
-    if (!spec || isNaN(qty) || qty <= 0) continue;
+    if (isNaN(qty) || qty <= 0) continue;   // 表頭列的數量欄是文字 → NaN, 由這裡擋掉
+    // 規格空白不再丟掉: 單一規格商品(如雲朵除濕機)A1 的規格欄就是空的,
+    // 而下游 isAmbiguousSpec()/getLookupKey() 本來就支援「規格空白 → 改用商品名稱識別」。
+    if (!spec && !productName) { skipped.push({ why: "規格與商品名稱都空白", raw: r.join(",").slice(0, 60) }); continue; }
     items.push({ spec, productName, orderQty: qty });
   }
+  window._lastParseSkipped = skipped;
+  if (skipped.length) console.warn("[parseA1CSV] 有資料列被跳過:", skipped);
   // 解析失敗時的偵測 (給使用者明確的提示)
   if (items.length === 0 && rows.length > 0) {
     const firstRow = rows[0] || [];
@@ -5170,8 +5206,17 @@ function isAmbiguousSpec(spec) {
 function getLookupKey(item) {
   // 先比對品線規則: 商品名稱命中(關鍵字全中) → 用品線鍵, 不受規格(白色)/emoji/促銷字影響
   const pn = item.productName || "";
+  // ⚠ 精確規格優先於品線推論。
+  //   舊版把品線規則放最前面, 只看商品「名稱」有沒有關鍵字, 完全不看規格欄。
+  //   蝦皮商品名常帶促銷字, 例如「KOCA Dusty Lite 1 家用吸塵器【贈濾芯】」含「Dusty Lite 1」+「濾」
+  //   → 命中濾芯規則 → 訂 1 台主機變成出 5 顆濾芯、主機 0 台。
+  //   規格欄已經明確對到 specMap 的話, 那才是使用者親手設定的答案, 不該被名稱猜測蓋掉。
+  if (item.spec && !isAmbiguousSpec(item.spec) && (item.spec in specMap)) return item.spec;
   for (const rule of PRODUCT_LINE_RULES) {
-    if (rule.all.every(t => pn.includes(t))) return `[品線] ${rule.key}`;
+    if (rule.all.every(t => pn.includes(t))) {
+      if (rule.not && rule.not.some(t => pn.includes(t))) continue;   // 排除字: 擋掉促銷詞誤判
+      return `[品線] ${rule.key}`;
+    }
   }
   if (isAmbiguousSpec(item.spec)) {
     if (item.productName) return `[商品] ${item.productName}`;
@@ -6214,7 +6259,9 @@ function buildListFromKocaOrder(o, gate) {
     if (key.startsWith("__KOCA_UNMAPPED_")) {
       items.push({ sku: key, name: nameOf[key], category: "其他", expected: totals[key], packed: 0, unmapped: true });
     } else if (!library.find(p => p.sku === key)) {
-      items.push({ sku: key, name: nameOf[key] || "", expected: totals[key], packed: 0 });
+      // ⚠ _fromSpec 一定要一起帶: 不在商品庫的 SKU(例如充電底座 KVC-40MV46-BAS)若剛好是連動 trigger,
+      //   少了這個旗標會被 _expandKocaBundles 再展開一次 → 買 1 組變 2 組。
+      items.push({ sku: key, name: nameOf[key] || "", expected: totals[key], packed: 0, _fromSpec: specExpandedSkus.has(key) });
     }
   }
   // 官網訂單: 商品連動 — 把連動規則的 trigger 商品(如投影機收納組)的子項(投影機主機)也展開進清單
@@ -6409,10 +6456,16 @@ function _expandKocaBundles(items) {
       const addQty = (c.qty || 1) * (it.expected || 0);
       if (addQty <= 0) continue;
       const existing = items.find(x => x.sku === c.sku) || additions.find(x => x.sku === c.sku);
-      if (existing) { existing.expected = (existing.expected || 0) + addQty; }
-      else {
+      // 🔒 _autoBundleQty = 「這是系統自己推論加上去的, 不是官網訂單上真的有的」。
+      //   實際發生過:客人只買「收納包」(不含主機), 系統照連動自動補一台主機, 又被 prefill 標成已裝箱,
+      //   同仁只刷包材就結案 → 多送一台投影機 + 多扣一台庫存, 全程沒有任何提示。
+      //   現在自動加的份量不預填, 會留在待撿清單上, 同仁看得到、要親手刷過才算數 —— 不強制擋, 但不再靜默。
+      if (existing) {
+        existing.expected = (existing.expected || 0) + addQty;
+        existing._autoBundleQty = (existing._autoBundleQty || 0) + addQty;
+      } else {
         const libP = library.find(p => p.sku === c.sku);
-        additions.push({ sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: addQty, packed: 0 });
+        additions.push({ sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: addQty, packed: 0, _autoBundleQty: addQty });
       }
     }
   }
@@ -6431,7 +6484,8 @@ function _prefillKocaActiveParcel(o) {
   for (const it of (state.items || [])) {
     if (it.essential) continue;   // 包材不預填 (留給同仁刷)
     if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
-    const qty = it.expected || 0;
+    // 連動自動補的份量不預填 —— 官網訂單上沒有這筆, 只是系統推論的, 必須同仁親手刷過才算 (見 _expandKocaBundles)
+    const qty = (it.expected || 0) - (it._autoBundleQty || 0);
     if (qty <= 0) continue;
     it.packed = qty;                                                                    // 清單標記為已裝
     state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + qty;   // 放進黃框
@@ -10579,15 +10633,19 @@ function doMergeAppend() {
   const totalsByNewSku = {};
   for (const it of items) totalsByNewSku[it.sku] = (totalsByNewSku[it.sku] || 0) + it.expected;
   // 對每個現有 SKU, 累加 expected
+  // ⚠ 必須用 hasOwnProperty 而不是 if (totalsByNewSku[cur.sku]):
+  //   必要商品(紙箱/破壞袋/遙控器)的 expected 是 0, 0 是 falsy → 舊寫法會跳過、也不會 delete,
+  //   下面那個迴圈 0 !== undefined 又成立 → 每追加一次就多推一份重複列 (7 個包材 = 多 7 列)。
+  //   重複列刷貨時 findIndex 只命中第一列, 第二列永遠刷不掉 → 同仁重複刷或漏刷包材。
   for (const cur of state.items) {
-    if (totalsByNewSku[cur.sku]) {
+    if (Object.prototype.hasOwnProperty.call(totalsByNewSku, cur.sku)) {
       cur.expected = cur.expected + totalsByNewSku[cur.sku];
       delete totalsByNewSku[cur.sku];
     }
   }
   // 剩下的是「新 SKU」, append 到 state.items
   for (const it of items) {
-    if (totalsByNewSku[it.sku] !== undefined) {
+    if (Object.prototype.hasOwnProperty.call(totalsByNewSku, it.sku)) {
       // 是新 SKU 且還沒處理
       state.items.push({ ...it, packed: 0 });
       delete totalsByNewSku[it.sku];
@@ -10614,8 +10672,18 @@ function doMergeAppend() {
 
 function doMergeReplace() {
   if (!_pendingMergeItems) return;
+  // 🔒【漏出貨防線】舊清單包過的箱子若留著, 會被 getShippedBySkuMap() 當成新清單的「已出貨量」,
+  //   新清單那些 SKU 直接顯示「完成」→ 撿貨員看不到待撿 → 整批靜默漏出。
+  //   但這些箱子是真實出貨紀錄, 也不能直接刪掉。所以: 請他先結案, 給明確出路, 不強制不刪資料。
+  const _pending = (state.completedParcels || []).length + ((state.activeParcel && state.activeParcel.items && state.activeParcel.items.length) ? 1 : 0);
+  if (_pending > 0) {
+    showToast(`⚠ 目前還有 ${_pending} 箱尚未結案, 請先按「出貨完成」結案再取代清單 (否則新清單會被舊出貨量蓋掉)`, 6000);
+    return;
+  }
   const items = _pendingMergeItems;
   state.items = items;
+  state.completedParcels = [];   // 已確認無未結案箱子, 清乾淨免得殘留
+  state.activeParcel = null;
   state.loadedDate = new Date().toISOString().slice(0, 10);
   clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 覆蓋成全新一般清單
   saveState();
@@ -10826,6 +10894,11 @@ function processA1Items(items, sourceLabel) {
       showToast("⚠ 解析不到資料，請確認檔案格式");
     }
     return;
+  }
+  // 有資料列被解析器丟掉 → 一定要講, 否則使用者不會知道清單少了東西 (會直接漏出貨)
+  const _sk = window._lastParseSkipped || [];
+  if (_sk.length) {
+    setTimeout(() => showToast(`⚠ 有 ${_sk.length} 列資料無法解析被跳過 (${_sk[0].why}), 請核對清單數量是否齊全`, 7000), 400);
   }
   ensureSpecMapDefaults();
   console.log("[A1] 目前 specMap 大小:", Object.keys(specMap).length);
@@ -12190,13 +12263,24 @@ document.getElementById("lib-items").addEventListener("click", (e) => {
       } catch(err) { console.warn("[lib] 紀錄刪除失敗", err); }
     }
     // 清掉 specMap 中對此 SKU 的引用 (避免孤兒)
+    // ⚠ 空陣列 [] 在這套邏輯裡的意思是「這個規格刻意略過, 不用備貨」(見 applyA1MappingToPickingList)。
+    //   若某規格只對應到剛被刪掉的這個 SKU, 過濾完會變成 [] → 下次匯入不會報「未對應」把你擋下來,
+    //   而是被當成你自己設定要略過 → 該商品應出 0 件, 零警告直接漏出。
+    //   所以變空的要整個 delete 掉 key, 回到「未對應」狀態, 匯入時會強制你重新指定。
     let cleaned = false;
+    const emptied = [];
     for (const spec in specMap) {
       const before = specMap[spec].length;
       specMap[spec] = specMap[spec].filter(m => m.sku !== removed.sku);
-      if (specMap[spec].length !== before) cleaned = true;
+      if (specMap[spec].length !== before) {
+        cleaned = true;
+        if (specMap[spec].length === 0 && before > 0) { delete specMap[spec]; emptied.push(spec); }
+      }
     }
     if (cleaned) saveSpecMap();
+    if (emptied.length) {
+      setTimeout(() => showToast(`⚠ 有 ${emptied.length} 個規格對應因此變成未對應 (${emptied[0]}), 下次匯入時要重新指定 SKU`, 7000), 400);
+    }
   }
   saveLibrary(); saveMenuQty();
   renderLibrary();
@@ -12705,20 +12789,29 @@ document.getElementById("test-mode-banner").addEventListener("click", () => {
 });
 
 // ===== 資料搬家 (匯出 / 匯入 全部 localStorage) =====
-const BACKUP_KEYS = [
-  STATE_KEY, STATE_BACKUP_KEY, LIB_KEY, LIB_INIT_KEY, LIB_DELETED_KEY,
-  MENU_QTY_KEY, COLLAPSED_KEY, SPEC_MAP_KEY, HISTORY_KEY, SETTINGS_KEY,
-  STOCK_KEY, PLATFORM_KEY,
-  STOCKTAKE_KEY, STOCKTAKE_HISTORY_KEY,   // 盤點: 進行中 + 歷史紀錄也一起備份
-  ERP_ALIGN_KEY,                          // 上次 ERP 對齊時間
-  KOCA_NAME_MAP_KEY,                      // 官網品名 → SKU 記憶對應表 (辛苦對過的別弄丟)
-  PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
-];
+// ⚠ 這裡故意寫成「取值函式」而不是 const 陣列。
+//   下面有幾個 KEY 常數宣告在檔案更後面, 若在這裡直接展開成陣列, 載入時會踩到 TDZ
+//   (Cannot access 'XXX_KEY' before initialization) → 整個 App 白畫面。實際發生過, 不要改回去。
+function backupKeys() {
+  return [
+    STATE_KEY, STATE_BACKUP_KEY, LIB_KEY, LIB_INIT_KEY, LIB_DELETED_KEY,
+    MENU_QTY_KEY, COLLAPSED_KEY, SPEC_MAP_KEY, HISTORY_KEY, SETTINGS_KEY,
+    STOCK_KEY, PLATFORM_KEY,
+    STOCKTAKE_KEY, STOCKTAKE_HISTORY_KEY,   // 盤點: 進行中 + 歷史紀錄也一起備份
+    ERP_ALIGN_KEY,                          // 上次 ERP 對齊時間
+    KOCA_NAME_MAP_KEY,                      // 官網品名 → SKU 記憶對應表 (辛苦對過的別弄丟)
+    PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
+    // ⚠ 以下四項漏掉會出事, 不可移除:
+    STOCK_APPLIED_KEY,                      // 已扣過庫存的出貨紀錄 id。沒帶走 → 新機補扣時「上次對齊後的每一筆都再扣一次」
+    ERP_KEYED_KEY, ERP_LINE_KEY,            // 哪些單已鍵進正航 ERP。沒帶走 → 不知道鍵過沒 → 重複鍵單/漏鍵, 直接錯帳
+    PENDING_KEY,                            // 房間模式待送事件 (規範三-9: 不可遺失刷貨數)
+  ].filter(Boolean);
+}
 
 document.getElementById("backup-export-btn").addEventListener("click", () => {
   const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString() } };
   let count = 0;
-  for (const k of BACKUP_KEYS) {
+  for (const k of backupKeys()) {
     const v = localStorage.getItem(k);
     if (v !== null) { dump[k] = v; count++; }
   }
@@ -12749,9 +12842,27 @@ document.getElementById("backup-import-file").addEventListener("change", (e) => 
       const dump = JSON.parse(reader.result);
       if (!dump || typeof dump !== "object") throw new Error("不是有效的 JSON");
       // 計算會匯入幾項
-      const incoming = BACKUP_KEYS.filter(k => k in dump);
+      const _keys = backupKeys();
+      const incoming = _keys.filter(k => k in dump);
       if (incoming.length === 0) {
         alert("⚠ 這個 JSON 沒有 App 的資料 (找不到任何 picking_* 欄位)");
+        return;
+      }
+      // 🔒【匯入前先驗證, 不合格就整批不做】
+      //   舊版直接一個個 setItem 蓋上去: 只要備份檔壞掉/被手改壞, 前幾項寫進去、第 N 項才炸,
+      //   結果變成「一半新一半舊」—— 商品庫是新的、庫存是舊的, 這種混合狀態比整個匯入失敗還難救。
+      const bad = [];
+      for (const k of incoming) {
+        const v = dump[k];
+        if (typeof v !== "string") { bad.push(`${k}: 不是文字`); continue; }
+        try { JSON.parse(v); } catch (pe) {
+          // 少數 key 存的本來就是純文字(時間字串), 不是 JSON → 只擋明顯是 JSON 卻壞掉的
+          if (/^[\s]*[\[{]/.test(v)) bad.push(`${k}: JSON 格式壞掉`);
+        }
+      }
+      if (bad.length) {
+        alert("⚠ 這個備份檔有問題, 為了不弄壞現有資料, 整批都不匯入:\n\n" + bad.slice(0, 8).join("\n"));
+        e.target.value = "";
         return;
       }
       const meta = dump._meta || {};
@@ -12760,9 +12871,19 @@ document.getElementById("backup-import-file").addEventListener("change", (e) => 
         e.target.value = "";
         return;
       }
-      // 套用
-      for (const k of incoming) {
-        localStorage.setItem(k, dump[k]);
+      // 先拍一份現況快照, 寫到一半失敗就整個還原 (全有或全無)
+      const snapshot = {};
+      for (const k of _keys) snapshot[k] = localStorage.getItem(k);
+      try {
+        for (const k of incoming) localStorage.setItem(k, dump[k]);
+      } catch (werr) {
+        console.error("[backup-import] 寫入失敗, 還原快照", werr);
+        for (const k of _keys) {
+          try { if (snapshot[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, snapshot[k]); } catch (re) {}
+        }
+        alert("⚠ 匯入寫入失敗 (可能是空間不足), 已還原成匯入前的資料。\n\n" + (werr.message || werr));
+        e.target.value = "";
+        return;
       }
       showToast(`✓ 已匯入 ${incoming.length} 項, 3 秒後重新載入`);
       setTimeout(() => location.reload(), 3000);
@@ -13999,7 +14120,9 @@ function reconcileStockFromCloud(opts) {
   for (const e of list) {
     if (!e || !e.id || !e.completedAt) continue;
     if (_stockAppliedIds.has(e.id)) continue;
-    if (new Date(e.completedAt).getTime() < cutoff) { _stockAppliedIds.add(e.id); continue; } // 基準前的視為已反映
+    // 基準(上次 ERP 對齊)之前的視為已反映 —— 直接跳過即可, ⚠ 絕不可 add 進 _stockAppliedIds:
+    //   那會用舊 id 灌爆上限, 把「真正扣過的新單 id」擠出去 → 下次補扣時同一筆再扣一次。
+    if (new Date(e.completedAt).getTime() < cutoff) continue;
     applyStockForEntry(e, { quiet: true });   // 安靜套用, 最後統一報一次
     applied++;
   }
@@ -14020,9 +14143,9 @@ function applyStockForEntry(entry, opts) {
   opts = opts || {};
   if (!entry || !entry.id) return;
   if (_stockAppliedIds.has(entry.id)) return;   // 已套用過 → 絕不重複
-  _stockAppliedIds.add(entry.id);
-  saveStockApplied();
   const quiet = !!opts.quiet;
+  // ⚠ 標記「已套用」必須等真的寫入成功之後 (見函式結尾)。先標記的話, 一旦 saveStock() 因空間不足失敗,
+  //   這筆扣帳就永遠不會再被補扣 → 靜默漏扣。
   // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
   if (settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement" && entry.orderType !== "inbound") {
     let deducted = 0;
@@ -14040,6 +14163,14 @@ function applyStockForEntry(entry, opts) {
         else for (const oit of (orig.items || [])) {
           if (!oit.essential && !oit.unmapped && (oit.packed || 0) > 0) priorDeducted[oit.sku] = oit.packed;
         }
+      } else if (!entry.deductedItems) {
+        // ⚠ 找不到原單(跨裝置補扣時原單已被刪除)→ 無法得知原本扣過多少。
+        //   此時若照「整筆扣」會把原單那份再扣一次 (例: 原 100 + 追加後 150 → 扣成 250)。
+        //   寧可跳過不扣, 由 ERP 對齊時修正; 少扣看得出來, 多扣看不出來。
+        console.warn("[stock] 追加單找不到原單, 跳過扣帳以免重複扣", entry.id, "→", entry.continuationOf);
+        _stockAppliedIds.add(entry.id); saveStockApplied();
+        if (!quiet) setTimeout(() => showToast(`⚠ 追加單 ${entry.id.slice(0, 8)} 找不到原單, 已跳過扣庫存(請用 ERP 對齊)`), 600);
+        return;
       }
     }
     const deductedNow = {}; // 本張「累計實扣量」, 存進 entry.deductedItems 供下次追加當基準
@@ -14087,6 +14218,11 @@ function applyStockForEntry(entry, opts) {
     const n = stockAddToBin(entry.items, "qty");
     if (n > 0) { saveStock(); if (!quiet) setTimeout(() => showToast(`📈 進貨入一般倉 ${n} SKU`), 600); }
   }
+  // ★ 全部庫存異動完成後才標記「已套用」。
+  //   若中途 saveStock() 因空間不足失敗, 這裡仍會標記 —— 但 saveStock 失敗時 notifyStorageFull 會提醒使用者,
+  //   且庫存最終以 ERP 對齊為準; 相對地「先標記後失敗」會讓這筆永遠補不回來, 兩害相權取輕。
+  _stockAppliedIds.add(entry.id);
+  saveStockApplied();
 }
 
 function applyShipmentSideEffects(entry) {
