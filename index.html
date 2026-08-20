@@ -1775,12 +1775,13 @@ footer.summary-bar {
       <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg> ERP 鍵單</button>
     </div>
     <details style="margin-bottom: 10px;">
-      <summary style="cursor:pointer; font-size:0.8rem; font-weight:600; color:var(--text-soft); padding:6px 2px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M4 4v16h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="12" y="8" width="2.5" height="9"/><rect x="17" y="5" width="2.5" height="12"/></svg> 統計分析(績效 · 客戶 · 熱銷 · 退貨)</summary>
+      <summary style="cursor:pointer; font-size:0.8rem; font-weight:600; color:var(--text-soft); padding:6px 2px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M4 4v16h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="12" y="8" width="2.5" height="9"/><rect x="17" y="5" width="2.5" height="12"/></svg> 統計分析(績效 · 客戶 · 熱銷 · 包材 · 退貨)</summary>
       <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
         <button class="btn outline sm" id="open-perf-stats-btn" style="flex:1; min-width: 70px;">📊 績效</button>
         <button class="btn outline sm" id="open-customers-btn" style="flex:1; min-width: 70px;">👥 客戶</button>
         <button class="btn outline sm" id="open-top-sku-btn" style="flex:1; min-width: 70px;">📈 熱銷</button>
         <button class="btn sm" id="open-biz-report-btn" style="flex:1; min-width: 70px; background: var(--primary);">📋 營運報表</button>
+        <button class="btn outline sm" id="open-packaging-btn" style="flex:1; min-width: 70px;">📦 包材</button>
         <button class="btn outline sm" id="open-return-analysis-btn" style="flex:1; min-width: 70px;">🔁 退貨</button>
       </div>
     </details>
@@ -2155,11 +2156,21 @@ footer.summary-bar {
           <div class="card-title">宅配寄件紀錄</div>
           <div class="card-desc">補寄 / 宅配寄件登記 · 誰寄了、誰還沒寄</div>
         </a>
+        <a href="pickup.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M3 14h4l1.5 3h7L17 14h4v6H3z"/></svg></div>
+          <div class="card-title">上門收件紀錄</div>
+          <div class="card-desc">物流上門收走幾件 · 交付/實收對不上一眼看出</div>
+        </a>
         <a href="scheduling.html" class="settings-card wide" style="text-decoration:none; color:inherit;">
           <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/><path d="M8 14h3M13 14h3M8 17.5h3"/></svg></div>
           <div class="card-title">訂單排程</div>
           <div class="card-desc">各通路要出的單排起來 · 今天該出、逾期一眼看</div>
         </a>
+        <button class="settings-card wide" data-settings-view="bundles">
+          <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5 12 13l9-4.5M12 13v7"/></svg></div>
+          <div class="card-title">連動規則</div>
+          <div class="card-desc">買配件時要一起帶出哪些商品 · 自己新增修改</div>
+        </button>
         <button class="settings-card wide" data-settings-view="backup">
           <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-6h8v6"/></svg></div>
           <div class="card-title">資料搬家 / 備份</div>
@@ -2540,6 +2551,20 @@ footer.summary-bar {
     </div>
 
     <!-- 子視圖: 資料搬家 / 備份 -->
+    <div id="settings-view-bundles" class="settings-subview" hidden>
+      <button class="settings-back-btn" data-settings-back>← 返回設定</button>
+      <h3 style="margin: 0 0 8px;">📦 連動規則</h3>
+      <p class="hint">客人買了<strong>加購配件</strong>(收納包、充電底座…)時,通常會一起出的主商品。建官網單時系統會<strong>問你一次</strong>要不要一起加,你按確定才會加。</p>
+      <p class="hint" style="background: var(--warn-bg); color: #92400e; padding: 10px; border-radius: 8px; font-size: 0.72rem; margin-top: 10px;">
+        ⚠ 這裡設的是「<strong>買配件 → 帶出主商品</strong>」。<br>
+        如果是「<strong>官網賣一個套組名稱 → 要拆成好幾樣</strong>」(例如「Dusty MINI 1收納包及濾芯4組」),那個要設在
+        📋 <strong>規格對應</strong>,不是這裡。
+      </p>
+      <div id="bundle-rules-list" style="margin-top: 14px;"></div>
+      <button class="btn full outline" id="bundle-add-btn" style="margin-top: 10px;">＋ 新增一條連動規則</button>
+      <button class="btn full outline" id="bundle-restore-btn" style="margin-top: 8px;">↻ 還原成出廠預設</button>
+    </div>
+
     <div id="settings-view-backup" class="settings-subview" hidden>
       <button class="settings-back-btn" data-settings-back>← 返回設定</button>
       <h3 style="margin: 0 0 8px;">💾 資料搬家 / 備份</h3>
@@ -2555,6 +2580,21 @@ footer.summary-bar {
       </div>
       <div style="margin-top: 10px;">
         <button class="btn full outline" id="backup-import-btn">📥 從 JSON 檔匯入</button>
+      </div>
+
+      <!-- 📦 儲存空間: 瀏覽器給每個網址的 localStorage 額度固定約 5MB, 沒有 API 可以要求加大。
+           所以這裡做兩件事: (1) 讓使用者看得到是誰在佔空間 (2) 提供「只清雲端已保存的舊紀錄」的安全出口。 -->
+      <div style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px;">
+        <h3 style="margin: 0 0 6px; font-size: 0.95rem;">📦 本機儲存空間</h3>
+        <div id="storage-usage"></div>
+        <button class="btn full outline" id="storage-refresh-btn" style="margin-top: 10px;">↻ 重新計算</button>
+        <button class="btn full outline" id="storage-cleanup-btn" style="margin-top: 8px;">🧹 清掉雲端已保存的舊出貨紀錄</button>
+        <button class="btn full outline" id="storage-purge-btn" style="margin-top: 8px; border-color: var(--danger); color: var(--danger);">🗑 清空本機全部出貨紀錄(雲端保留)</button>
+        <p class="hint" style="font-size: 0.7rem; margin-top: 8px;">
+          🧹 <strong>清掉舊的</strong>:只刪已確認存在雲端、且超過 14 天的。<br>
+          🗑 <strong>全部清空</strong>:本機一次清乾淨(還沒推上雲端的仍會保留)。會先自動下載一份備份檔,並逐筆跟雲端核對過才刪。<br>
+          兩個都<strong>不會動到雲端</strong> —— 出貨紀錄頁和統計分析照樣看得到完整資料(統計會自動從雲端讀兩年份)。
+        </p>
       </div>
 
       <details style="margin-top: 14px;">
@@ -2906,6 +2946,33 @@ footer.summary-bar {
 
     <div style="height: 14px"></div>
     <button class="btn full outline" id="top-sku-close">關閉</button>
+  </div>
+</div>
+
+<!-- 📦 包材用量 modal -->
+<div class="modal-backdrop" id="packaging-modal" hidden>
+  <div class="modal" style="max-width: 620px;">
+    <h2>📦 包材用量 / 叫貨評估</h2>
+    <p class="hint" style="font-size: 0.75rem;">從出貨紀錄統計每種包材實際用掉多少,算出每日用量,推估還能撐幾天。</p>
+
+    <div class="filter-bar" id="pkg-range-bar" style="margin: 10px 0;">
+      <button data-pkg-range="week" class="active">本週</button>
+      <button data-pkg-range="month">本月</button>
+      <button data-pkg-range="lastmonth">上月</button>
+      <button data-pkg-range="quarter">本季</button>
+      <button data-pkg-range="all">全部</button>
+    </div>
+
+    <div id="pkg-summary" class="hint" style="background: var(--primary-light); padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.75rem;"></div>
+    <div id="pkg-content" style="max-height: 50vh; overflow-y: auto;"></div>
+
+    <p class="hint" id="pkg-stock-note" style="font-size: 0.68rem; margin-top: 10px;"></p>
+
+    <div style="height: 10px"></div>
+    <div class="row" style="gap: 6px;">
+      <button class="btn outline sm" id="pkg-export-csv" style="flex:1;">📤 匯出 CSV</button>
+      <button class="btn outline sm" id="packaging-close" style="flex:1;">關閉</button>
+    </div>
   </div>
 </div>
 
@@ -3322,7 +3389,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v5.1 · 2026-08-14";
+const APP_VERSION = "v5.6 · 2026-08-20";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3400,6 +3467,9 @@ const DEFAULT_LIBRARY = [
   { sku: "KVC-18MV45-HEPA",  name: "KOCA Dusty MINI 1 濾芯",            category: "吸塵器" },
   { sku: "KVC-40MV46",       name: "KOCA Dusty Lite 1 家用吸塵器",         category: "吸塵器" },
   { sku: "KVC-40MV46-HEPA",  name: "Dusty Lite 1 濾心",                 category: "吸塵器" },
+  // ⚠ 這個 SKU 是 BUNDLE_RULES 的連動 trigger(充電底座 → 帶主機 1), 但以前漏了沒進商品庫
+  //   → 官網訂單買到它一律變「對不到」, 那條連動規則等於從來沒生效過。名稱若和實際不符, 到 📚 商品庫 改即可。
+  { sku: "KVC-40MV46-BAS",   name: "KOCA Dusty Lite 1 充電底座",          category: "吸塵器" },
   { sku: "KVCBG-18MV45",     name: "KOCA Dusty MINI 1 收納包",          category: "吸塵器" },
   { sku: "AF-CYK625-W",      name: "珍珠白【半導體製冷】北極熊御用款",         category: "加購品" },
   { sku: "AF-CYK625-B",      name: "海洋藍【半導體製冷】北極熊御用款",         category: "加購品" },
@@ -3588,6 +3658,21 @@ function saveKocaNameMap() {
 }
 function loadKocaNameMap() {
   try { const s = localStorage.getItem(KOCA_NAME_MAP_KEY); if (s) { const p = JSON.parse(s); if (p && typeof p === "object") kocaNameMap = p; } } catch (e) {}
+}
+
+// 官網品名 → 「規格對應表的套組鍵」記憶表。
+// 為什麼需要這張:官網和規格對應表用的是兩套完全不同的講法, 靠文字比對永遠對不起來。
+//   官網:「KOCA Dusty MINI 1 黑騎士(Dusty MINI 1 完整配件組)」
+//   規格表:「Dusty MINI 1收納包及濾芯4組」
+// 兩個名字除了型號以外沒有任何共同字 → 只能由使用者指定一次, 然後永遠記住。
+// { 正規化後的官網品名: "規格對應表的鍵" }
+const KOCA_BUNDLE_MAP_KEY = "picking_koca_bundle_map_v1";
+let kocaBundleMap = {};
+function saveKocaBundleMap() {
+  try { localStorage.setItem(KOCA_BUNDLE_MAP_KEY, JSON.stringify(kocaBundleMap)); if (typeof scheduleMasterPush === "function") scheduleMasterPush(); } catch (e) {}
+}
+function loadKocaBundleMap() {
+  try { const s = localStorage.getItem(KOCA_BUNDLE_MAP_KEY); if (s) { const p = JSON.parse(s); if (p && typeof p === "object") kocaBundleMap = p; } } catch (e) {}
 }
 
 // 設定 (聲音/webhook/主題/多人同步 等)
@@ -4719,9 +4804,181 @@ function checkStorageUsage() {
   try { for (const k in localStorage) { if (Object.prototype.hasOwnProperty.call(localStorage, k)) chars += (localStorage[k] || "").length + k.length; } } catch (e) { return; }
   const bytes = chars * 2; // UTF-16 ≈ 2 bytes/char (粗估)
   if (bytes > 5 * 1024 * 1024 * 0.8) { // 超過約 5MB 上限的 8 成就提醒
-    try { showToast(`⚠ 本機儲存空間已用約 ${(bytes / 1024 / 1024).toFixed(1)}MB(接近上限),請到 ⚙ 匯出備份、或清掉舊出貨紀錄,以免之後出貨存不進去`); } catch (e) {}
+    // ⚠ 只丟一句「請去清理」等於沒有出路 —— 同仁在包貨中根本不知道要點哪裡。
+    //   直接把設定 → 資料搬家/備份 開起來, 那頁有儲存空間明細和一鍵清理。
+    try {
+      showToast(`⚠ 本機儲存空間已用約 ${(bytes / 1024 / 1024).toFixed(1)}MB(接近上限),幫你開啟清理頁面`);
+      setTimeout(() => {
+        const m = document.getElementById("settings-modal");
+        if (m && m.hidden) { m.hidden = false; showSettingsView("backup"); }
+      }, 1200);
+    } catch (e) {}
   }
 }
+// ===== 📦 儲存空間: 看得到誰在佔 + 安全清理 =====
+// ⚠ localStorage 的額度是瀏覽器給的(每個網址約 5MB), 沒有任何 API 可以「擴充」。
+//   能做的只有: 少存一點, 或把資料搬到別的地方(雲端 / IndexedDB)。
+const STORAGE_LABELS = {
+  picking_history_v1: "出貨紀錄",
+  picking_state_v2: "當前備貨清單",
+  picking_state_backup_v1: "清單自動備份",
+  picking_stock_v1: "倉庫清冊",
+  picking_library_v1: "商品庫",
+  picking_spec_map_v1: "規格對應表",
+  picking_bundle_rules_v1: "連動規則",
+  picking_stocktake_v1: "進行中的盤點",
+  picking_stocktake_history_v1: "盤點歷史",
+  picking_stock_applied_v1: "已扣庫存紀錄",
+  picking_pending_cloud_history_v1: "待補送雲端佇列",
+  picking_pending_events_v1: "房間待送事件",
+  picking_erp_keyed_v1: "ERP 已鍵單紀錄",
+  picking_erp_line_done_v1: "ERP 已鍵明細",
+  picking_settings_v1: "設定",
+  picking_koca_name_map_v1: "官網品名對應",
+  picking_koca_bundle_map_v1: "官網套組對應",
+  koca_logistics_v1: "物流狀態快取",
+};
+function storageBreakdown() {
+  const rows = [];
+  let total = 0;
+  try {
+    for (const k in localStorage) {
+      if (!Object.prototype.hasOwnProperty.call(localStorage, k)) continue;
+      const bytes = ((localStorage[k] || "").length + k.length) * 2;   // UTF-16 ≈ 2 bytes/char
+      total += bytes;
+      rows.push({ key: k, label: STORAGE_LABELS[k] || k, bytes });
+    }
+  } catch (e) { return { total: 0, rows: [] }; }
+  rows.sort((a, b) => b.bytes - a.bytes);
+  return { total, rows };
+}
+const _mb = b => (b / 1024 / 1024).toFixed(2);
+function renderStorageUsage() {
+  const el = document.getElementById("storage-usage");
+  if (!el) return;
+  const { total, rows } = storageBreakdown();
+  const LIMIT = 5 * 1024 * 1024;
+  const pct = Math.min(100, Math.round(total / LIMIT * 100));
+  const barColor = pct >= 80 ? "var(--danger)" : pct >= 60 ? "#b8860b" : "var(--success)";
+  const localCount = (typeof history !== "undefined" && Array.isArray(history)) ? history.length : 0;
+  el.innerHTML = `
+    <div style="font-size:0.8rem; font-weight:700; margin-bottom:4px;">已用 ${_mb(total)} MB / 上限約 5 MB(${pct}%)</div>
+    <div style="height:9px; background:var(--border); border-radius:99px; overflow:hidden;">
+      <div style="height:100%; width:${pct}%; background:${barColor};"></div>
+    </div>
+    <p class="hint" style="font-size:0.68rem; margin:6px 0 8px;">這個上限是瀏覽器訂的,<strong>不能加大</strong>。要騰空間只能清掉本機不需要留的東西。</p>
+    <div style="font-size:0.75rem; line-height:1.9;">
+      ${rows.filter(r => r.bytes > 1024).slice(0, 8).map(r =>
+        `<div style="display:flex; justify-content:space-between; gap:8px;">
+           <span style="color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.label)}</span>
+           <strong>${_mb(r.bytes)} MB</strong>
+         </div>`).join("")}
+    </div>
+    <p class="hint" style="font-size:0.68rem; margin-top:6px;">本機出貨紀錄 ${localCount} 筆${cloudHistoryEnabled() ? "・雲端另有一份完整的" : "・⚠ 沒設雲端,本機是唯一一份,別清"}</p>`;
+}
+// 只清「確定已經在雲端」而且夠舊的本機出貨紀錄。
+// 為什麼安全: allHistory() 會把本機和雲端合併顯示 → 本機刪掉、雲端還在, 出貨紀錄頁看得到、匯出也有。
+// 為什麼不自動做: 出貨紀錄是憑證等級的資料(見檔頭資料安全規範), 一律由使用者按下去才動。
+async function cleanupLocalHistory() {
+  if (!cloudHistoryEnabled()) {
+    alert("⚠ 這台沒有設定雲端同步(Worker URL + 金鑰)。\n\n本機這份就是唯一的一份出貨紀錄,不能清。\n請先到「外部整合」設定雲端,或改用「匯出全部資料」備份。");
+    return;
+  }
+  const KEEP_DAYS = 14;
+  const cutoff = Date.now() - KEEP_DAYS * 86400000;
+  showToast("正在跟雲端核對…");
+  await fetchCloudHistory(true);                 // 先抓雲端最新一份來核對
+  const inCloud = new Set((cloudHistory || []).map(e => e && e.id).filter(Boolean));
+  const pendingIds = new Set((pendingCloudHistory || []).map(e => e && e.id).filter(Boolean));
+  const before = history.length;
+  const removable = history.filter(e => {
+    if (!e || !e.id || !e.completedAt) return false;             // 資料怪的一律不動
+    if (pendingIds.has(e.id)) return false;                      // 還沒推上去 → 絕不能刪
+    if (!inCloud.has(e.id)) return false;                        // 雲端沒查到 → 絕不能刪
+    return new Date(e.completedAt).getTime() < cutoff;            // 只清超過保留天數的
+  });
+  if (removable.length === 0) {
+    renderStorageUsage();
+    alert(`沒有可以清的紀錄。\n\n本機 ${before} 筆之中:\n・${KEEP_DAYS} 天內的會保留\n・雲端還沒查到的會保留(雲端只回最近 30 天)\n・還沒推上雲端的會保留`);
+    return;
+  }
+  const freed = removable.reduce((s, e) => s + JSON.stringify(e).length * 2, 0);
+  if (!confirm(`要清掉 ${removable.length} 筆本機出貨紀錄嗎?\n\n這些都已經確認存在雲端,清掉之後:\n・出貨紀錄頁還是看得到(自動從雲端讀)\n・匯出、對帳都還有\n\n預計騰出約 ${_mb(freed)} MB\n(本機會從 ${before} 筆變成 ${before - removable.length} 筆)`)) return;
+  const kill = new Set(removable.map(e => e.id));
+  const kept = history.filter(e => !kill.has(e.id));
+  history.length = 0;
+  for (const e of kept) history.push(e);
+  if (saveHistory() === false) {
+    showToast("⚠ 清理後存檔失敗, 請重新整理再試");
+    return;
+  }
+  renderStorageUsage();
+  if (typeof renderHistory === "function") renderHistory();
+  showToast(`✓ 已清掉 ${removable.length} 筆本機舊紀錄, 騰出約 ${_mb(freed)} MB(雲端那份完好)`);
+}
+
+// 🗑 清空本機「全部」出貨紀錄 —— 雲端那份完全不動, 統計照樣看得到。
+// 為什麼這樣就不會掉資料:
+//   ・統計是從 allHistory() = 本機 + 雲端 合併算出來的
+//   ・開統計時會 ensureFullCloudHistory() 把雲端兩年份整包拉回來
+//   → 本機刪掉只是少了一份快取, 統計數字不會變
+// ⚠ 出貨紀錄是憑證等級的資料, 所以這裡三道關卡一道都不能省:
+//   1. 一定先下載一份備份檔 (不給跳過)
+//   2. 逐筆跟雲端核對, 雲端沒有的絕不刪
+//   3. 明確告知刪幾筆、留幾筆、為什麼留
+async function purgeLocalHistory() {
+  if (!cloudHistoryEnabled()) {
+    alert("⚠ 這台沒有設定雲端同步(Worker URL + 金鑰)。\n\n本機這份就是唯一的一份出貨紀錄, 清掉就真的沒了。\n請先到「外部整合」設定雲端。");
+    return;
+  }
+  if (!history.length) { showToast("本機沒有出貨紀錄"); return; }
+  const before = history.length;
+  if (!confirm(`要清空本機全部 ${before} 筆出貨紀錄嗎?\n\n・雲端那份完全不會動\n・統計分析照樣看得到(會自動從雲端讀)\n・出貨紀錄頁也照樣看得到\n\n按確定後會先幫你下載一份備份檔。`)) return;
+
+  // 關卡 1: 先備份 (下載失敗就整個中止, 不冒險)
+  try {
+    const dump = { _meta: { app: "出貨雙重確認", type: "purge-before-backup", version: APP_VERSION, exportedAt: new Date().toISOString(), count: before } };
+    for (const k of backupKeys()) { const v = localStorage.getItem(k); if (v !== null) dump[k] = v; }
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `清空前備份_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("⚠ 備份檔下載失敗, 已中止清空。\n\n" + (e.message || e));
+    return;
+  }
+
+  // 關卡 2: 逐筆跟雲端核對 (拉完整兩年, 不是只有 30 天)
+  showToast("正在跟雲端核對全部紀錄…");
+  const ok = await ensureFullCloudHistory(true);
+  if (!ok) {
+    alert("⚠ 連不上雲端或讀取失敗, 已中止清空。\n\n沒有核對過就刪, 等於拿憑證冒險。請確認網路後再試。");
+    return;
+  }
+  const inCloud = new Set((cloudHistory || []).map(e => e && e.id).filter(Boolean));
+  const pendingIds = new Set((pendingCloudHistory || []).map(e => e && e.id).filter(Boolean));
+  const keep = history.filter(e => !e || !e.id || pendingIds.has(e.id) || !inCloud.has(e.id));
+  const removeCount = before - keep.length;
+  if (removeCount === 0) {
+    alert(`沒有可以清的紀錄。\n\n本機 ${before} 筆全部都「雲端還查不到」或「還沒推上雲端」, 為了安全一筆都沒刪。\n\n請先確認雲端同步正常(出貨紀錄頁會自動補推)。`);
+    return;
+  }
+  const whyKeep = keep.length
+    ? `\n\n會保留 ${keep.length} 筆(雲端查不到 或 還沒推上去), 這些不能刪。`
+    : "";
+  if (!confirm(`最後確認:清掉本機 ${removeCount} 筆。${whyKeep}\n\n這 ${removeCount} 筆都已確認存在雲端, 統計和出貨紀錄都還看得到。\n\n確定?`)) return;
+
+  history.length = 0;
+  for (const e of keep) history.push(e);
+  if (saveHistory() === false) { showToast("⚠ 清空後存檔失敗, 請重新整理再試"); return; }
+  renderStorageUsage();
+  if (typeof renderHistory === "function") renderHistory();
+  showToast(`✓ 已清空本機 ${removeCount} 筆(雲端完好, 統計不受影響)`, 6000);
+}
+
 let _lastStateBackupAt = 0;
 function saveState() {
   try {
@@ -5249,7 +5506,10 @@ function parseLibraryData(text) {
 
 // ---- 商品連動規則 (基於歷史出貨資料分析, 100% 配對驗證) ----
 // 結構: 一個 trigger 可帶動多個 children
-const BUNDLE_RULES = [
+// 連動規則(加購配件 → 通常會一起出的主商品)。
+// ⚠ 這裡只是「出廠預設」。實際使用的是 BUNDLE_RULES, 由 ⚙ 設定 → 📦 連動規則 編輯, 存在 localStorage。
+//   以前寫死在程式裡, Kyle 要加一條規則就得找我改 code —— 不合理, v5.4 起改成自己可以編。
+const DEFAULT_BUNDLE_RULES = [
   {
     trigger: "KVCBG-18MV45",
     triggerName: "Dusty Mini 收納包",
@@ -5276,6 +5536,52 @@ const BUNDLE_RULES = [
     note: "充電底座 → 帶主機 1 (KOCA Dusty Lite 1 家用吸塵器)",
   },
 ];
+
+// 實際使用的連動規則 (可在設定裡編輯)
+const BUNDLE_RULES_KEY = "picking_bundle_rules_v1";
+let BUNDLE_RULES = [];
+function loadBundleRules() {
+  try {
+    const s = localStorage.getItem(BUNDLE_RULES_KEY);
+    if (s) {
+      const p = JSON.parse(s);
+      // 存過就以存的為準 (包含「全部刪光」這個決定, 所以空陣列也要尊重)
+      if (Array.isArray(p)) { BUNDLE_RULES = p.filter(r => r && r.trigger && Array.isArray(r.children)); return; }
+    }
+  } catch (e) { console.warn("[bundle] 讀取連動規則失敗, 用預設", e); }
+  BUNDLE_RULES = JSON.parse(JSON.stringify(DEFAULT_BUNDLE_RULES));   // 第一次使用: 帶出廠預設
+}
+function saveBundleRules() {
+  try {
+    localStorage.setItem(BUNDLE_RULES_KEY, JSON.stringify(BUNDLE_RULES));
+    if (typeof scheduleMasterPush === "function") scheduleMasterPush();   // 電腦改了, 手機跟著更新
+    return true;
+  } catch (e) { notifyStorageFull("saveBundleRules"); return false; }
+}
+
+// 🔎 連動規則自我檢查:規則裡的 SKU 若不在商品庫, 那條規則等於永遠不會生效, 而且完全不會有人發現。
+//   實際發生過:KVC-40MV46-BAS(充電底座)漏建在商品庫 → 官網買到它一律標「對不到」,
+//   連動從來沒觸發過, 也沒有任何錯誤訊息。開機講一次, 以後加新規則忘記建商品就會立刻知道。
+function auditBundleRules() {
+  const bad = [];
+  for (const r of (typeof BUNDLE_RULES !== "undefined" ? BUNDLE_RULES : [])) {
+    if (!library.find(p => p.sku === r.trigger)) bad.push(`${r.triggerName || r.trigger}(trigger ${r.trigger})`);
+    for (const c of (r.children || [])) {
+      if (!library.find(p => p.sku === c.sku)) bad.push(`${r.triggerName || r.trigger} 的子項 ${c.sku}`);
+    }
+  }
+  // 規格對應表(套組)也一起查:對到不存在的 SKU 會靜默出 0 件
+  for (const k in specMap) {
+    for (const m of (specMap[k] || [])) {
+      if (m && m.sku && !library.find(p => p.sku === m.sku)) bad.push(`規格「${k}」對到不存在的 ${m.sku}`);
+    }
+  }
+  if (bad.length) {
+    console.warn("[audit] 連動/套組設定對不到商品庫:", bad);
+    setTimeout(() => showToast(`⚠ 有 ${bad.length} 項連動/套組設定對不到商品庫(${bad[0]}), 這些規則不會生效。請到 📚 商品庫 補建`, 8000), 2500);
+  }
+  return bad;
+}
 
 function checkBundleRule(triggerIdx, deltaAdded) {
   const triggerIt = state.items[triggerIdx];
@@ -5963,9 +6269,35 @@ function _kocaDeliveryLabel(m) {
 }
 // 官網品名 → 規格對應表(specMap)的「多品項套組」拆法; 沒命中或只對到單一 SKU 回 null (走原本的 sku/品名比對)
 // 只認「拆成 2 個以上 SKU」的才算套組, 避免影響一般單品的既有行為。
+// 把品名切成「有意義的關鍵詞」: 先用連接詞(及/與/和/+)斷開, 再依中英文分段。
+// 丟掉純數字與單字中文詞(「組」「入」「版」這種到處都有的字, 留著會誤中)。
+function _nameTokens(s) {
+  const n = normalizeProdName(s);
+  if (!n) return [];
+  const out = [];
+  for (const seg of n.split(/[+＋及與和\/]/)) {
+    for (const t of (seg.match(/[a-z0-9]+|[一-鿿]+/g) || [])) {
+      if (/^\d+$/.test(t)) continue;                       // 純數字不算(4組 / 5入 的那個數字)
+      if (/^[一-鿿]$/.test(t)) continue;           // 單字中文不算
+      out.push(t);
+    }
+  }
+  return out;
+}
+// 這個官網品名看起來是不是「套組/組合」? 用來判斷「對不到套組時要不要問使用者」。
+// 官網的套組寫法五花八門(完整配件組 / 組合包 / 全配 / 豪華組…), 這裡只做「像不像」的初判, 不做決定。
+const _BUNDLE_NAME_HINTS = /配件組|完整配件|組合包|組合|套組|全配|豪華組|超值組|優惠組|入組|同捆|bundle|combo/i;
+function _looksLikeBundleName(name) {
+  return _BUNDLE_NAME_HINTS.test(String(name || ""));
+}
 function _kocaSpecExpand(name, allowSingle) {
   const minCount = allowSingle ? 1 : 2;   // 預設只認「拆成 2 個以上」的套組; allowSingle=單品比對也用(對不到時的最後手段)
   if (!name || typeof specMap !== "object" || !specMap) return null;
+  // 0. 使用者指定過的套組對應最優先 —— 官網和規格表用詞不同時, 這是唯一可靠的來源
+  const _remembered = kocaBundleMap[normalizeProdName(name)];
+  if (_remembered && Array.isArray(specMap[_remembered]) && specMap[_remembered].length >= minCount) {
+    return specMap[_remembered];
+  }
   const direct = specMap[name];
   if (Array.isArray(direct) && direct.length >= minCount) return direct;
   const n = normalizeProdName(name);
@@ -5980,6 +6312,24 @@ function _kocaSpecExpand(name, allowSingle) {
       if (kn.length > bestLen) { best = v; bestLen = kn.length; }  // 多筆命中取最精確(最長)的
     }
   }
+  if (best) return best;
+  // ★ 關鍵詞比對 (上面整串包含比對失敗時才跑)。
+  //   上面那套要求規格表的名字「一字不差」出現在官網品名裡, 只要官網多寫幾個字就對不到:
+  //     規格表:「Dusty MINI 1收納包及濾芯4組」
+  //     官網名:「KOCA Dusty MINI 1 無線吸塵器 收納包+濾芯4入組」  ← 中間多了「無線吸塵器」、「及」變「+」、「4組」變「4入組」
+  //   對不到就會掉到下面用商品名去猜 → 猜成「單主機」→ 收納包和濾芯整個沒出貨, 而且完全沒有提示。
+  //   改成: 規格表名字拆出來的關鍵詞(如 dustymini1 / 收納包 / 濾芯)只要全部出現在官網品名裡就算命中。
+  //   門檻: 至少 2 個關鍵詞、合計 6 個字以上 —— 否則像「濾芯5個」這種只剩一個「濾芯」的鍵會亂中。
+  for (const k in specMap) {
+    const v = specMap[k];
+    if (!Array.isArray(v) || v.length < minCount) continue;
+    const toks = _nameTokens(String(k).replace(/^\[(品線|商品)\]\s*/, ""));
+    const totalLen = toks.reduce((s, t) => s + t.length, 0);
+    if (toks.length < 2 || totalLen < 6) continue;
+    if (!toks.every(t => n.includes(t))) continue;
+    if (totalLen > bestLen) { best = v; bestLen = totalLen; }   // 命中最多字的最精確
+  }
+  if (best) console.log("[koca] 套組以關鍵詞比對命中:", name, "→", best.map(m => m.sku + "×" + (m.qty || 1)).join(" + "));
   return best;
 }
 // 金鑰只放在 Worker secret (KOCA_INTERNAL_API_KEY), 前端完全碰不到, 只帶 SPIDEY_KEY 打自家 Worker。
@@ -6219,6 +6569,20 @@ function buildListFromKocaOrder(o, gate) {
       expandedNames.push(it.name);
       return;
     }
+    // ★ 名字看起來是套組, 但上面對不到任何套組拆法 → 不可以偷偷當成單品。
+    //   實際情形: 官網寫「KOCA Dusty MINI 1 黑騎士(Dusty MINI 1 完整配件組)」, 規格表寫「Dusty MINI 1收納包及濾芯4組」,
+    //   兩邊用詞完全不同對不起來 → 舊版就用品名去猜, 猜成「單主機」→ 收納包和濾芯整組沒出貨, 而且畫面上看不出異常。
+    //   改成標紅要求指定一次(可以選套組), 指定後永遠記住, 之後同一個品名自動展開。
+    if (_looksLikeBundleName(it.name)
+        && !kocaBundleMap[normalizeProdName(it.name)]
+        && !kocaNameMap[normalizeProdName(it.name)]) {
+      const ph = `__KOCA_UNMAPPED_${i}`;
+      totals[ph] = (totals[ph] || 0) + qty;
+      nameOf[ph] = it.name || "(無名稱)";
+      unmapped.push(it.name || "(無名稱)");
+      console.warn("[koca] 品名像套組但對不到拆法, 要求使用者指定:", it.name);
+      return;
+    }
     // 官網若有回 sku 就直接用, 沒有才用商品名對
     let sku = (it.sku || "").trim();
     let prod = sku ? (library.find(p => p.sku === sku) || null) : null;
@@ -6444,32 +6808,52 @@ function kocaBatchActive() {
 // 官網訂單建清單時: 把「連動規則(BUNDLE_RULES)的 trigger 商品」的子項也展開進清單。
 //   例: 訂單只有「投影機收納組(KPJ-40MV47-BAG)」→ 自動帶入子項「投影機主機(KPJ-40MV47)」。
 //   一般刷單模式下 checkBundleRule 不會自動補缺漏子項(只提醒), 所以官網建單時就先展開好, 清單/黃框才完整。
+// 官網訂單的商品連動 (收納包 → 主機 + 濾芯)。
+//
+// ⚠ 這裡「一定要問」, 兩個方向都會出事, 所以不能自己決定:
+//   ・自動加  → 客人只買收納包(不含主機)時會多送一台主機, 而且被預填成已裝箱, 全程沒提示 (實際發生過)
+//   ・不加    → 客人買的是整組時會漏出主機和濾芯
+//   ・加了卻不預填 → 應出算進去、已裝卻是 0 → 清單永遠顯示未完成、結案被當成漏裝, 整張單卡住 (v5.1 犯過這個錯)
+//
+// 所以: 問一次, 答「要」就照常加並預填(視同官網訂單本來就有), 答「不要」就完全不加。
+// 套組(_fromSpec)本來就已經拆好完整內容, 一律跳過不問。
 function _expandKocaBundles(items) {
   if (!Array.isArray(items) || typeof BUNDLE_RULES === "undefined") return items;
-  const additions = [];
+  // 先算出「如果要加, 會加什麼」, 不動 items
+  const plan = [];   // [{sku, name, qty}]
+  const triggers = [];
   for (const it of items) {
     if (it.essential || it.unmapped) continue;
     if (it._fromSpec) continue; // 規格對應表已經拆好完整內容, 再展開一次會變兩倍 (買1組變主機2、濾芯8)
     const rule = BUNDLE_RULES.find(r => r.trigger === it.sku);
     if (!rule || !Array.isArray(rule.children)) continue;
+    triggers.push(it.name || it.sku);
     for (const c of rule.children) {
       const addQty = (c.qty || 1) * (it.expected || 0);
       if (addQty <= 0) continue;
-      const existing = items.find(x => x.sku === c.sku) || additions.find(x => x.sku === c.sku);
-      // 🔒 _autoBundleQty = 「這是系統自己推論加上去的, 不是官網訂單上真的有的」。
-      //   實際發生過:客人只買「收納包」(不含主機), 系統照連動自動補一台主機, 又被 prefill 標成已裝箱,
-      //   同仁只刷包材就結案 → 多送一台投影機 + 多扣一台庫存, 全程沒有任何提示。
-      //   現在自動加的份量不預填, 會留在待撿清單上, 同仁看得到、要親手刷過才算數 —— 不強制擋, 但不再靜默。
-      if (existing) {
-        existing.expected = (existing.expected || 0) + addQty;
-        existing._autoBundleQty = (existing._autoBundleQty || 0) + addQty;
-      } else {
-        const libP = library.find(p => p.sku === c.sku);
-        additions.push({ sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: addQty, packed: 0, _autoBundleQty: addQty });
-      }
+      const libP = library.find(p => p.sku === c.sku);
+      const nm = (libP && libP.name) || c.name || c.sku;
+      const hit = plan.find(x => x.sku === c.sku);
+      if (hit) hit.qty += addQty;
+      else plan.push({ sku: c.sku, name: nm, qty: addQty, category: (libP && libP.category) || "其他" });
     }
   }
-  for (const a of additions) items.push(a);
+  if (plan.length === 0) return items;
+  const desc = plan.map(p => `・${p.name} ×${p.qty}`).join("\n");
+  const ok = confirm(
+    `📦 套組連動\n\n這張官網訂單有「${triggers.join("、")}」。\n通常會一起出:\n${desc}\n\n要一起加進清單嗎?\n\n` +
+    `【要加】按「確定」—— 會直接算成已裝箱, 你只要刷包裝\n【客人只買這個配件本身】按「取消」—— 什麼都不加`
+  );
+  if (!ok) {
+    console.log("[koca] 使用者選擇不加連動子項");
+    setTimeout(() => showToast("已依你的選擇, 不加連動商品"), 500);
+    return items;
+  }
+  for (const p of plan) {
+    const existing = items.find(x => x.sku === p.sku);
+    if (existing) existing.expected = (existing.expected || 0) + p.qty;
+    else items.push({ sku: p.sku, name: p.name, category: p.category, expected: p.qty, packed: 0 });
+  }
   return items;
 }
 // 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
@@ -6484,8 +6868,9 @@ function _prefillKocaActiveParcel(o) {
   for (const it of (state.items || [])) {
     if (it.essential) continue;   // 包材不預填 (留給同仁刷)
     if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
-    // 連動自動補的份量不預填 —— 官網訂單上沒有這筆, 只是系統推論的, 必須同仁親手刷過才算 (見 _expandKocaBundles)
-    const qty = (it.expected || 0) - (it._autoBundleQty || 0);
+    // 這裡一律照 expected 預填。連動子項在 _expandKocaBundles 已經問過使用者了,
+    // 既然答應要加, 就等同官網訂單本來就有 —— 不可以「加進應出卻不預填」, 那會讓清單永遠結不了案。
+    const qty = it.expected || 0;
     if (qty <= 0) continue;
     it.packed = qty;                                                                    // 清單標記為已裝
     state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + qty;   // 放進黃框
@@ -6763,27 +7148,71 @@ function renderKocaUnmappedPanel() {
   const el = document.getElementById("koca-order-map");
   if (!el) return;
   const un = (state.items || []).filter(it => it.unmapped);
-  if (un.length === 0) { el.hidden = true; el.innerHTML = ""; return; }
+  const _ov = document.getElementById("koca-map-overlay");
+  if (un.length === 0) {
+    el.hidden = true; el.innerHTML = "";
+    if (_ov) _ov.remove();
+    return;
+  }
 
   const opts = library
     .filter(p => !p.essential)
     .map(p => `<option value="${escapeHtml(p.sku)}">${escapeHtml(p.sku)} — ${escapeHtml(p.name || "")}</option>`)
     .join("");
+  // ★ 套組選項: 規格對應表裡「一個名字拆成多個商品」的那些鍵。
+  //   官網的套組講法(完整配件組)和規格表的講法(收納包及濾芯4組)常常完全不同, 靠文字比對永遠對不起來,
+  //   只能讓使用者指定一次。選了以後記在 kocaBundleMap, 之後同一個官網品名自動展開整組。
+  const bundleKeys = Object.keys(specMap || {}).filter(k => Array.isArray(specMap[k]) && specMap[k].length >= 2);
+  const bundleOpts = bundleKeys.map(k => {
+    const detail = specMap[k].map(m => {
+      const p = library.find(x => x.sku === m.sku);
+      return `${(p && p.name) || m.sku}×${m.qty || 1}`;
+    }).join(" + ");
+    return `<option value="bundle:${escapeHtml(k)}">📦 ${escapeHtml(k)} = ${escapeHtml(detail)}</option>`;
+  }).join("");
   el.hidden = false;
-  el.innerHTML = `
+  const inner = `
     <div style="border:1px solid var(--danger); border-radius:10px; padding:10px 12px; margin-top:10px; background: rgba(220,38,38,.06);">
-      <div style="font-weight:700; color:var(--danger); margin-bottom:4px;">⚠ 有 ${un.length} 個官網品項對不到商品庫</div>
-      <p class="hint" style="margin:0 0 8px;">指定一次對應的商品,系統就會<strong>永遠記住這個官網品名</strong>,以後同一個品名自動帶入,不用再選。</p>
+      <div style="font-weight:700; color:var(--danger); margin-bottom:4px;">⚠ 有 ${un.length} 個官網品項要指定內容</div>
+      <p class="hint" style="margin:0 0 8px;">指定一次,系統就會<strong>永遠記住這個官網品名</strong>,以後同一個品名自動帶入,不用再選。<br>
+      <strong>是套組的話請選 📦 開頭的那些</strong>(會自動展開成主機+收納包+濾芯…),不要只選單主機。</p>
       ${un.map(it => `
         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
           <div style="flex:1; min-width:150px; font-size:0.8125rem; font-weight:600;">${escapeHtml(it.name)} <span style="color:var(--text-soft); font-weight:400;">×${it.expected}</span></div>
           <select data-koca-map="${escapeHtml(it.sku)}" style="flex:1; min-width:170px; padding:6px; border:1px solid var(--border); border-radius:6px; font-size:0.8125rem; background:var(--surface); color:var(--text);">
-            <option value="">— 選擇對應商品 —</option>${opts}
+            <option value="">— 選擇對應內容 —</option>
+            ${bundleOpts ? `<optgroup label="📦 套組 (會展開成多個商品)">${bundleOpts}</optgroup>` : ""}
+            <optgroup label="單一商品">${opts}</optgroup>
           </select>
         </div>`).join("")}
       <button class="btn sm" id="koca-map-apply-btn" type="button" style="margin-top:4px;">✓ 套用並記住對應</button>
       <button class="btn outline sm" id="koca-map-skip-btn" type="button" style="margin-top:4px;">✕ 略過(從清單移除)</button>
       <p class="hint" style="font-size:0.68rem; margin:6px 0 0;">不想現在對應就按「略過」——把它從清單移除,不會卡著結不了單(這張的其他商品照常刷、照常完成)。</p>
+    </div>`;
+
+  // ⚠ 這塊面板長在「建單」分頁裡, 但建完官網單會直接切到撿貨頁 → 面板整個看不到,
+  //   同仁只會看到清單上一列紅字, 卻找不到地方處理 = 死路。
+  //   所以: 建單頁沒顯示時, 改用浮出視窗把同一塊內容端到眼前 (兩者只會存在一個, 避免選單重複)。
+  const importVisible = !!(el.offsetParent || el.getClientRects().length);
+  if (importVisible) {
+    if (_ov) _ov.remove();
+    el.innerHTML = inner;
+    return;
+  }
+  el.innerHTML = "";
+  let ov = _ov;
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "koca-map-overlay";
+    ov.style.cssText = "position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding:14px; overflow:auto;";
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `
+    <div style="background:var(--surface); border-radius:14px; max-width:560px; width:100%; max-height:88vh; overflow:auto; padding:14px 16px; box-shadow:0 10px 40px rgba(0,0,0,.3);">
+      <div style="font-weight:700; font-size:1rem; margin-bottom:2px;">📦 這張官網單有品項要先指定</div>
+      <p class="hint" style="margin:0;">指定完就會自動填進當前訂單,接著照常刷包裝結案。</p>
+      ${inner}
+      <button class="btn outline sm" id="koca-map-later-btn" type="button" style="margin-top:8px; width:100%;">稍後再說(先關掉)</button>
     </div>`;
 }
 // 略過: 把對不到的佔位品項從清單移除, 不強迫一定要選一個商品 (Kyle: 不要有強迫機制)
@@ -6813,6 +7242,32 @@ function applyKocaNameMapping() {
     const idx = state.items.findIndex(it => it.sku === d.phSku);
     if (idx < 0) continue;
     const it = state.items[idx];
+
+    // ★ 選了套組: 一列展開成多列 (主機 + 收納包 + 濾芯×4…), 並永遠記住這個官網品名對應哪個套組
+    if (String(d.targetSku).startsWith("bundle:")) {
+      const key = String(d.targetSku).slice(7);
+      const mapping = specMap[key];
+      if (!Array.isArray(mapping) || mapping.length === 0) continue;
+      const orderQty = it.expected || 0;
+      kocaBundleMap[normalizeProdName(it.name)] = key;
+      state.items.splice(idx, 1);                 // 先移掉紅色佔位列
+      for (const m of mapping) {
+        const addQty = (m.qty || 1) * orderQty;
+        if (addQty <= 0) continue;
+        const p = library.find(x => x.sku === m.sku);
+        const dupI = state.items.findIndex(x => x.sku === m.sku);
+        if (dupI >= 0) state.items[dupI].expected += addQty;
+        else state.items.push({
+          sku: m.sku, name: (p && p.name) || m.sku, category: (p && p.category) || "其他",
+          expected: addQty, packed: 0,
+          // 套組拆出來的已經是完整內容, 標記起來避免連動規則再展開一次 (買1組變2組)
+          _fromSpec: true,
+        });
+      }
+      applied++;
+      continue;
+    }
+
     const prod = library.find(p => p.sku === d.targetSku);
     if (!prod) continue;
 
@@ -6870,6 +7325,7 @@ function applyKocaNameMapping() {
   }
 
   saveKocaNameMap();
+  saveKocaBundleMap();
   saveState();
   if (state.roomMode && typeof pushRoomListReset === "function") pushRoomListReset(); // 房間模式: 換清單要通知同事
   showToast(`✓ 已對應 ${applied} 個品項,並記住官網品名`);
@@ -8313,6 +8769,93 @@ function buildAnomalyConfirmMessage(issues) {
   return msg;
 }
 
+// ===== 📦 包材用量 / 叫貨評估 =====
+// 包材(essential)在熱銷排行是被排除的(它不是商品), 但「用掉多少」才是叫貨的依據。
+// ⚠ 包材目前不會自動扣庫存(applyStockForEntry 對 essential 直接 continue),
+//   所以「目前庫存」是使用者最後一次盤點/ERP 對齊的數字, 畫面上必須講明, 不能讓人誤以為是即時的。
+function computePackagingUsage(range) {
+  const cutoff = getRangeCutoff(range);
+  let until = new Date();
+  if (range === "lastmonth") { const n = new Date(); until = new Date(n.getFullYear(), n.getMonth(), 1); }
+  const totals = {};
+  let orderCount = 0, firstTs = null, lastTs = null;
+  for (const entry of allHistory()) {   // 本機+雲端合併: 要算全公司用掉的, 不是只有這台
+    const ts = new Date(entry.completedAt);
+    if (isNaN(ts.getTime()) || ts < cutoff) continue;
+    if (range === "lastmonth" && ts >= until) continue;
+    orderCount++;
+    if (!firstTs || ts < firstTs) firstTs = ts;
+    if (!lastTs || ts > lastTs) lastTs = ts;
+    for (const it of (entry.items || [])) {
+      if (!it || !it.essential) continue;             // 只看包材
+      const q = Number(it.packed) || 0;
+      if (q <= 0) continue;
+      if (!totals[it.sku]) {
+        const libP = library.find(p => p.sku === it.sku);
+        totals[it.sku] = { sku: it.sku, name: it.name || (libP && libP.name) || it.sku, qty: 0, orders: 0 };
+      }
+      totals[it.sku].qty += q;
+      totals[it.sku].orders++;
+    }
+  }
+  // 涵蓋天數: 用「實際有出貨的區間」算日均, 比用固定天數準
+  //   (例如選「全部」但只有 3 天資料, 除以 90 會嚴重低估用量 → 叫貨太晚)
+  let days = 1;
+  if (firstTs && lastTs) days = Math.max(1, Math.round((lastTs - firstTs) / 86400000) + 1);
+  const rows = Object.values(totals).map(r => {
+    const perDay = r.qty / days;
+    const st = stockMap[r.sku];
+    const onHand = st && Number.isFinite(Number(st.qty)) ? Number(st.qty) : null;
+    const daysLeft = (onHand != null && perDay > 0) ? Math.floor(onHand / perDay) : null;
+    return { ...r, perDay, onHand, daysLeft, stockUpdatedAt: (st && st.updatedAt) || null };
+  }).sort((a, b) => b.qty - a.qty);
+  return { rows, orderCount, days, totalQty: rows.reduce((s, r) => s + r.qty, 0) };
+}
+let _pkgRange = "week";
+function renderPackagingUsage(range) {
+  _pkgRange = range || _pkgRange;
+  const { rows, orderCount, days, totalQty } = computePackagingUsage(_pkgRange);
+  const sum = document.getElementById("pkg-summary");
+  const content = document.getElementById("pkg-content");
+  const note = document.getElementById("pkg-stock-note");
+  sum.innerHTML = `共 ${orderCount} 筆出貨 · 用掉 ${totalQty} 個包材 · 涵蓋 ${days} 天(日均 ${(totalQty / days).toFixed(1)} 個)`;
+  if (rows.length === 0) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>此區間沒有包材使用紀錄</div></div>';
+    note.textContent = "";
+    return;
+  }
+  const maxQty = rows[0].qty;
+  content.innerHTML = rows.map(r => {
+    const pct = maxQty > 0 ? Math.max(2, Math.round(r.qty / maxQty * 100)) : 0;
+    // 燈號: 撐不到 7 天=紅(該叫貨了) / 7~14 天=黃(準備叫) / 其他=綠。沒庫存數字就不亮燈, 不要亂猜。
+    let badge = '<span style="font-size:0.68rem; color:var(--text-soft);">未設庫存</span>';
+    if (r.daysLeft != null) {
+      const c = r.daysLeft < 7 ? "var(--danger)" : (r.daysLeft < 14 ? "#b8860b" : "var(--success)");
+      const t = r.daysLeft < 7 ? "🔴 該叫貨了" : (r.daysLeft < 14 ? "🟡 準備叫貨" : "🟢 充足");
+      badge = `<span style="font-size:0.68rem; font-weight:700; color:${c};">${t} · 約可撐 ${r.daysLeft} 天</span>`;
+    }
+    return `
+      <div style="padding: 7px 0; border-bottom: 1px solid var(--border-light);">
+        <div style="display:flex; justify-content:space-between; gap:6px; align-items:baseline;">
+          <span style="font-weight:700; font-size:0.75rem; font-family: ui-monospace, monospace;">${escapeHtml(r.sku)}</span>
+          <span style="font-weight:700; font-size:0.875rem; color:var(--primary);">${r.qty} 個</span>
+        </div>
+        <div style="font-size:0.6875rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</div>
+        <div style="font-size:0.6875rem; color:var(--text-soft); margin-top:2px;">
+          日均 <strong>${r.perDay.toFixed(1)}</strong> 個 · 用於 ${r.orders} 筆出貨 · 目前庫存 <strong>${r.onHand != null ? r.onHand : "—"}</strong>
+        </div>
+        <div style="margin-top:3px;">${badge}</div>
+        <div style="background: var(--border-light); height: 4px; border-radius: 2px; margin-top: 4px; overflow: hidden;">
+          <div style="background: var(--primary); height: 100%; width: ${pct}%;"></div>
+        </div>
+      </div>`;
+  }).join("");
+  const anyStock = rows.some(r => r.onHand != null);
+  note.innerHTML = anyStock
+    ? '⚠ <strong>包材不會自動扣庫存</strong>(只有商品會)。上面的「目前庫存」是你最後一次<strong>盤點或 ERP 對齊</strong>填的數字,不是即時的 —— 「可撐幾天」只能當參考,叫貨前還是實際看一下。'
+    : '⚠ 這些包材在倉庫清冊裡還沒有庫存數字,所以算不出「可撐幾天」。到 📦 倉庫清冊 填上目前數量就會出現。';
+}
+
 // ===== 📈 熱銷 SKU =====
 function computeTopSKUs(range) {
   const cutoff = getRangeCutoff(range);
@@ -8659,7 +9202,7 @@ document.getElementById("open-perf-stats-btn").addEventListener("click", () => {
   renderPerfStats(_perfRange);
   document.querySelectorAll("#perf-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.perfRange === _perfRange));
   // 拉最新雲端紀錄 → 到手後重畫 (否則只看得到這台包的)
-  fetchCloudHistory(true).then(() => { if (!document.getElementById("perf-stats-modal").hidden) renderPerfStats(_perfRange); }).catch(() => {});
+  ensureFullCloudHistory().then(() => { if (!document.getElementById("perf-stats-modal").hidden) renderPerfStats(_perfRange); }).catch(() => {});
 });
 document.getElementById("perf-stats-close").addEventListener("click", () => {
   document.getElementById("perf-stats-modal").hidden = true;
@@ -8679,7 +9222,7 @@ document.getElementById("open-customers-btn").addEventListener("click", () => {
   document.getElementById("customers-modal").hidden = false;
   document.getElementById("customers-search").value = "";
   renderCustomers("");
-  fetchCloudHistory(true).then(() => { if (!document.getElementById("customers-modal").hidden) renderCustomers(document.getElementById("customers-search").value); }).catch(() => {});
+  ensureFullCloudHistory().then(() => { if (!document.getElementById("customers-modal").hidden) renderCustomers(document.getElementById("customers-search").value); }).catch(() => {});
 });
 document.getElementById("customers-close").addEventListener("click", () => {
   document.getElementById("customers-modal").hidden = true;
@@ -8697,7 +9240,7 @@ document.getElementById("open-top-sku-btn").addEventListener("click", () => {
   document.getElementById("top-sku-modal").hidden = false;
   renderTopSKUs(_tskuRange);
   document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.tskuRange === _tskuRange));
-  fetchCloudHistory(true).then(() => { if (!document.getElementById("top-sku-modal").hidden) renderTopSKUs(_tskuRange); }).catch(() => {});
+  ensureFullCloudHistory().then(() => { if (!document.getElementById("top-sku-modal").hidden) renderTopSKUs(_tskuRange); }).catch(() => {});
 });
 document.getElementById("top-sku-close").addEventListener("click", () => {
   document.getElementById("top-sku-modal").hidden = true;
@@ -8711,6 +9254,43 @@ document.getElementById("top-sku-range-bar").addEventListener("click", (e) => {
   _tskuRange = btn.dataset.tskuRange;
   document.querySelectorAll("#top-sku-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
   renderTopSKUs(_tskuRange);
+});
+
+// 📦 包材用量
+document.getElementById("open-packaging-btn").addEventListener("click", () => {
+  document.getElementById("packaging-modal").hidden = false;
+  renderPackagingUsage(_pkgRange);
+  document.querySelectorAll("#pkg-range-bar button").forEach(b => b.classList.toggle("active", b.dataset.pkgRange === _pkgRange));
+  // 拉一次雲端再算 —— 包材是全公司一起用的, 只看這台會低估用量、叫貨會太晚
+  ensureFullCloudHistory().then(() => { if (!document.getElementById("packaging-modal").hidden) renderPackagingUsage(_pkgRange); }).catch(() => {});
+});
+document.getElementById("packaging-close").addEventListener("click", () => {
+  document.getElementById("packaging-modal").hidden = true;
+});
+document.getElementById("packaging-modal").addEventListener("click", (e) => {
+  if (e.target.id === "packaging-modal") document.getElementById("packaging-modal").hidden = true;
+});
+document.getElementById("pkg-range-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-pkg-range]");
+  if (!btn) return;
+  _pkgRange = btn.dataset.pkgRange;
+  document.querySelectorAll("#pkg-range-bar button").forEach(b => b.classList.toggle("active", b === btn));
+  renderPackagingUsage(_pkgRange);
+});
+document.getElementById("pkg-export-csv").addEventListener("click", () => {
+  const { rows, orderCount, days } = computePackagingUsage(_pkgRange);
+  if (!rows.length) { showToast("這個區間沒有包材使用紀錄"); return; }
+  const head = ["SKU", "品名", "用量", "日均用量", "用於幾筆出貨", "目前庫存", "預估可撐天數", "統計區間天數", "統計筆數"];
+  const body = rows.map(r => [r.sku, r.name, r.qty, r.perDay.toFixed(2), r.orders,
+    r.onHand != null ? r.onHand : "", r.daysLeft != null ? r.daysLeft : "", days, orderCount]);
+  const esc = c => { let s = String(c == null ? "" : c); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = "﻿" + [head].concat(body).map(r => r.map(esc).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `包材用量_${_pkgRange}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast("✓ 已匯出包材用量 CSV");
 });
 
 // ===== 📋 營運報表 (報備 / 叫貨估算) =====
@@ -8897,7 +9477,7 @@ document.getElementById("open-biz-report-btn").addEventListener("click", () => {
   _bizSetRange("thismonth");
   document.getElementById("biz-report-modal").hidden = false;
   renderBizReport();
-  fetchCloudHistory(true).then(() => { if (!document.getElementById("biz-report-modal").hidden) renderBizReport(); }).catch(() => {});
+  ensureFullCloudHistory().then(() => { if (!document.getElementById("biz-report-modal").hidden) renderBizReport(); }).catch(() => {});
 });
 document.getElementById("biz-close").addEventListener("click", () => document.getElementById("biz-report-modal").hidden = true);
 document.getElementById("biz-report-modal").addEventListener("click", (e) => {
@@ -9288,7 +9868,7 @@ async function pushHistoryToCloud(entry) {
     enqueuePendingCloudHistory(entry);
   }
 }
-// 開出貨紀錄時拉雲端最近 30 天 (節流 8 秒)
+// 開出貨紀錄時拉雲端最近 30 天 (節流 3 秒)
 async function fetchCloudHistory(force) {
   if (!cloudHistoryEnabled()) return;
   if (!force && Date.now() - _cloudHistFetchedAt < 3000) return;
@@ -9300,14 +9880,57 @@ async function fetchCloudHistory(force) {
     const data = await res.json().catch(() => ({}));
     if (data && data.ok && Array.isArray(data.entries)) {
       // 防呆: 雲端可能來自別台/別版本, 補上缺的欄位避免 render/刪除時 throw
-      cloudHistory = data.entries.map(e => ({
-        ...e,
-        items: Array.isArray(e.items) ? e.items : [],
-        summary: e.summary || { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 },
-      }));
+      const fresh = data.entries.map(_normCloudEntry);
+      // ⚠ 已經載入過完整歷史的話, 不可以用「最近 30 天」把它蓋掉 —— 那會讓統計突然少掉舊資料。
+      //   改成合併: 30 天內以這次拉的為準(較新), 30 天以前的保留。
+      cloudHistory = _cloudFullLoaded ? _mergeCloud(cloudHistory, fresh) : fresh;
       renderHistory();
     }
   } catch (e) { console.warn("[cloud-history] fetch failed", e); }
+}
+function _normCloudEntry(e) {
+  return {
+    ...e,
+    items: Array.isArray(e.items) ? e.items : [],
+    parcels: Array.isArray(e.parcels) ? e.parcels : [],
+    summary: e.summary || { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 },
+  };
+}
+function _mergeCloud(oldArr, newArr) {
+  const byId = new Map();
+  for (const e of (oldArr || [])) if (e && e.id) byId.set(e.id, e);
+  for (const e of (newArr || [])) if (e && e.id) byId.set(e.id, e);   // 新的覆蓋舊的
+  return Array.from(byId.values());
+}
+
+// 📊 統計要用的「完整歷史」。
+// 為什麼需要:統計是直接從出貨紀錄算的, 沒有另一份統計資料。
+//   本機紀錄清掉之後, 若只拉雲端最近 30 天, 所有統計就只剩 30 天 —— 舊資料看起來像消失了。
+//   Worker 的 /api/history/list 支援 ?from=&to= 任意區間(資料永久保存), 這裡一次把整段拉回來。
+let _cloudFullLoaded = false;
+let _cloudFullLoadedAt = 0;
+async function ensureFullCloudHistory(force) {
+  if (!cloudHistoryEnabled()) return false;
+  if (!force && _cloudFullLoaded && Date.now() - _cloudFullLoadedAt < 120000) return true;  // 2 分鐘內不重拉
+  const to = new Date();
+  const from = new Date(to.getTime() - 730 * 86400000);   // 往回抓兩年
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  try {
+    const url = settings.syncWorkerUrl.replace(/\/$/, "")
+      + `/api/history/list?from=${iso(from)}&to=${iso(to)}&limit=5000`;
+    const res = await fetch(url, { headers: { "X-Spidey-Key": settings.spideyKey || "" } });
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.ok || !Array.isArray(data.entries)) return false;
+    cloudHistory = _mergeCloud(cloudHistory, data.entries.map(_normCloudEntry));
+    _cloudFullLoaded = true;
+    _cloudFullLoadedAt = Date.now();
+    if (data.truncated) {
+      console.warn("[cloud-history] 完整歷史被截斷, 統計可能不完整");
+      setTimeout(() => showToast("⚠ 雲端歷史筆數太多被截斷, 統計可能不完整"), 400);
+    }
+    console.log("[cloud-history] 完整歷史已載入", cloudHistory.length, "筆");
+    return true;
+  } catch (e) { console.warn("[cloud-history] 完整歷史載入失敗", e); return false; }
 }
 
 // ===== 盤點紀錄雲端共享 (沿用同一組 Worker + Spidey Key) =====
@@ -9373,7 +9996,7 @@ async function pushMasterNow() {
     const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/master/put", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Spidey-Key": settings.spideyKey || "" },
-      body: JSON.stringify({ version, updatedAt: new Date().toISOString(), updatedBy: settings.myName || "電腦", library, stockMap, kocaNameMap }),
+      body: JSON.stringify({ version, updatedAt: new Date().toISOString(), updatedBy: settings.myName || "電腦", library, stockMap, kocaNameMap, kocaBundleMap, specMap, bundleRules: BUNDLE_RULES }),
     });
     const data = await res.json().catch(() => ({}));
     if (data && data.ok) {
@@ -9404,6 +10027,20 @@ async function fetchMasterMirror(force) {
     if (doc.kocaNameMap && typeof doc.kocaNameMap === "object") {
       kocaNameMap = doc.kocaNameMap;
       try { localStorage.setItem(KOCA_NAME_MAP_KEY, JSON.stringify(kocaNameMap)); } catch (_) {} // 直接寫入, 不再觸發推送
+    }
+    // 套組對應 + 規格對應表也一起鏡像: 在電腦上指定過的套組, 手機才不會又只出主機
+    if (doc.kocaBundleMap && typeof doc.kocaBundleMap === "object") {
+      kocaBundleMap = doc.kocaBundleMap;
+      try { localStorage.setItem(KOCA_BUNDLE_MAP_KEY, JSON.stringify(kocaBundleMap)); } catch (_) {}
+    }
+    if (doc.specMap && typeof doc.specMap === "object" && Object.keys(doc.specMap).length > 0) {
+      specMap = doc.specMap;
+      try { localStorage.setItem(SPEC_MAP_KEY, JSON.stringify(specMap)); } catch (_) {}
+    }
+    // 連動規則也鏡像 (電腦上加的規則, 手機要跟著有)。空陣列是合法的決定, 所以只檢查型別。
+    if (Array.isArray(doc.bundleRules)) {
+      BUNDLE_RULES = doc.bundleRules.filter(r => r && r.trigger && Array.isArray(r.children));
+      try { localStorage.setItem(BUNDLE_RULES_KEY, JSON.stringify(BUNDLE_RULES)); } catch (_) {}
     }
     _lastMasterVersion = v;
     try { localStorage.setItem(MASTER_VER_KEY, String(v)); } catch (_) {}
@@ -10956,10 +11593,16 @@ document.getElementById("platform-select").addEventListener("change", (e) => {
   }
 
   btn.addEventListener("click", go);
-  // 「套用並記住對應」(面板是動態產生的, 用事件委派)
-  document.getElementById("koca-order-map").addEventListener("click", (e) => {
-    if (e.target && e.target.id === "koca-map-apply-btn") applyKocaNameMapping();
-    if (e.target && e.target.id === "koca-map-skip-btn") skipKocaUnmapped();
+  // 「套用並記住對應」(面板是動態產生的, 且可能長在建單頁或浮出視窗兩處 → 綁在 document 上才兩邊都收得到)
+  document.addEventListener("click", (e) => {
+    if (!e.target || !e.target.id) return;
+    if (e.target.id === "koca-map-apply-btn") applyKocaNameMapping();
+    else if (e.target.id === "koca-map-skip-btn") skipKocaUnmapped();
+    else if (e.target.id === "koca-map-later-btn") {
+      const ov = document.getElementById("koca-map-overlay");
+      if (ov) ov.remove();
+      showToast("已關閉。要再指定的話, 到「建單」分頁最下方還找得到");
+    }
   });
   // 📋 今天要出的單
   const listBtn = document.getElementById("koca-order-list-btn");
@@ -12621,7 +13264,8 @@ const settingsModal = document.getElementById("settings-modal");
 // ==================== 🔒 裝置角色 (工讀生模式) ====================
 // 工讀生模式: 把「會弄壞資料」的功能藏起來, 並在處理程式再擋一層 (只藏 UI 不夠, 免得有路徑繞過)。
 // ⚠ 這是「防手滑 / 防好奇」的軟鎖, 不是資安機制 —— PIN 只存本機, 懂開發者工具的人繞得過。工讀生情境足夠。
-const HELPER_LOCKED_VIEWS = ["integration", "backup", "danger", "stocktake", "shipping"];
+// bundles 也鎖: 連動規則直接決定「出貨清單裡會有什麼」, 改錯會出錯貨
+const HELPER_LOCKED_VIEWS = ["integration", "backup", "danger", "stocktake", "shipping", "bundles"];
 function isHelper() { return settings.deviceRole === "helper"; }
 
 // 工讀生模式不給改的設定 → 強制回到安全值
@@ -12640,7 +13284,7 @@ function applyRoleLock() {
   document.querySelectorAll("button[data-settings-view]").forEach(b => {
     if (HELPER_LOCKED_VIEWS.includes(b.dataset.settingsView)) b.hidden = h;
   });
-  document.querySelectorAll('a[href="shipping.html"], a[href="scheduling.html"]').forEach(a => { a.hidden = h; });
+  document.querySelectorAll('a[href="shipping.html"], a[href="scheduling.html"], a[href="pickup.html"]').forEach(a => { a.hidden = h; });
   const byId = (id, hide) => { const el = document.getElementById(id); if (el) el.hidden = hide; };
   byId("test-mode-toggle", h);   // 🧪 測試模式
   byId("manage-lib-btn", h);     // 📚 管理商品庫 → 唯讀
@@ -12733,10 +13377,12 @@ function helperBlocked(what) {
 function showSettingsView(view) {
   document.getElementById("settings-menu").hidden = (view !== "menu");
   // 漏了 "theme" → 點外觀卡片時所有子視圖都被隱藏, 只剩標題, 看起來像空白
-  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger", "timing", "profile", "role"].forEach(v => {
+  ["help", "stocktake", "theme", "integration", "shipping", "backup", "danger", "timing", "profile", "role", "bundles"].forEach(v => {
     const el = document.getElementById(`settings-view-${v}`);
     if (el) el.hidden = (view !== v);
   });
+  if (view === "backup" && typeof renderStorageUsage === "function") renderStorageUsage();
+  if (view === "bundles" && typeof renderBundleRules === "function") renderBundleRules();
 }
 
 document.getElementById("settings-btn").addEventListener("click", () => {
@@ -12800,6 +13446,8 @@ function backupKeys() {
     STOCKTAKE_KEY, STOCKTAKE_HISTORY_KEY,   // 盤點: 進行中 + 歷史紀錄也一起備份
     ERP_ALIGN_KEY,                          // 上次 ERP 對齊時間
     KOCA_NAME_MAP_KEY,                      // 官網品名 → SKU 記憶對應表 (辛苦對過的別弄丟)
+    KOCA_BUNDLE_MAP_KEY,                    // 官網品名 → 套組拆法 記憶表 (弄丟 → 套組又只出主機)
+    BUNDLE_RULES_KEY,                       // 連動規則 (自己編的, 弄丟就退回出廠預設)
     PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
     // ⚠ 以下四項漏掉會出事, 不可移除:
     STOCK_APPLIED_KEY,                      // 已扣過庫存的出貨紀錄 id。沒帶走 → 新機補扣時「上次對齊後的每一筆都再扣一次」
@@ -12807,6 +13455,116 @@ function backupKeys() {
     PENDING_KEY,                            // 房間模式待送事件 (規範三-9: 不可遺失刷貨數)
   ].filter(Boolean);
 }
+
+// ===== 📦 連動規則編輯 (⚙ 設定 → 連動規則) =====
+function _skuOptions(selected) {
+  return library.filter(p => !p.essential)
+    .map(p => `<option value="${escapeHtml(p.sku)}"${p.sku === selected ? " selected" : ""}>${escapeHtml(p.sku)} — ${escapeHtml(p.name || "")}</option>`)
+    .join("");
+}
+function renderBundleRules() {
+  const el = document.getElementById("bundle-rules-list");
+  if (!el) return;
+  if (!BUNDLE_RULES.length) {
+    el.innerHTML = '<p class="hint" style="text-align:center; padding:20px;">目前沒有任何連動規則。<br>買配件時不會自動帶出主商品。</p>';
+    return;
+  }
+  el.innerHTML = BUNDLE_RULES.map((r, ri) => {
+    const trigLib = library.find(p => p.sku === r.trigger);
+    const missing = !trigLib;
+    return `
+    <div style="border:1px solid ${missing ? "var(--danger)" : "var(--border)"}; border-radius:10px; padding:10px 12px; margin-bottom:10px; background:${missing ? "rgba(220,38,38,.05)" : "var(--surface)"};">
+      <div style="font-size:0.72rem; font-weight:700; color:var(--text-soft); margin-bottom:3px;">買了這個配件</div>
+      <select data-bundle-trigger="${ri}" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:7px; font-size:0.82rem; background:var(--surface); color:var(--text);">
+        ${_skuOptions(r.trigger)}
+      </select>
+      ${missing ? `<p class="hint" style="color:var(--danger); font-size:0.7rem; margin:4px 0 0;">⚠ ${escapeHtml(r.trigger)} 不在商品庫, 這條規則不會生效</p>` : ""}
+      <div style="font-size:0.72rem; font-weight:700; color:var(--text-soft); margin:10px 0 3px;">就一起帶出</div>
+      ${(r.children || []).map((c, ci) => {
+        const cMissing = !library.find(p => p.sku === c.sku);
+        return `<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+          <select data-bundle-child="${ri}:${ci}" style="flex:1; min-width:0; padding:8px; border:1px solid ${cMissing ? "var(--danger)" : "var(--border)"}; border-radius:7px; font-size:0.82rem; background:var(--surface); color:var(--text);">
+            ${_skuOptions(c.sku)}
+          </select>
+          <input type="number" min="1" step="1" value="${Math.max(1, c.qty || 1)}" data-bundle-qty="${ri}:${ci}"
+                 style="width:64px; padding:8px; border:1px solid var(--border); border-radius:7px; font-size:0.82rem; background:var(--surface); color:var(--text); text-align:center;">
+          <button class="btn outline sm" data-bundle-delchild="${ri}:${ci}" style="padding:6px 9px;">✕</button>
+        </div>`;
+      }).join("")}
+      <button class="btn outline sm" data-bundle-addchild="${ri}" style="margin-top:2px;">＋ 再加一項</button>
+      <button class="btn sm" data-bundle-delrule="${ri}" style="margin-top:2px; background:#fff; border:1px solid var(--danger); color:var(--danger);">🗑 刪掉這條</button>
+    </div>`;
+  }).join("");
+}
+function _bundleIdx(v) { const [a, b] = String(v).split(":"); return [parseInt(a, 10), parseInt(b, 10)]; }
+document.getElementById("settings-view-bundles").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.bundleTrigger !== undefined) {
+    const ri = parseInt(t.dataset.bundleTrigger, 10);
+    if (BUNDLE_RULES[ri]) {
+      BUNDLE_RULES[ri].trigger = t.value;
+      const p = library.find(x => x.sku === t.value);
+      BUNDLE_RULES[ri].triggerName = (p && p.name) || t.value;
+      saveBundleRules(); renderBundleRules(); showToast("✓ 已更新");
+    }
+  } else if (t.dataset.bundleChild !== undefined) {
+    const [ri, ci] = _bundleIdx(t.dataset.bundleChild);
+    if (BUNDLE_RULES[ri] && BUNDLE_RULES[ri].children[ci]) {
+      BUNDLE_RULES[ri].children[ci].sku = t.value;
+      const p = library.find(x => x.sku === t.value);
+      BUNDLE_RULES[ri].children[ci].name = (p && p.name) || t.value;
+      saveBundleRules(); renderBundleRules(); showToast("✓ 已更新");
+    }
+  } else if (t.dataset.bundleQty !== undefined) {
+    const [ri, ci] = _bundleIdx(t.dataset.bundleQty);
+    // 數量至少 1: 填 0 或負數等於這條子項不會生效, 卻看不出來
+    const q = Math.max(1, parseInt(t.value, 10) || 1);
+    if (BUNDLE_RULES[ri] && BUNDLE_RULES[ri].children[ci]) {
+      BUNDLE_RULES[ri].children[ci].qty = q;
+      saveBundleRules(); renderBundleRules(); showToast("✓ 已更新");
+    }
+  }
+});
+document.getElementById("settings-view-bundles").addEventListener("click", (e) => {
+  const addC = e.target.closest("[data-bundle-addchild]");
+  const delC = e.target.closest("[data-bundle-delchild]");
+  const delR = e.target.closest("[data-bundle-delrule]");
+  if (addC) {
+    const ri = parseInt(addC.dataset.bundleAddchild, 10);
+    const first = library.find(p => !p.essential);
+    if (!first) { showToast("⚠ 商品庫是空的"); return; }
+    BUNDLE_RULES[ri].children.push({ sku: first.sku, name: first.name, qty: 1 });
+    saveBundleRules(); renderBundleRules();
+  } else if (delC) {
+    const [ri, ci] = _bundleIdx(delC.dataset.bundleDelchild);
+    if (!BUNDLE_RULES[ri]) return;
+    if (BUNDLE_RULES[ri].children.length <= 1) { showToast("⚠ 至少要留一項。整條不要就按「🗑 刪掉這條」"); return; }
+    BUNDLE_RULES[ri].children.splice(ci, 1);
+    saveBundleRules(); renderBundleRules();
+  } else if (delR) {
+    const ri = parseInt(delR.dataset.bundleDelrule, 10);
+    const r = BUNDLE_RULES[ri]; if (!r) return;
+    if (!confirm(`刪掉這條連動規則?\n\n買「${r.triggerName || r.trigger}」時就不會再問要不要帶出主商品。`)) return;
+    BUNDLE_RULES.splice(ri, 1);
+    saveBundleRules(); renderBundleRules(); showToast("已刪除");
+  }
+});
+document.getElementById("bundle-add-btn").addEventListener("click", () => {
+  const prods = library.filter(p => !p.essential);
+  if (prods.length < 2) { showToast("⚠ 商品庫至少要有 2 個商品才能設連動"); return; }
+  BUNDLE_RULES.push({ trigger: prods[0].sku, triggerName: prods[0].name, children: [{ sku: prods[1].sku, name: prods[1].name, qty: 1 }] });
+  saveBundleRules(); renderBundleRules();
+  showToast("✓ 已新增一條, 請選擇商品");
+});
+document.getElementById("bundle-restore-btn").addEventListener("click", () => {
+  if (!confirm("要把連動規則還原成出廠預設嗎?\n\n你自己加的、改的都會被覆蓋掉。")) return;
+  BUNDLE_RULES = JSON.parse(JSON.stringify(DEFAULT_BUNDLE_RULES));
+  saveBundleRules(); renderBundleRules(); showToast("✓ 已還原成出廠預設");
+});
+
+document.getElementById("storage-refresh-btn").addEventListener("click", renderStorageUsage);
+document.getElementById("storage-cleanup-btn").addEventListener("click", cleanupLocalHistory);
+document.getElementById("storage-purge-btn").addEventListener("click", purgeLocalHistory);
 
 document.getElementById("backup-export-btn").addEventListener("click", () => {
   const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString() } };
@@ -14516,6 +15274,7 @@ if (state.items.length === 0) {
   }
 }
 loadLibrary();
+loadBundleRules();   // 連動規則 (⚙ 設定可編輯; 沒存過就帶出廠預設)
 loadMenuQty();
 loadCollapsed();
 loadSpecMap();
@@ -14535,6 +15294,38 @@ loadStock();
 loadStockTake();
 loadStockTakeHistory();
 loadKocaNameMap();   // 官網品名 → SKU 記憶對應表
+loadKocaBundleMap(); // 官網品名 → 套組(規格對應表) 記憶表
+// 一次性修正 (v5.1): 清掉「名字像套組, 卻被記成單一商品」的舊對應。
+//   這種記憶是怎麼來的: 套組品名以前對不到拆法 → 跳出指定視窗 → 現場只能選單一商品 → 只好選主機 → 永遠記住。
+//   結果就是每次同一個套組都只出主機, 收納包和濾芯整組漏掉。清掉後會重新問一次, 這次可以選「套組」。
+try {
+  if (!localStorage.getItem("picking_bundlemap_migrated_v1")) {
+    let _cleared = 0;
+    for (const k in kocaNameMap) { if (_looksLikeBundleName(k)) { delete kocaNameMap[k]; _cleared++; } }
+    if (_cleared > 0) { saveKocaNameMap(); console.log("[migration] 清掉", _cleared, "筆被記成單品的套組對應, 將重新詢問"); }
+    localStorage.setItem("picking_bundlemap_migrated_v1", "1");
+  }
+} catch (e) { console.warn("[migration] 套組對應清理失敗", e); }
+// 一次性修正 (v5.3): 補建連動規則需要、但商品庫裡漏掉的 SKU。
+//   KVC-40MV46-BAS(Dusty Lite 1 充電底座) 是連動 trigger, 卻從來沒進過商品庫 →
+//   官網買到它一律標「對不到」, 那條連動規則等於從未生效。
+//   ⚠ 使用者自己刪掉的(在 LIB_DELETED_KEY 裡)不補回去, 尊重他的決定。
+try {
+  if (!localStorage.getItem("picking_lib_bundle_sku_fix_v1")) {
+    let _deleted = [];
+    try { _deleted = JSON.parse(localStorage.getItem(LIB_DELETED_KEY) || "[]"); } catch (_) {}
+    let _added = 0;
+    for (const sku of ["KVC-40MV46-BAS"]) {
+      if (library.find(p => p.sku === sku)) continue;
+      if (_deleted.includes(sku)) continue;
+      const def = DEFAULT_LIBRARY.find(p => p.sku === sku);
+      if (def) { library.push({ ...def }); _added++; }
+    }
+    if (_added > 0) { saveLibrary(); console.log("[migration] 補建", _added, "個連動規則需要的商品"); }
+    localStorage.setItem("picking_lib_bundle_sku_fix_v1", "1");
+  }
+} catch (e) { console.warn("[migration] 補建連動商品失敗", e); }
+auditBundleRules();   // 🔎 連動/套組設定對不到商品庫就講出來, 不要靜默失效
 // 若上次離線時還在盤點中, 自動進盤點視圖
 if (stockTake) {
   setTimeout(() => {
