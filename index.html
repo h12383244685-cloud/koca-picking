@@ -2592,8 +2592,9 @@ footer.summary-bar {
         <button class="btn full outline" id="storage-purge-btn" style="margin-top: 8px; border-color: var(--danger); color: var(--danger);">🗑 清空本機全部出貨紀錄(雲端保留)</button>
         <p class="hint" style="font-size: 0.7rem; margin-top: 8px;">
           🧹 <strong>清掉舊的</strong>:只刪已確認存在雲端、且超過 14 天的。<br>
-          🗑 <strong>全部清空</strong>:本機一次清乾淨(還沒推上雲端的仍會保留)。會先自動下載一份備份檔,並逐筆跟雲端核對過才刪。<br>
-          兩個都<strong>不會動到雲端</strong> —— 出貨紀錄頁和統計分析照樣看得到完整資料(統計會自動從雲端讀兩年份)。
+          🗑 <strong>全部清空</strong>:本機一次清乾淨(還沒推上雲端的仍會保留)。<br>
+          兩個都會<strong>先跟雲端逐筆核對完整歷史</strong>才刪,雲端查不到的一筆都不動;清空時可以順便下載一份備份檔(可略過)。<br>
+          <strong>不會動到雲端</strong> —— 出貨紀錄頁和統計分析照樣看得到完整資料(統計會自動從雲端讀兩年份)。
         </p>
       </div>
 
@@ -3389,7 +3390,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v5.6 · 2026-08-20";
+const APP_VERSION = "v5.7 · 2026-08-20";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -4887,7 +4888,15 @@ async function cleanupLocalHistory() {
   const KEEP_DAYS = 14;
   const cutoff = Date.now() - KEEP_DAYS * 86400000;
   showToast("正在跟雲端核對…");
-  await fetchCloudHistory(true);                 // 先抓雲端最新一份來核對
+  // 🔴 這裡一定要拉「完整歷史」, 不可以用 fetchCloudHistory(30天)。
+  //   v5.2 原本用 30 天版, 結果:核對名單只有 30 天內, 卻只刪 14 天以前的
+  //   → 只有 14~30 天那個夾層刪得掉, 30 天以前的一律「雲端查不到」而被保留
+  //   → 使用者按下去看到「沒有可以清的紀錄」, 以為功能壞掉 (Kyle 在手機上就是踩到這個)。
+  const _ok = await ensureFullCloudHistory(true);
+  if (!_ok) {
+    alert("⚠ 連不上雲端或讀取失敗, 沒有清除任何東西。\n\n沒有核對過就刪等於拿憑證冒險。請確認網路後再試。");
+    return;
+  }
   const inCloud = new Set((cloudHistory || []).map(e => e && e.id).filter(Boolean));
   const pendingIds = new Set((pendingCloudHistory || []).map(e => e && e.id).filter(Boolean));
   const before = history.length;
@@ -4899,7 +4908,7 @@ async function cleanupLocalHistory() {
   });
   if (removable.length === 0) {
     renderStorageUsage();
-    alert(`沒有可以清的紀錄。\n\n本機 ${before} 筆之中:\n・${KEEP_DAYS} 天內的會保留\n・雲端還沒查到的會保留(雲端只回最近 30 天)\n・還沒推上雲端的會保留`);
+    alert(`沒有可以清的紀錄。\n\n本機 ${before} 筆之中:\n・${KEEP_DAYS} 天內的會保留\n・雲端查不到的會保留(已比對雲端完整歷史 ${(cloudHistory || []).length} 筆)\n・還沒推上雲端的會保留`);
     return;
   }
   const freed = removable.reduce((s, e) => s + JSON.stringify(e).length * 2, 0);
@@ -4933,30 +4942,34 @@ async function purgeLocalHistory() {
   }
   if (!history.length) { showToast("本機沒有出貨紀錄"); return; }
   const before = history.length;
-  if (!confirm(`要清空本機全部 ${before} 筆出貨紀錄嗎?\n\n・雲端那份完全不會動\n・統計分析照樣看得到(會自動從雲端讀)\n・出貨紀錄頁也照樣看得到\n\n按確定後會先幫你下載一份備份檔。`)) return;
 
-  // 關卡 1: 先備份 (下載失敗就整個中止, 不冒險)
-  try {
-    const dump = { _meta: { app: "出貨雙重確認", type: "purge-before-backup", version: APP_VERSION, exportedAt: new Date().toISOString(), count: before } };
-    for (const k of backupKeys()) { const v = localStorage.getItem(k); if (v !== null) dump[k] = v; }
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `清空前備份_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    alert("⚠ 備份檔下載失敗, 已中止清空。\n\n" + (e.message || e));
-    return;
-  }
-
-  // 關卡 2: 逐筆跟雲端核對 (拉完整兩年, 不是只有 30 天)
+  // 關卡 1: 先跟雲端逐筆核對 (拉完整兩年, 不是只有 30 天)。
+  // ⚠ 順序很重要: 核對放最前面。以前是「先強制下載備份檔」, 但手機(尤其 iOS)下載會開新分頁、
+  //   常常把後面的流程打斷 → 使用者按了半天沒反應, 以為手機不能清 (Kyle 就是踩到這個)。
+  //   真正的安全網是「雲端有一份」, 不是本機那個檔案。
   showToast("正在跟雲端核對全部紀錄…");
   const ok = await ensureFullCloudHistory(true);
   if (!ok) {
     alert("⚠ 連不上雲端或讀取失敗, 已中止清空。\n\n沒有核對過就刪, 等於拿憑證冒險。請確認網路後再試。");
     return;
+  }
+  if (!confirm(`雲端已核對完成(雲端有 ${(cloudHistory || []).length} 筆)。\n\n要清空本機 ${before} 筆出貨紀錄嗎?\n\n・雲端那份完全不會動\n・統計分析照樣看得到(會自動從雲端讀)\n・出貨紀錄頁也照樣看得到`)) return;
+
+  // 關卡 2: 備份檔 (建議, 但不強迫 —— 手機下載常常不順, 不該卡住整個流程)
+  if (confirm("要先下載一份本機備份檔嗎?\n\n【建議】按「確定」下載(手機會存到「檔案」App)\n【略過】按「取消」直接繼續 —— 雲端已經核對過了, 不會掉資料")) {
+    try {
+      const dump = { _meta: { app: "出貨雙重確認", type: "purge-before-backup", version: APP_VERSION, exportedAt: new Date().toISOString(), count: before } };
+      for (const k of backupKeys()) { const v = localStorage.getItem(k); if (v !== null) dump[k] = v; }
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `清空前備份_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);   // 手機開新分頁讀取需要時間, 別太快回收
+    } catch (e) {
+      if (!confirm("⚠ 備份檔下載失敗:" + (e.message || e) + "\n\n雲端已經核對過了, 還是要繼續清空嗎?")) return;
+    }
   }
   const inCloud = new Set((cloudHistory || []).map(e => e && e.id).filter(Boolean));
   const pendingIds = new Set((pendingCloudHistory || []).map(e => e && e.id).filter(Boolean));
