@@ -3414,7 +3414,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v6.7 · 2026-09-04";
+const APP_VERSION = "v6.8 · 2026-09-07";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5789,15 +5789,12 @@ function checkBundleRule(triggerIdx, deltaAdded) {
   const available = state.manualMode ? childResolved : childResolved.filter(c => c.idx >= 0);
   if (available.length === 0) return;
 
-  // 詢問 (延遲執行避免阻塞掃描 buffer)
+  // ⚡ 直接加, 不詢問 (Kyle 2026/09: 每刷一個 trigger 就跳一次確認, 太拖時間)。
+  //   加完會明講加了什麼, 而且「撤銷」按鈕會把 trigger + 子項一起撤掉 —— 加錯了一鍵就能還原。
+  //   某條規則常誤加 → ⚙ 設定 → 📦 連動規則 停掉那一條。
+  //   仍然延遲執行: 避免阻塞掃描 buffer (連刷時掉碼)。
   setTimeout(() => {
-    const childList = available.map(c => `  • ${c.name} × ${c.totalQty}`).join("\n");
-    const ok = confirm(
-      `✓ ${rule.triggerName} 已加 ${deltaAdded} 個\n\n` +
-      `📦 連動規則: ${rule.note}\n\n` +
-      `要同步加入:\n${childList}\n\n要一起加嗎?`
-    );
-    if (ok) {
+    {
       let addedCount = 0;
       for (const c of available) {
         let recheckIdx = state.items.findIndex(it => it.sku === c.sku);
@@ -5823,7 +5820,8 @@ function checkBundleRule(triggerIdx, deltaAdded) {
         }
       }
       if (addedCount > 0) {
-        showToast(`✓ 套組已加入 ${addedCount} 個 SKU`);
+        const _d = available.map(c => `${c.name}×${c.totalQty}`).join("、");
+        showToast(`📦 連動已自動加入:${_d}(不需要的話按「撤銷」)`, 5000);
         // 剛加完子項 → 刷新撤銷鈕(重置 5 秒倒數 + 更新文字), 讓「撤銷=trigger+套組」有足夠時間按
         if (_lastAction && _lastAction.type === "scan_sku" && Array.isArray(_lastAction.children) && _lastAction.children.length) {
           _lastAction.label = `${_lastAction.sku} ×${_lastAction.delta} + 套組`;
@@ -7057,21 +7055,18 @@ function _expandKocaBundles(items) {
     }
   }
   if (plan.length === 0) return items;
-  const desc = plan.map(p => `・${p.name} ×${p.qty}`).join("\n");
-  const ok = confirm(
-    `📦 套組連動\n\n這張官網訂單有「${triggers.join("、")}」。\n通常會一起出:\n${desc}\n\n要一起加進清單嗎?\n\n` +
-    `【要加】按「確定」—— 會直接算成已裝箱, 你只要刷包裝\n【客人只買這個配件本身】按「取消」—— 什麼都不加`
-  );
-  if (!ok) {
-    console.log("[koca] 使用者選擇不加連動子項");
-    setTimeout(() => showToast("已依你的選擇, 不加連動商品"), 500);
-    return items;
-  }
+  // ⚡ 直接加入, 不再詢問 (Kyle 2026/09: 每張單都要點「是」太拖時間)。
+  //   風險仍在:客人只買配件(不含主機)時會多帶出主機 —— 所以改用兩道比較不擾民的防線:
+  //     1. 加完之後跳一則明確的提示, 講清楚「多加了什麼」, 同仁看得到就能當場移除
+  //     2. 某條規則若常常誤加, 到 ⚙ 設定 → 📦 連動規則 停用或修改那一條 (v5.4 起可自行編輯)
   for (const p of plan) {
     const existing = items.find(x => x.sku === p.sku);
     if (existing) existing.expected = (existing.expected || 0) + p.qty;
     else items.push({ sku: p.sku, name: p.name, category: p.category, expected: p.qty, packed: 0 });
   }
+  const desc = plan.map(p => `${p.name}×${p.qty}`).join("、");
+  console.log("[koca] 連動自動加入:", desc);
+  setTimeout(() => showToast(`📦 連動已自動加入:${desc}(客人只買配件的話請手動移除)`, 6000), 500);
   return items;
 }
 // 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
@@ -7571,13 +7566,14 @@ function applyKocaNameMapping() {
       };
     }
     // ★ 連動補跑: 建清單時這個品項還是「對不到」, _expandKocaBundles 跳過了它 →
-    //   指定後若它是套組 trigger (如收納包=主機+濾芯), 「詢問後」把子項補進清單。
-    //   ⚠ 一定要問, 不能自動加: 實際出現過「客人只買收納包(不含主機)」的官網單 —— 自動加會多送一台主機。
+    //   指定後若它是套組 trigger (如收納包=主機+濾芯), 把子項補進清單。
+    //   ⚡ 直接加, 不詢問 (Kyle 2026/09: 每次都要點很拖時間)。加完會明講加了什麼;
+    //      某條規則常誤加就到 ⚙ 設定 → 📦 連動規則 停掉那一條。
     const _rule = (typeof BUNDLE_RULES !== "undefined") ? BUNDLE_RULES.find(r => r.trigger === prod.sku) : null;
     if (_rule && Array.isArray(_rule.children)) {
       const _trigQty = it.expected || 0;
       const _childDesc = _rule.children.map(c => `${c.name || c.sku} ×${(c.qty || 1) * _trigQty}`).join("、");
-      if (_trigQty > 0 && confirm(`📦 套組連動\n\n「${prod.name}」通常會一起出:\n${_childDesc}\n\n這張單要一起加嗎?\n\n(客人只買「${prod.name}」本身 → 按取消)`)) {
+      if (_trigQty > 0) {
         for (const c of _rule.children) {
           const addQty = (c.qty || 1) * _trigQty;
           if (addQty <= 0) continue;
@@ -7588,7 +7584,7 @@ function applyKocaNameMapping() {
             state.items.push({ sku: c.sku, name: (libC && libC.name) || c.name || c.sku, category: (libC && libC.category) || "其他", expected: addQty, packed: 0 });
           }
         }
-        setTimeout(() => showToast(`📦 套組連動: 已加入 ${_childDesc}`), 400);
+        setTimeout(() => showToast(`📦 連動已自動加入:${_childDesc}(客人只買配件的話請手動移除)`, 6000), 400);
       }
     }
     applied++;
@@ -10210,7 +10206,8 @@ async function fetchCloudHistory(force) {
   if (!force && Date.now() - _cloudHistFetchedAt < 3000) return;
   _cloudHistFetchedAt = Date.now();
   try {
-    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/list?days=30", {
+    // limit 拉到上限 5000: 預設 2000 在出貨量大的時候會不夠 (2026/09 實際發生過 30 天內 2066 筆)
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/history/list?days=30&limit=5000", {
       headers: { "X-Spidey-Key": settings.spideyKey || "" },
     });
     const data = await res.json().catch(() => ({}));
@@ -10220,6 +10217,13 @@ async function fetchCloudHistory(force) {
       // ⚠ 已經載入過完整歷史的話, 不可以用「最近 30 天」把它蓋掉 —— 那會讓統計突然少掉舊資料。
       //   改成合併: 30 天內以這次拉的為準(較新), 30 天以前的保留。
       cloudHistory = _cloudFullLoaded ? _mergeCloud(cloudHistory, fresh) : fresh;
+      // 🔔 雲端資料被截斷 → 一定要講出來。
+      //   2026/09/07 事故: 30 天內 2066 筆超過上限 2000, 最新的 66 筆(含當天全部補寄)被砍掉,
+      //   結果「只有包的那台看得到」, 而且完全沒有任何提示, 是靠人發現數字怪怪的才查出來。
+      if (data.truncated) {
+        console.warn("[cloud-history] 雲端回傳被截斷, 筆數:", data.entries.length);
+        setTimeout(() => showToast(`⚠ 雲端紀錄太多(已達 ${data.entries.length} 筆上限), 較舊的沒load進來。統計請用「統計分析」看, 那邊會抓完整區間。`, 8000), 600);
+      }
       renderHistory();
     }
   } catch (e) { console.warn("[cloud-history] fetch failed", e); }
@@ -11905,8 +11909,10 @@ function bumpPickItem(idx, delta, options) {
   if (delta > 0 && navigator.vibrate) navigator.vibrate(12);
   saveState();
   renderPicking();
-  // 必要商品 (自由計數) 不跳「已完成」或「超過」提示, 因為沒有目標值
-  if (delta > 0 && !it.essential) {
+  // 必要商品(包材)與 expected=0 的自由計數項目, 都不跳「已完成 / 超過」提示 —— 它們根本沒有目標值。
+  // ⚠ 以前少了 expected > 0 這個條件, 導致手建/補寄/退貨/入倉(全部 expected=0)每刷一件都跳
+  //   「⚠ 已超過應出量」→ 同仁每天看幾百次假警告, 練成無視, 真的多刷時反而不會停下來。
+  if (delta > 0 && !it.essential && (it.expected || 0) > 0) {
     if (it.packed === it.expected) showToast("✓ " + it.sku + " 已完成");
     else if (it.packed > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
   }
@@ -13420,7 +13426,7 @@ function applyQtyModal() {
   const _idxForBundle = editingItemIdx; // 在 close 之前抓住 idx
   closeQtyModal();
   renderPicking();
-  if (!it.essential) {
+  if (!it.essential && (it.expected || 0) > 0) {   // expected=0 的自由計數沒有目標值, 不該報「超過」
     if (v === it.expected) showToast("✓ " + it.sku + " 已完成");
     else if (v > it.expected) showToast("⚠ " + it.sku + " 已超過應出量");
   }
