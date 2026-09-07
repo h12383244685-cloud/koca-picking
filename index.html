@@ -1597,6 +1597,8 @@ footer.summary-bar {
     <span class="count" id="header-status-count">0</span>
   </button>
   <div class="row">
+    <button class="icon-btn" id="work-timer" title="連續工作時間 (點一下看今天的統計)" hidden
+            style="font-size:0.72rem; padding:2px 7px; font-weight:700; font-variant-numeric:tabular-nums;">⏱ 0:00</button>
     <button class="icon-btn" id="net-status" title="網路狀態" aria-label="網路狀態" style="font-size:0.8rem; padding:0 4px;">🟢</button>
     <button class="icon-btn" id="home-btn" title="回首頁瀏覽商品庫" hidden>🏠</button>
     <button class="icon-btn" id="settings-btn" title="設定">⚙</button>
@@ -1770,6 +1772,9 @@ footer.summary-bar {
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
       尚無紀錄
     </div>
+    <!-- ☁ 雲端同步狀態: 沒設雲端 / 有紀錄卡著沒上傳 都要講出來。
+         以前兩種失敗都是靜默的 → 手機刷的單電腦看不到, 但沒有任何地方看得出問題。 -->
+    <div id="cloud-sync-status" hidden style="margin-bottom: 10px;"></div>
     <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
       <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 100px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg> 重新整理</button>
       <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg> ERP 鍵單</button>
@@ -2617,6 +2622,25 @@ footer.summary-bar {
       <h3 style="margin: 0 0 8px;">⏱ 包裹計時紀錄</h3>
       <p class="hint" style="margin-bottom:10px;">每個包裹從「開單(刷寄件單號 / 拉官網單)」到「完成此筆」的時間,系統會自動記錄,讓你知道一單通常包多久。退貨/入倉不列入。</p>
       <div id="timing-stats"></div>
+
+      <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px;">
+        <h3 style="margin:0 0 6px; font-size:0.95rem;">☕ 連續工作提醒</h3>
+        <p class="hint" style="margin-bottom:10px;">標題列會顯示<strong>實際包了多久</strong>。超過設定的時間會提醒休息一下 —— <strong>只是提醒,不會擋你做事</strong>。<br>
+        停手<strong>超過 5 分鐘</strong>的空檔(喝水、上廁所)<strong>不算工作時間</strong>;休息滿 <strong>30 分鐘</strong>才會整個重新計算。</p>
+        <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; cursor:pointer;">
+          <input type="checkbox" id="work-timer-input" style="transform: scale(1.3);">
+          <span style="flex:1; font-weight:700; font-size:0.85rem;">開啟連續工作計時</span>
+        </label>
+        <label style="margin-top:10px;">提醒門檻</label>
+        <select id="work-rest-mins-input">
+          <option value="30">30 分鐘</option>
+          <option value="45">45 分鐘</option>
+          <option value="60">1 小時</option>
+          <option value="90">1.5 小時</option>
+          <option value="120">2 小時</option>
+        </select>
+        <p class="hint" style="font-size:0.7rem; margin-top:6px;">累了最容易刷錯、多刷。這個提醒是「還沒出錯之前先攔一下」,跟其他防呆(出錯才抓)是不一樣的東西。</p>
+      </div>
     </div>
 
     <div id="settings-view-profile" class="settings-subview" hidden>
@@ -3390,7 +3414,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v5.7 · 2026-08-20";
+const APP_VERSION = "v6.7 · 2026-09-04";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3403,6 +3427,7 @@ const PLATFORMS = {
   coupang: { label: "酷澎 Coupang",  emoji: "🅒", customer: "酷澎",    kocaCustomer: "酷澎", hint: "從酷澎賣家中心匯出訂單 CSV 上傳。⚠ 解析器尚未針對酷澎客製化。" },
   kol:     { label: "KOL",           emoji: "📣", customer: "KOL",     kocaCustomer: "KOL",  hint: "KOL / 團購通路。通常用「手動建單」逐筆刷單號。" },
   meet:    { label: "面交",          emoji: "🤝", customer: "面交",    kocaCustomer: "面交", hint: "面交 / 自取。通常用「手動建單」逐筆刷單號。" },
+  fumao:   { label: "福貓",          emoji: "🐱", customer: "福貓",    kocaCustomer: "福貓", hint: "福貓通路。有 CSV 就上傳(會用 A1 邏輯嘗試解析);沒有就用「手動建單」逐筆刷單號。" },
   // ── 已停用的舊通路 (legacy): 不出現在新的通路下拉, 但保留讓「舊出貨紀錄」仍能正常顯示標籤 ──
   seven:   { legacy: true, label: "7-11",     emoji: "🏪", customer: "7-11",    kocaCustomer: "7-11" },
   family:  { legacy: true, label: "全家",     emoji: "🏬", customer: "全家",    kocaCustomer: "全家" },
@@ -3425,6 +3450,11 @@ const DEFAULT_SPEC_MAP = {
   "Joy Lite 1 白色單主機 ●現貨": [{ sku: "KPJ-40MV47", qty: 1 }],
   "Joy Lite 1 白色單主機 ●現": [{ sku: "KPJ-40MV47", qty: 1 }],
   "Joy Lite 1隨行組 ●現貨":     [{ sku: "KPJ-40MV47", qty: 1 }, { sku: "KPJ-40MV47-BAG", qty: 1 }],
+  // 蝦皮 2026/08 起後綴只剩「●」(以前是 ●現貨 / ●現)。規格字串是精確比對, 少一個字就對不到 → 整筆變未對應。
+  // ⚠ 只補「●」這種現貨變體;「●預購」是不同的東西(預購單不能當現貨出), 絕不可以合併。
+  "Joy Lite 1 白色單主機 ●": [{ sku: "KPJ-40MV47", qty: 1 }],
+  "Joy Lite 1 隨行組 ●":     [{ sku: "KPJ-40MV47", qty: 1 }, { sku: "KPJ-40MV47-BAG", qty: 1 }],
+  "Joy Lite 1隨行組 ●":      [{ sku: "KPJ-40MV47", qty: 1 }, { sku: "KPJ-40MV47-BAG", qty: 1 }],
   "濾芯5個":                  [{ sku: "KVC-18MV45-HEPA", qty: 5 }],
   "Dusty MINI 1收納包及濾芯4組": [{ sku: "KVC-18MV45", qty: 1 }, { sku: "KVCBG-18MV45", qty: 1 }, { sku: "KVC-18MV45-HEPA", qty: 4 }],
   "Dusty MINI 1 一般版●預購":   [{ sku: "KVC-18MV45", qty: 1 }],
@@ -3584,8 +3614,104 @@ const ROOM_CONFIG = {
   NOCHANGE_BEFORE_IDLE: 5,    // 連續無變化幾次後進入閒置頻率
 };
 
+// ===== ⏱ 連續工作計時 / 休息提醒 =====
+// 為什麼要做:包久了會累, 累了就開始刷錯、多刷。前面做的那些防呆是「錯了才抓」,
+//   這個是「還沒錯之前先提醒」。⚠ 一律不擋人做事 (Kyle: 任何會強迫的機制都關掉)。
+const WORK_TIMER_KEY = "picking_work_timer_v1";
+// ⚠ 這兩個門檻的差別很重要, 不要合成一個:
+//   IDLE_MS(5分)  = 停手超過這個時間, 那段「不算工作時間」(喝水/上廁所)
+//   RESET_MS(30分)= 停手超過這個時間, 才算「真的休息過了」, 累計歸零
+//   為什麼不是「停手就歸零」: 包一箱、貼單、封箱、走去拿貨中間本來就會有空檔,
+//   一有空檔就歸零的話計時器永遠回到 0, 提醒跳不出來, 等於這功能不存在。
+//   ⚠ 5 分鐘是 Kyle 實際量過的(2 分鐘會被封箱/拿貨這種正常空檔誤判成休息)。
+const WORK_IDLE_MS = 5 * 60 * 1000;
+const WORK_RESET_MS = 30 * 60 * 1000;
+let _workAccumMs = 0;    // 到目前為止「真正在工作」的累計毫秒 (已扣掉閒置)
+let _workSegStart = 0;   // 目前這一段連續動作的起點
+let _workNotifiedAt = 0; // 上次提醒時已經工作幾分鐘 (避免同一個門檻一直提醒)
+// 目前的實際工作時間 = 已累計 + 這一段
+// ⚠ 這一段要拆成兩塊算, 不可以直接用「現在 - 起點」:
+//   confirmed = 起點 → 最後一次動作 (這段確定在工作, 不管多長都要算)
+//   tail      = 最後一次動作 → 現在 (還沒滿閒置門檻就算工作中; 超過就是在休息, 不算)
+//   一開始寫成「整段超過門檻就只認門檻」是錯的 —— 連續包 40 分鐘會只算成 5 分鐘。
+function workedMs() {
+  if (!_workSegStart) return _workAccumMs;
+  const lastAt = _lastUserActivity || _workSegStart;
+  const confirmed = Math.max(0, lastAt - _workSegStart);
+  const since = Date.now() - lastAt;
+  const tail = since < WORK_IDLE_MS ? since : 0;
+  return _workAccumMs + confirmed + tail;
+}
+// 有新動作時結算上一段:閒置太久就不算工作;真的休息夠久就整個歸零
+function _closeWorkSegment() {
+  const now = Date.now();
+  if (_workSegStart && _lastUserActivity) {
+    const gap = now - _lastUserActivity;
+    if (gap >= WORK_RESET_MS) { _workAccumMs = 0; _workNotifiedAt = 0; }        // 真的休息過了
+    else _workAccumMs += Math.max(0, _lastUserActivity - _workSegStart);        // 只累計到最後一次動作為止, 中間的閒置不算
+  }
+  _workSegStart = now;
+}
+function loadWorkTimer() {
+  try {
+    const s = JSON.parse(localStorage.getItem(WORK_TIMER_KEY) || "null");
+    if (!s || !s.lastAt) return;
+    if (Date.now() - s.lastAt >= WORK_RESET_MS) return;   // 離開夠久 = 休息過了, 不接續
+    _workAccumMs = Number(s.accumMs) || 0;
+    _workNotifiedAt = s.notifiedAt || 0;
+    _lastUserActivity = s.lastAt;
+    _workSegStart = s.lastAt;   // 重整回來先接在最後一次動作上, 中間關著的時間不算工作
+  } catch (e) {}
+}
+function saveWorkTimer() {
+  try {
+    localStorage.setItem(WORK_TIMER_KEY, JSON.stringify({
+      accumMs: _workAccumMs + (_workSegStart && _lastUserActivity ? Math.max(0, _lastUserActivity - _workSegStart) : 0),
+      lastAt: _lastUserActivity, notifiedAt: _workNotifiedAt,
+    }));
+  } catch (e) {}
+}
+function renderWorkTimer() {
+  const el = document.getElementById("work-timer");
+  if (!el) return;
+  const ms = workedMs();
+  if (settings.workTimer === false || ms <= 0) { el.hidden = true; return; }
+  const mins = Math.floor(ms / 60000);
+  el.hidden = false;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  el.textContent = `⏱ ${h}:${String(m).padStart(2, "0")}`;
+  // 顏色只是提示強度, 不擋任何操作
+  const limit = Number(settings.workRestMins) || 60;
+  el.style.color = mins >= limit ? "var(--danger)" : (mins >= limit * 0.75 ? "#b8860b" : "");
+}
+// 每分鐘檢查一次: 更新顯示 / 該不該提醒 / 休息夠久就歸零
+function tickWorkTimer() {
+  if (settings.workTimer === false) return;
+  const now = Date.now();
+  if (_lastUserActivity && (now - _lastUserActivity) >= WORK_RESET_MS) {
+    // 真的休息夠久 → 累計歸零 (喝水上廁所那 2 分鐘不會走到這裡, 只是不計入工作時間)
+    if (_workAccumMs || _workSegStart) { _workAccumMs = 0; _workSegStart = 0; _workNotifiedAt = 0; saveWorkTimer(); }
+    renderWorkTimer();
+    return;
+  }
+  renderWorkTimer();
+  const mins = Math.floor(workedMs() / 60000);
+  const limit = Number(settings.workRestMins) || 60;
+  // 到門檻提醒一次, 之後每 20 分鐘再提醒一次 (不擋畫面, 只是 toast + 聲音)
+  if (mins >= limit && mins - _workNotifiedAt >= 20) {
+    _workNotifiedAt = mins; saveWorkTimer();
+    const done = (state.completedParcels || []).length;
+    try { SOUND.parcelFinish(); } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
+    showToast(`☕ 已經實際包了 ${Math.floor(mins/60) ? Math.floor(mins/60)+" 小時 " : ""}${mins%60} 分${done ? `、${done} 箱` : ""}了,休息一下再繼續(累了最容易刷錯)`, 8000);
+  }
+}
+
 function markUserActivity() {
+  const _gap = _lastUserActivity ? Date.now() - _lastUserActivity : Infinity;
+  if (!_workSegStart || _gap >= WORK_IDLE_MS) _closeWorkSegment();   // 停手超過 5 分 → 那段不算工作時間
   _lastUserActivity = Date.now();
+  saveWorkTimer();
   _consecutiveNoChange = 0;
   // 我剛做了動作 → debounce 後同步 (連續動作合成一次), 對方馬上看到
   if (_quickSyncTimeout) clearTimeout(_quickSyncTimeout);
@@ -4212,6 +4338,36 @@ function queueRoomEvent(type, data) {
 
 // 補寄/退貨/入倉「換下一位客人」: 把房間共用清單整批換成本機目前的新清單, 並同步給同仁那台。
 // 只由開房者呼叫 (避免兩台搶著換); 設 _pendingListReset 讓自己的回廣播不要把本機清單再洗一次。
+// 房間裡除了我以外, 還有誰最近有動作? (lastSeen 2 分鐘內算在線)
+// 用途: 房主離開後, 留下來的人被卡住不能收尾 —— 要能判斷「是不是只剩我一個」才敢讓他接手。
+function roomOthersOnline() {
+  const mem = state.roomMembers || {};
+  const me = (settings.myName || "").trim();
+  const now = Date.now();
+  return Object.entries(mem).filter(([name, m]) => {
+    if (name === me) return false;
+    const t = m && m.lastSeen ? new Date(m.lastSeen).getTime() : 0;
+    return t && (now - t) < 2 * 60 * 1000;
+  }).map(([name]) => name);
+}
+// 非房主想收尾時的統一處理。回 true = 可以繼續收尾(已離房), false = 使用者取消。
+// ⚠ 以前這裡是死路: 只跳 alert 叫他自己去找「房間狀態 → 離開房間」, 手上抱著貨的人根本找不到,
+//   房主一離開, 留下來的人就完全無法完成出貨 (Kyle 回報的「被房間卡死」)。
+function allowNonHostFinish() {
+  if (!state.roomMode || state.isRoomHost) return true;
+  const others = roomOthersOnline();
+  const msg = others.length
+    ? `👥 共同包貨中,房間裡還有:${others.join("、")}\n\n` +
+      `照規矩應該由「開房的那台」按完成,避免兩台各存一筆紀錄、各扣一次庫存。\n\n` +
+      `【確定】= 我確定要由這台收尾(會先離開房間)\n【取消】= 先跟對方確認`
+    : `👥 房間裡目前只剩你一個人(開房的那台已經離開)。\n\n` +
+      `要由這台接手收尾嗎?\n\n【確定】= 離開房間並完成出貨\n【取消】= 先不要`;
+  if (!confirm(msg)) return false;
+  leaveRoom(true);   // 離房(會盡力補送未同步的刷貨數), 之後這台就是單機收尾
+  showToast("已離開房間, 由這台收尾");
+  return true;
+}
+
 function pushRoomListReset() {
   if (!state.roomMode) return;
   // 🔒 只有房主能重設全房清單。註解一直寫「只由開房者呼叫」但程式沒有真的擋:
@@ -4784,6 +4940,16 @@ function renderRoomBadge() {
     return (now - new Date(m.lastSeen).getTime()) < ROOM_CONFIG.BADGE_ONLINE_MS;
   });
   document.getElementById("rb-member-count").textContent = activeMembers.length || 1;
+  // 🔔 房主走了、只剩非房主一個人 → 主動講一次。
+  //   否則他會一直看到房間、按完成又被擋, 完全不知道自己卡在哪 (Kyle 回報的「被房間卡死」)。
+  //   只提醒一次, 不擋任何操作。
+  if (!state.isRoomHost && roomOthersOnline().length === 0 && !state._aloneNotified) {
+    state._aloneNotified = true;
+    saveState();
+    setTimeout(() => showToast("👤 房間裡只剩你一個人(開房的那台已離開)。按「出貨完成」時可以選擇由這台接手收尾。", 8000), 400);
+  } else if (roomOthersOnline().length > 0 && state._aloneNotified) {
+    state._aloneNotified = false;   // 有人回來了 → 下次再落單可以再提醒
+  }
 }
 
 let _lastHistorySaveOk = true;
@@ -5268,7 +5434,8 @@ function appendHistory() {
   // 從當前 state.items 建一筆紀錄
   if (!state.items || state.items.length === 0) return;
   // 收尾還在進行中的 parcel (若有)
-  if (state.activeParcel) finalizeActiveParcel(true);
+  // 收尾: 一律強制收掉, 不再跳逐單比對 (使用者已經確認要完成出貨了; 這裡取消會讓這箱從紀錄裡消失)
+  if (state.activeParcel) finalizeActiveParcel(true, { skipPlanCheck: true });
   const items = state.items.map(it => ({
     sku: it.sku, name: it.name || "", category: it.category || "其他",
     expected: it.expected, packed: it.packed,
@@ -5424,6 +5591,9 @@ function parseA1CSV(text) {
   // 🔒【漏出貨防線】被丟掉的資料列一定要數出來。舊版三個條件(欄位數<6、序號非純數字、規格空白)
   //   都是 continue 靜默跳過, 一列不見了畫面上完全看不出來 → 那個商品應出 0 件, 直接漏出。
   const skipped = [];
+  // 逐單防呆用: 「序」= 一張訂單。續行(序空白)算同一張。
+  //   分籃資訊(r[7], 例 "1-1(1)")也一起留著, 之後要對照蝦皮實體分籃時用得上。
+  let curSeq = 0;
   for (const r of rows) {
     if (!r || r.length < 6) {
       if (r && r.join("").trim()) skipped.push({ why: "欄位數不足", raw: r.join(",").slice(0, 60) });
@@ -5440,7 +5610,8 @@ function parseA1CSV(text) {
     // 規格空白不再丟掉: 單一規格商品(如雲朵除濕機)A1 的規格欄就是空的,
     // 而下游 isAmbiguousSpec()/getLookupKey() 本來就支援「規格空白 → 改用商品名稱識別」。
     if (!spec && !productName) { skipped.push({ why: "規格與商品名稱都空白", raw: r.join(",").slice(0, 60) }); continue; }
-    items.push({ spec, productName, orderQty: qty });
+    if (sn) curSeq = parseInt(sn, 10) || curSeq;   // 有序號 = 新的一張單; 空白 = 上一張的續行
+    items.push({ spec, productName, orderQty: qty, seq: curSeq, basket: clean(r[7] || "") });
   }
   window._lastParseSkipped = skipped;
   if (skipped.length) console.warn("[parseA1CSV] 有資料列被跳過:", skipped);
@@ -6202,6 +6373,30 @@ function clearOrderModeFlags() {
   state.kocaOrderId = null;
 }
 
+// 📋 逐單防呆:把 CSV 拆成「每一張訂單各自該裝什麼」。
+// 為什麼要這個:蝦皮的清單是整批加總, App 只知道「今天總共要出 20 個主機」,
+//   不知道「這一箱該裝幾個」→ 只要總數對得起來, 裝錯箱完全看不出來 (官網不會, 因為一單一箱)。
+// ⚠ 不需要知道「這箱是第幾單」—— Kyle 是按物流別印標籤的, 順序跟 CSV 對不上。
+//   改成比對「這箱的內容是不是今天任何一張還沒出的單」, 順序完全不重要;
+//   內容一樣的單彼此不用分辨 (反正裝的東西一樣)。
+function buildOrderPlanFromPending() {
+  const bySeq = {};
+  for (const item of pendingA1) {
+    const key = item.lookupKey || getLookupKey(item);
+    const mapping = specMap[key];
+    if (!Array.isArray(mapping) || mapping.length === 0) continue;   // 未對應/刻意略過的不算
+    const seq = item.seq || 0;
+    if (!seq) return [];      // 沒有序號資訊(非揀貨單格式) → 不做逐單防呆, 不要亂猜
+    if (!bySeq[seq]) bySeq[seq] = { seq, specs: [], items: {}, basket: item.basket || "" };
+    bySeq[seq].specs.push(key);
+    for (const m of mapping) {
+      const add = (m.qty || 1) * item.orderQty;
+      bySeq[seq].items[m.sku] = (bySeq[seq].items[m.sku] || 0) + add;
+    }
+  }
+  return Object.values(bySeq).sort((a, b) => a.seq - b.seq).map(o => ({ ...o, doneParcelId: null }));
+}
+
 function applyA1MappingToPickingList() {
   // 累加各 SKU 的應出數量
   const totals = {}; // sku -> qty
@@ -6262,13 +6457,15 @@ function applyA1MappingToPickingList() {
     return showMergeModal(items);
   }
 
+  const _plan = buildOrderPlanFromPending();   // ★ 逐單防呆用 (要在清掉 pendingA1 之前算)
   state.items = items;
   state.loadedDate = new Date().toISOString().slice(0, 10);
   state.completedParcels = []; state.activeParcel = null; // 全新清單: 清掉可能殘留的舊出貨包裹, 免得舊出貨量被當成新清單的「已出貨」地板卡住減量
+  state.orderPlan = _plan;
   clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 全新一般出貨清單
   saveState();
   pendingA1 = [];
-  showToast(`已建立今日清單，共 ${items.length} 個 SKU`);
+  showToast(`已建立今日清單，共 ${items.length} 個 SKU${_plan.length ? ` · ${_plan.length} 張單(逐單防呆已開啟)` : ""}`);
   render();
   maybeAutoCreateRoom("CSV 匯入"); // 自動開房 (共同包貨)
   return true;
@@ -6446,7 +6643,14 @@ function kocaErrMessage(data) {
     if (data.keyLen !== undefined && data.keyLen !== 64) {
       return `❌ <strong>Cloudflare 的官網金鑰不正確</strong>(長度 ${data.keyLen},應為 64)。<br>請到 Cloudflare → koca-picking-sync → Variables and Secrets 重新貼上完整金鑰。`;
     }
-    if (st === 401 || st === 403) return "❌ 官網拒絕這把金鑰(401/403)。金鑰長度正確但內容不符,請重新取得。";
+    // ⚠ 不要在這裡宣稱「長度正確」—— keyLen 現在只有帶 ?debug=1 才會回(避免對外洩漏金鑰長度),
+    //   沒拿到就等於沒檢查過,講「長度正確但內容不符」會把人帶去查錯方向。
+    if (st === 401 || st === 403) {
+      return "❌ <strong>官網拒絕了這把金鑰</strong>(HTTP " + st + ")。<br>" +
+        "這是<strong>伺服器端的設定問題,不是你的手機</strong> —— 全公司的裝置都會拉不到單。<br>" +
+        "請跟管理者說:官網的 API 金鑰要重新取得,並更新到 Cloudflare 的 <code>KOCA_INTERNAL_API_KEY</code>。<br>" +
+        "<span style=\"color:var(--text-soft);\">在那之前,官網單請改用「其他建單方式 → 手動建單」逐筆刷單號,不會卡住出貨。</span>";
+    }
     if (st === 429) return "⏳ 官網限流中(太頻繁),請等一分鐘再按一次。";
     if (String(st).startsWith("5")) return `⚠ 官網暫時異常(HTTP ${st}),請稍後再試一次。`;
     return `❌ 官網 API 回錯誤(HTTP ${st})。請稍後再試,若持續發生請截圖回報。`;
@@ -6690,6 +6894,7 @@ function buildListFromKocaOrder(o, gate) {
     saveState();
   }
 
+  _saveKocaOrderSnapshot(o.orderId, items);   // 📌 存原始內容, 之後刪光了還能還原
   const codNote = gate && gate.cod ? '<br><strong style="color:#b26b00;">💰 貨到付款(COD):出貨時記得收款。</strong>' : "";
   const expandNote = expandedNames.length
     ? `<br><strong style="color:var(--primary);">📦 套組已展開:${escapeHtml(expandedNames.join("、"))}</strong>(依規格對應表拆成各別商品)` : "";
@@ -6906,6 +7111,26 @@ function _addKocaBatchOrder(o, gate) {
   if (!state.kocaBatch.orderList.includes(o.orderId)) state.kocaBatch.orderList.push(o.orderId);
   state.kocaBatch.meta[o.orderId] = _kocaOrderMeta(o, gate);
 }
+// 📌 存下「這張官網單原本該出什麼」。
+// 為什麼:同仁把黃框的商品全部刪掉之後, 重刷同一張單號只會回「已經在這張了」, 商品再也帶不回來
+//   → 只能硬按完成再重掃, 那筆數量就記錯了 (Kyle 回報)。
+//   官網訂單的內容是固定的, 存一份原始清單就能隨時還原, 也不必再打一次官網 API(金鑰壞掉時照樣能救)。
+function _saveKocaOrderSnapshot(orderId, items) {
+  if (!orderId || !Array.isArray(items)) return;
+  if (!state.kocaSnapshots) state.kocaSnapshots = {};
+  state.kocaSnapshots[orderId] = items
+    .filter(it => it && !it.essential)          // 包材是自由計數, 不屬於訂單內容
+    .map(it => ({ sku: it.sku, name: it.name, category: it.category, expected: it.expected || 0, unmapped: !!it.unmapped, _fromSpec: !!it._fromSpec }));
+  // ⚠ state 每刷一次貨就整包寫進 localStorage, 所以它不能無限長大。
+  //   只留「這一批還在的訂單」的快照; 已經不在批次裡的(結算過/被移除)一律丟掉。
+  try {
+    const alive = new Set((state.kocaBatch && state.kocaBatch.orderList) || []);
+    alive.add(orderId);
+    for (const k of Object.keys(state.kocaSnapshots)) {
+      if (!alive.has(k)) delete state.kocaSnapshots[k];
+    }
+  } catch (e) { /* 修剪失敗不影響主流程 */ }
+}
 function kocaOrderLabel(id) {
   const m = state.kocaBatch && state.kocaBatch.meta && state.kocaBatch.meta[id];
   return (m && m.recipient) ? `${m.recipient}(${id})` : id;
@@ -6960,9 +7185,59 @@ function _kocaOrderPackagingWrongById(orderId) {
   return Object.keys(merged).filter(sku => (merged[sku] > 0) && GOVERNED_PACKAGING.has(sku) && !expected.has(sku));
 }
 // 切到批次裡另一張 (它必須已在 suspended)
+// 🔁 把這張官網單的商品「重新帶入」清單(用建單時存的原始內容, 不必再打官網 API)。
+// 為什麼需要:同仁把黃框商品全刪掉之後想重來, 重刷單號只會回「已經在這張了」, 商品帶不回來
+//   → 只好硬按完成再重掃 → 那筆的數量就記錯了。這是純還原, 不會產生第二筆紀錄。
+function reloadKocaOrderItems(orderId) {
+  const snap = (state.kocaSnapshots || {})[orderId];
+  if (!Array.isArray(snap) || snap.length === 0) {
+    showToast("⚠ 找不到這張單的原始內容, 請重新拉一次官網訂單");
+    return false;
+  }
+  // 保留包材(自由計數, 同仁可能已經刷了), 商品部分整批換回原始的
+  const keepEssential = (state.items || []).filter(it => it && it.essential);
+  state.items = snap.map(it => ({ ...it, packed: 0 })).concat(keepEssential);
+  // 黃框重開, 商品照官網單預填 (跟第一次建單時一致), 包材維持空白讓同仁刷
+  const meta = (state.kocaBatch && state.kocaBatch.meta && state.kocaBatch.meta[orderId]) || {};
+  state.activeParcel = { id: orderId, items: {}, startedAt: new Date().toISOString() };
+  if (meta.trackingNo && String(meta.trackingNo) !== String(orderId)) state.activeParcel.trackingNo = String(meta.trackingNo);
+  for (const it of state.items) {
+    if (it.essential || it.unmapped) continue;
+    const q = it.expected || 0;
+    if (q <= 0) continue;
+    it.packed = q;
+    state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + q;
+  }
+  state.scanMode = true;
+  saveState();
+  if (state.roomMode && state.isRoomHost && typeof pushRoomListReset === "function") pushRoomListReset();
+  render();
+  SOUND.parcelStart();
+  showToast(`🔁 已重新帶入 ${snap.length} 個商品`);
+  return true;
+}
+
 function switchToKocaOrder(orderId) {
   if (!kocaBatchActive() || !orderId) return;
-  if (orderId === state.kocaOrderId) { showToast("已經在這張了"); return; }
+  if (orderId === state.kocaOrderId) {
+    // 重刷「目前這張」= 想重來一次。以前只回「已經在這張了」就結束 → 商品刪光後完全救不回來。
+    const snap = (state.kocaSnapshots || {})[orderId];
+    const prods = (state.items || []).filter(it => it && !it.essential);
+    const packedNow = prods.reduce((s, it) => s + (it.packed || 0), 0);
+    const expectNow = prods.reduce((s, it) => s + (it.expected || 0), 0);
+    if (Array.isArray(snap) && snap.length) {
+      const snapExpect = snap.reduce((s, it) => s + (it.expected || 0), 0);
+      const looksBroken = prods.length === 0 || expectNow < snapExpect;   // 商品被刪掉 / 數量少了
+      const msg = looksBroken
+        ? `🔁 這張單的商品好像被刪掉了(目前 ${prods.length} 項 / 應有 ${snap.length} 項)。\n\n要重新帶入這張官網單的商品嗎?\n\n【確定】= 照官網訂單重新帶入(不會多產生一筆紀錄)\n【取消】= 保持現狀`
+        : `🔁 你已經在這張單了(目前已裝 ${packedNow} 件)。\n\n要重新帶入這張官網單的商品、從頭來一次嗎?\n\n【確定】= 清掉目前刷的, 照官網訂單重新帶入\n【取消】= 保持現狀`;
+      if (confirm(msg)) reloadKocaOrderItems(orderId);
+      else showToast("已保持現狀");
+    } else {
+      showToast("已經在這張了");
+    }
+    return;
+  }
   const snap = state.kocaBatch.suspended[orderId];
   if (!snap) return;
   _suspendActiveKocaOrder();
@@ -6987,10 +7262,7 @@ async function completeKocaBatch() {
   if (!kocaBatchActive()) return;
   if (!requireNameOk()) return;   // 工讀生沒填暱稱 → 紀錄追不到人, 先擋
   // 🛡 共同包貨: 只讓開房者收尾 (批次也適用, 避免非開房者按到)
-  if (state.roomMode && !state.isRoomHost) {
-    alert("👥 共同包貨中,請由「開房的那台」按完成,避免重複結算。\n\n若真的要由這台收尾,請先「離開房間」再完成。");
-    return;
-  }
+  if (!allowNonHostFinish()) return;   // 非房主: 問過就能接手收尾, 不再是死路
   const _wasInRoomB = state.roomMode, _roomCodeB = state.roomCode; // 結算/測試完成後要關房 (比照單張出貨完成, 否則會留孤兒房間、同仁被留在舊房)
   // 🛡 防重複記帳: 1.5 秒內第二次一律忽略 (擋觸控雙擊/事件連發)
   const _nowC = Date.now();
@@ -9870,9 +10142,60 @@ async function flushPendingCloudHistory() {
     if (typeof showToast === "function") showToast(`☁ 已補上雲端 ${drained} 筆出貨紀錄`);
   }
 }
+// ☁ 雲端同步狀態列 —— 兩種「電腦看不到手機刷的單」的原因都要講出來:
+//   (1) 這台根本沒設雲端 → pushHistoryToCloud 第一行就 return, 紀錄只留本機, 不推也不排隊
+//   (2) 有設但推失敗 → 進補送佇列, 但以前畫面上完全看不到卡了幾筆
+// 這兩種以前都是靜默的, 所以「手機刷了電腦沒有」查不出原因。
+function renderCloudSyncStatus() {
+  const el = document.getElementById("cloud-sync-status");
+  if (!el) return;
+  const pend = (pendingCloudHistory || []).length;
+  if (!cloudHistoryEnabled()) {
+    el.hidden = false;
+    el.innerHTML = `
+      <div style="border:1px solid var(--warn,#f59e0b); background:var(--warn-bg,#fef3c7); color:#92400e; border-radius:10px; padding:10px 12px; font-size:0.78rem; line-height:1.6;">
+        <strong>⚠ 這台沒有設定雲端同步</strong><br>
+        在這台刷的出貨紀錄<strong>只會留在這台</strong>,其他裝置(電腦/其他手機)看不到,也不會進統計。<br>
+        <button class="btn outline sm" id="cloud-sync-goto-settings" style="margin-top:6px;">⚙ 去設定 Worker URL + 金鑰</button>
+      </div>`;
+    return;
+  }
+  if (pend > 0) {
+    el.hidden = false;
+    el.innerHTML = `
+      <div style="border:1px solid var(--danger); background:var(--danger-bg); color:var(--danger); border-radius:10px; padding:10px 12px; font-size:0.78rem; line-height:1.6;">
+        <strong>⚠ 有 ${pend} 筆出貨紀錄還沒上傳到雲端</strong><br>
+        <span style="color:var(--text-soft);">其他裝置暫時看不到這幾筆。資料沒有不見,連上網路會自動補送。</span><br>
+        <button class="btn outline sm" id="cloud-sync-retry" style="margin-top:6px;">↻ 現在補送</button>
+      </div>`;
+    return;
+  }
+  el.hidden = true; el.innerHTML = "";
+}
+document.addEventListener("click", (e) => {
+  if (!e.target || !e.target.id) return;
+  if (e.target.id === "cloud-sync-goto-settings") {
+    document.getElementById("settings-modal").hidden = false;
+    showSettingsView("integration");
+  } else if (e.target.id === "cloud-sync-retry") {
+    showToast("正在補送…");
+    flushPendingCloudHistory().then(() => {
+      renderCloudSyncStatus();
+      const left = (pendingCloudHistory || []).length;
+      showToast(left ? `⚠ 還有 ${left} 筆沒送成功, 請檢查網路或金鑰` : "✓ 全部補送完成");
+    }).catch(() => showToast("⚠ 補送失敗, 請檢查網路"));
+  }
+});
+
 // 出貨完成 → 推一筆到雲端 (全類型都推; 失敗排進補送佇列, 不影響本機)
 async function pushHistoryToCloud(entry) {
-  if (!entry || !cloudHistoryEnabled()) return;
+  if (!entry) return;
+  if (!cloudHistoryEnabled()) {
+    // ⚠ 沒設雲端不是「不用推」, 是「推不了」—— 要留下痕跡, 不然這筆就永遠只在這台, 沒人知道。
+    console.warn("[cloud-history] 這台沒設雲端, 紀錄只留本機:", entry.id);
+    renderCloudSyncStatus();
+    return;
+  }
   const ok = await _sendHistoryToCloud(entry);
   if (ok) {
     _dequeueCloudHistory(entry.id);   // 若之前排過, 清掉
@@ -10069,6 +10392,7 @@ function renderHistory() {
   const list = document.getElementById("history-list");
   const stats = document.getElementById("history-stats");
   if (!list) return;
+  renderCloudSyncStatus();   // 沒設雲端 / 有紀錄卡著沒上傳 → 在這頁講清楚
 
   // 計數 (依 orderType 拆) - 用於 filter bar
   const cntAll = history.length;
@@ -10105,9 +10429,12 @@ function renderHistory() {
   const thisMonthRepl = thisMonth.filter(e => e.orderType === "replacement");
   const thisMonthReturn = thisMonth.filter(e => e.orderType === "return");
   const thisMonthNormal = thisMonth.filter(e => e.orderType !== "replacement" && e.orderType !== "return" && e.orderType !== "inbound");
-  const totalQtyNormal = thisMonthNormal.reduce((s, e) => s + e.summary.totalPacked, 0);
-  const totalQtyRepl = thisMonthRepl.reduce((s, e) => s + e.summary.totalPacked, 0);
-  const totalQtyReturn = thisMonthReturn.reduce((s, e) => s + e.summary.totalPacked, 0);
+  // ⚠ 舊資料 / 別台推上來的紀錄可能沒有 summary(或欄位缺) → 直接相加會變成 NaN,
+  //   畫面就出現「本月一般 425 次 · NaN 件」。一筆壞資料就毀掉整行數字, 所以一律轉成數字再加。
+  const packedOf = e => { const n = Number(e && e.summary && e.summary.totalPacked); return Number.isFinite(n) ? n : 0; };
+  const totalQtyNormal = thisMonthNormal.reduce((s, e) => s + packedOf(e), 0);
+  const totalQtyRepl = thisMonthRepl.reduce((s, e) => s + packedOf(e), 0);
+  const totalQtyReturn = thisMonthReturn.reduce((s, e) => s + packedOf(e), 0);
   stats.innerHTML = `
     <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:0.8125rem;">
       <div><strong>本月一般</strong> ${thisMonthNormal.length} 次 · ${totalQtyNormal} 件</div>
@@ -10177,9 +10504,12 @@ function renderHistory() {
     const _hasItems = Array.isArray(e.items) && e.items.length > 0;
     const _partialItems = (e.items || []).filter(it => !it.essential && (it.expected || 0) > 0);
     const _partialMiss = _partialItems.filter(it => (it.packed || 0) < it.expected).length;
+    // ⚠ summary 一律當成「可能不存在/缺欄位」來讀。舊紀錄、別台別版本推上來的紀錄都可能沒有,
+    //   直接 e.summary.completedSku 會 throw → 一筆壞資料就讓整個出貨紀錄頁畫不出來(整頁空白)。
+    const _sm = e.summary || {};
     const isPartial = _hasItems
       ? (_partialItems.length > 0 && _partialMiss > 0)      // 沒有任何「有目標的品項」→ 無從未完成
-      : (e.summary.completedSku < e.summary.totalSku);      // 舊紀錄沒有 items 才退回舊算法
+      : ((Number(_sm.completedSku) || 0) < (Number(_sm.totalSku) || 0));   // 舊紀錄沒有 items 才退回舊算法
     const expanded = !!e._expanded;
     let detail = "";
     if (expanded) {
@@ -10261,7 +10591,7 @@ function renderHistory() {
       } else {
         // 無寄件單號 (例如進貨/退貨單筆) → 照舊列整筆商品明細
         detail += `<div style="font-size: 0.6875rem; color: var(--text-soft); margin-bottom: 4px;">📋 商品明細</div>`;
-        for (const it of e.items) {
+        for (const it of (Array.isArray(e.items) ? e.items : [])) {   // 舊/壞資料可能完全沒有 items, 不可以直接 for-of
           const cls = it.packed < it.expected ? "partial" : (it.packed > it.expected ? "over" : "");
           const missBadge = _missSet.has(it.sku) ? ' <span class="missing-badge">⚠缺</span>' : '';
           detail += `<div class="row-line ${cls}"><span>${escapeHtml(it.sku)} · ${escapeHtml(it.name)}${missBadge}</span><span>${it.packed}/${it.expected}</span></div>`;
@@ -10277,9 +10607,9 @@ function renderHistory() {
         </div>
         <div class="history-item-summary">
           ${e.completedBy ? `<span style="display:inline-block; background: var(--primary-light); color: var(--primary); padding: 1px 9px; border-radius: 999px; font-size: 0.6875rem; font-weight: 700; margin-bottom: 4px;">👤 ${escapeHtml(e.completedBy)}</span><br>` : ''}
-          <strong>${e.summary.totalSku}</strong> SKU · 應出 <strong>${e.summary.totalExpected}</strong> · 已裝 <strong>${e.summary.totalPacked}</strong> · 完成率 <strong>${e.summary.completionRate}%</strong>
-          ${e.summary.parcelCount ? `<br>📦 共 <strong>${e.summary.parcelCount}</strong> 筆訂單裝箱` : ''}
-          ${isPartial ? `<br>⚠ ${_partialMiss || (e.summary.totalSku - e.summary.completedSku)} 個 SKU 未完成` : ''}
+          <strong>${Number(_sm.totalSku) || 0}</strong> SKU · 應出 <strong>${Number(_sm.totalExpected) || 0}</strong> · 已裝 <strong>${Number(_sm.totalPacked) || 0}</strong> · 完成率 <strong>${Number(_sm.completionRate) || 0}%</strong>
+          ${_sm.parcelCount ? `<br>📦 共 <strong>${_sm.parcelCount}</strong> 筆訂單裝箱` : ''}
+          ${isPartial ? `<br>⚠ ${_partialMiss || ((Number(_sm.totalSku) || 0) - (Number(_sm.completedSku) || 0))} 個 SKU 未完成` : ''}
           ${(() => { const miss = (e.items || []).filter(it => it.missing); return miss.length ? `<br><span style="color: var(--danger); font-weight: 700;">⚠ 缺貨 ${miss.length} 項: ${miss.map(it => escapeHtml(String(it.sku || "").startsWith("__KOCA_UNMAPPED_") ? (it.name || "未對應品項") : it.sku)).join("、")}</span>` : ''; })()}
           ${(e.platform === "koca" && e.kocaOrderId && e.orderType !== "return" && e.orderType !== "replacement" && e.orderType !== "inbound") ? _histLogiBadge(e.kocaOrderId) : ''}
         </div>
@@ -10885,6 +11215,20 @@ function processScan(code) {
     if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return false;
     return true;
   }
+  // 🔒 這一行必須在 looksLikeSku 之前:
+  //   「再刷一次目前這張單自己的單號」是結案動作, 意思百分之百明確, 不可以再問「要不要當商品加入商品庫」。
+  //   補寄單號長得像 SKU(有 dash), 所以會掉進下面那個詢問 → 同仁想結案卻被問要不要建商品,
+  //   一旦手滑按「確定」, 寄件單號就被永久寫進商品庫, 之後每次刷都被當成商品 → 黃框關不掉、
+  //   出貨完成被健康檢查擋住、清單一直留著 → 下一張補寄單就跳「你有未完成的備貨清單」。
+  //   (Kyle 回報的就是這個連鎖反應)
+  if (state.activeParcel && state.activeParcel.id === code) {
+    const _pk0 = checkActiveParcelPackaging();
+    if (!_pk0.ok) { SOUND.scanError(); if (!confirm(_pk0.message)) return; }
+    if (!finalizeActiveParcel(false)) return;   // 逐單比對被取消 → 別謊報「已完成」
+    SOUND.parcelFinish();
+    showToast("✓ 訂單 " + code + " 已完成");
+    return;
+  }
   if (looksLikeSku(code)) {
     // ⚠ 這裡以前是死路 (非手建模式只跳 alert 不給出路) → 補寄單號等「有 dash 的訂單號」完全刷不進來。
     //   改成: 問一次要當商品還是當單號, 取消就往下繼續當寄件單號處理, 不擋死。
@@ -10947,7 +11291,7 @@ function processScan(code) {
       const _label = _mode === "inbound" ? "入倉" : (_mode === "replacement" ? "補寄" : "退貨");
       const _next = _mode === "inbound" ? "下一張進貨單" : "下一位";
       if (!confirm(`要結束目前這筆${_label}並存檔, 換${_next} (${code}) 嗎?`)) return;
-      if (state.activeParcel) finalizeActiveParcel(false);
+      if (state.activeParcel && !finalizeActiveParcel(false)) return;   // 沒收成功就別存檔換下一位
       // 共同包貨(開房者): 存檔上一位但「不關房」, 待會建立下一位時會把房間清單整批換掉同步給同仁。
       const _keepRoom = state.roomMode && state.isRoomHost;
       const _saveOk = actuallyCompleteShipping(_keepRoom ? { keepRoom: true } : undefined); // 存檔目前這筆, 並清空 state
@@ -10967,7 +11311,7 @@ function processScan(code) {
       // 同一張 -> 結束此筆 (結案前整單複查包材)
       const _pk = checkActiveParcelPackaging();
       if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
-      finalizeActiveParcel(false);
+      if (!finalizeActiveParcel(false)) return;   // 逐單比對被取消 → 別謊報「已完成」
       SOUND.parcelFinish();
       showToast("✓ 訂單 " + code + " 已完成");
     } else {
@@ -10975,7 +11319,8 @@ function processScan(code) {
       if (!confirm(`目前還在處理 ${state.activeParcel.id}，要先結束它再開新的 ${code} 嗎？`)) return;
       const _pk = checkActiveParcelPackaging();
       if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
-      finalizeActiveParcel(false);
+      // 🔒 沒收成功就絕不能開新箱 —— startParcel 會直接蓋掉 activeParcel, 舊箱刷的東西會全部消失。
+      if (!finalizeActiveParcel(false)) { showToast("⚠ 上一箱還沒收掉, 先處理完再開新的"); return; }
       startParcel(code);
       showToast("📦 開新訂單 " + code);
     }
@@ -11034,16 +11379,70 @@ function startParcel(id) {
   };
 }
 
-function finalizeActiveParcel(skipIfEmpty) {
-  if (!state.activeParcel) return;
+// 把一箱的內容跟「今天還沒出的訂單」比對。
+// 回傳 true = 可以結案(對到了, 或使用者確認照樣出); false = 使用者要回去改, 黃框保持開著。
+// ⚠ 只比對「非包材」的商品: 包材是自由計數, 每箱用幾個紙箱不該影響判斷。
+function matchParcelToOrderPlan(ap) {
+  const plan = state.orderPlan;
+  if (!Array.isArray(plan) || plan.length === 0) return true;    // 沒有逐單資料(官網單/手建/補寄) → 不管
+  const essentialSku = new Set(library.filter(p => p.essential).map(p => p.sku));
+  const got = {};
+  for (const sku in (ap.items || {})) {
+    if (essentialSku.has(sku)) continue;
+    const q = Number(ap.items[sku]) || 0;
+    if (q > 0) got[sku] = q;
+  }
+  if (Object.keys(got).length === 0) return true;                 // 整箱只有包材 → 不判斷
+  const same = (a, b) => {
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    return ka.every(k => (a[k] || 0) === (b[k] || 0));
+  };
+  const pending = plan.filter(o => !o.doneParcelId);
+  const hit = pending.find(o => same(got, o.items));
+  if (hit) {
+    hit.doneParcelId = ap.id;
+    const left = plan.filter(o => !o.doneParcelId).length;
+    setTimeout(() => showToast(`✓ 對到第 ${hit.seq} 單${left ? ` · 還剩 ${left} 張` : " · 今天的單全部出完了"}`), 300);
+    return true;
+  }
+  // 對不到 → 講清楚「這箱裝了什麼」跟「還沒出的單長什麼樣」, 讓人一眼看出差在哪
+  const nameOf = s => { const p = library.find(x => x.sku === s); return (p && p.name) || s; };
+  const gotTxt = Object.entries(got).map(([s, q]) => `${nameOf(s)} ×${q}`).join("\n  ");
+  const remainTxt = pending.length
+    ? pending.slice(0, 6).map(o => `第${o.seq}單: ` + Object.entries(o.items).map(([s, q]) => `${nameOf(s)}×${q}`).join(" + ")).join("\n  ")
+      + (pending.length > 6 ? `\n  …還有 ${pending.length - 6} 張` : "")
+    : "(今天的單都已經出完了)";
+  SOUND.scanError();
+  if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+  return confirm(
+    `⚠ 這箱的內容跟今天任何一張單都對不起來\n\n` +
+    `這箱裝了:\n  ${gotTxt}\n\n` +
+    `還沒出的單:\n  ${remainTxt}\n\n` +
+    `【取消】= 回去改這箱 (建議, 多半是刷錯或刷重複)\n【確定】= 我確定沒錯, 照樣出`
+  );
+}
+
+// 回傳 true = 這箱已經收掉(結案或空箱丟棄); false = 使用者取消, 黃框還開著。
+// ⚠ 呼叫端一定要看回傳值 —— v6.0 加了逐單比對之後這個函式會中途取消,
+//   舊的呼叫端假設「一定會結案」, 結果:取消後照樣播完成音、照樣 startParcel 開新箱 → 舊箱內容整個被蓋掉。
+function finalizeActiveParcel(skipIfEmpty, opts) {
+  opts = opts || {};
+  if (!state.activeParcel) return true;
   const ap = state.activeParcel;
   const hasItems = ap.items && Object.keys(ap.items).length > 0;
   // 防呆: 空訂單一律不寫入 completedParcels (避免誤掃留下假紀錄)
   if (!hasItems) {
     console.log("[parcel] 空訂單已丟棄:", ap.id);
     state.activeParcel = null;
-    return;
+    return true;
   }
+  // 📋 逐單防呆: 這箱的內容, 是不是今天「還沒出的某一張單」?
+  //   對得到 → 把那張單標成已出。對不到 → 當場擋下來 (不是死路, 可以按確定照樣出)。
+  //   這是蝦皮/MOMO 這種「整批加總清單」唯一能做到的逐箱驗證: 官網是一單一箱所以本來就防得住。
+  // skipPlanCheck: 出貨完成的收尾階段用。那時使用者已經走過健康檢查 + 完成確認了,
+  //   再問一次逐單比對很奇怪, 而且他若按取消, 這箱就會從出貨紀錄裡消失(資料遺失)。
+  if (!opts.skipPlanCheck && !matchParcelToOrderPlan(ap)) return false;   // 取消 → 保持黃框開著, 讓他改
   ap.completedAt = new Date().toISOString();
   if (ap.startedAt) { const _dur = new Date(ap.completedAt) - new Date(ap.startedAt); if (_dur >= 0) ap.durationMs = _dur; } // ⏱ 包裹計時: 開單(刷寄件單/拉官網單) → 完成
   ap.packedBy = settings.myName || "(本機)";
@@ -11053,6 +11452,7 @@ function finalizeActiveParcel(skipIfEmpty) {
     queueRoomEvent("parcel_complete", { id: ap.id, items: ap.items, packedBy: ap.packedBy });
   }
   state.activeParcel = null;
+  return true;
 }
 
 // 目前建單模式 (決定各處用語): inbound / return / replacement / normal
@@ -11311,6 +11711,12 @@ function doMergeAppend() {
     }
   }
   state.loadedDate = new Date().toISOString().slice(0, 10);
+  // ⚠ 追加後清單變成「舊的 + 新的」, 舊那批的逐單資料已經對不上了。
+  //   寧可關掉逐單防呆, 也不要拿不完整的訂單表去擋人 —— 誤擋比不擋更糟(會被練成無腦按確定)。
+  if (Array.isArray(state.orderPlan) && state.orderPlan.length) {
+    state.orderPlan = [];
+    setTimeout(() => showToast("ℹ 已追加合併, 逐單防呆先關閉(訂單表對不上了)"), 500);
+  }
   clearOrderModeFlags(); // 追加合併後視為一般出貨清單, 清掉殘留的補寄/退貨/入倉/手建旗標
   saveState();
   pendingA1 = [];
@@ -11334,6 +11740,7 @@ function doMergeReplace() {
   state.items = items;
   state.completedParcels = [];   // 已確認無未結案箱子, 清乾淨免得殘留
   state.activeParcel = null;
+  state.orderPlan = buildOrderPlanFromPending();   // 逐單資料跟著換成新的一批 (拿不到就是空的)
   state.loadedDate = new Date().toISOString().slice(0, 10);
   clearOrderModeFlags(); state.continuationOf = null; state.appendLevel = 1; state.priorKocaPushed = null; // 覆蓋成全新一般清單
   saveState();
@@ -11455,6 +11862,20 @@ function bumpPickItem(idx, delta, options) {
     if (it.packed + delta < skuShipped) {
       const label = it.essential ? "已使用" : "已確認出貨";
       showToast(`⛔ ${it.sku} ${label} ${skuShipped} 件無法減到那麼少`);
+      return;
+    }
+  }
+  // 🔒【多刷攔截】刷超過應出量時, 一定要「聽得出來」+「擋一下」。
+  //   以前只跳一行 toast, 而且提示音跟正常刷一模一樣(scanSku) —— 倉庫裡同仁眼睛在貨上、手在刷,
+  //   靠聲音判斷有沒有刷到, 所以多刷聽起來完全正常, 等到結案報告才發現已經裝箱封起來了。
+  //   ⚠ 只在「掃描造成的加量」擋: expected 為 0 的自由計數(補寄/包材)沒有基準, 擋了只會變成每刷必問。
+  if (delta > 0 && !options.isUndo && !options.suppressBundle && !options.noOverGuard
+      && !it.essential && (it.expected || 0) > 0 && it.packed + delta > it.expected) {
+    const over = it.packed + delta - it.expected;
+    SOUND.scanError();
+    if (navigator.vibrate) navigator.vibrate([90, 60, 90]);   // 跟正常刷的短震動明顯不同
+    if (!confirm(`⚠ 多刷了\n\n${it.sku} ${it.name || ""}\n應出 ${it.expected} 件, 已刷 ${it.packed} 件\n這一刷會變成 ${it.packed + delta} 件 (多 ${over} 件)\n\n確定要多加嗎?\n\n【取消】= 不加 (建議先確認是不是刷錯商品或刷重複)`)) {
+      renderPicking();
       return;
     }
   }
@@ -12069,7 +12490,7 @@ document.getElementById("history-list").addEventListener("click", (e) => {
     if (!entry) return;
     const d = new Date(entry.completedAt);
     const sharedNote = cloudHistoryEnabled() ? "\n\n⚠ 這是共享紀錄, 刪除後所有人都看不到。" : "";
-    if (!confirm(`刪除這筆紀錄?\n${d.toLocaleString("zh-TW")} · ${entry.summary.totalSku} SKU${sharedNote}`)) return;
+    if (!confirm(`刪除這筆紀錄?\n${d.toLocaleString("zh-TW")} · ${(entry.summary && entry.summary.totalSku) || 0} SKU${sharedNote}`)) return;
     history = history.filter(h => h.id !== id);
     saveHistory();
     cloudHistory = cloudHistory.filter(h => h.id !== id);
@@ -12185,7 +12606,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
       if (entryToRestore) {
         if (state.items.length > 0) {
           const r = state.items.reduce((s, it) => s + Math.max(0, it.expected - it.packed), 0);
-          if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${entryToRestore.summary.totalSku} SKU 的舊紀錄, 確定?`)) {
+          if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU, 還差 ${r} 件)。\n\n繼續追加會放棄目前清單, 改成繼續處理 ${(entryToRestore.summary && entryToRestore.summary.totalSku) || 0} SKU 的舊紀錄, 確定?`)) {
             return;
           }
         }
@@ -13220,7 +13641,7 @@ document.getElementById("finish-parcel-btn").addEventListener("click", () => {
   const _pk = checkActiveParcelPackaging();
   if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
   const id = state.activeParcel.id;
-  finalizeActiveParcel(false);
+  if (!finalizeActiveParcel(false)) { saveState(); render(); return; }   // 逐單比對被取消 → 別謊報「已完成」
   saveState();
   renderScanPanel();
   renderPicking();
@@ -13410,6 +13831,10 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   const _svLbl = document.getElementById("sound-volume-label");
   if (_svInp) _svInp.value = settings.soundVolume || 50;
   if (_svLbl) _svLbl.textContent = (settings.soundVolume || 50) + "%";
+  const _wt = document.getElementById("work-timer-input");
+  if (_wt) _wt.checked = settings.workTimer !== false;              // 預設開
+  const _wr = document.getElementById("work-rest-mins-input");
+  if (_wr) _wr.value = String(Number(settings.workRestMins) || 60); // 預設 1 小時
   document.getElementById("discord-webhook-input").value = settings.discordWebhook || "";
   document.getElementById("sheets-webhook-input").value = settings.sheetsWebhook || "";
   { const _ko = document.getElementById("koca-outbound-input"); if (_ko) _ko.checked = !!settings.kocaOutboundEnabled; }
@@ -13924,6 +14349,30 @@ if (_pgInp) _pgInp.addEventListener("change", (e) => {
   saveSettings();
   showToast(e.target.checked ? "📦 包材防呆已開啟" : "包材防呆已關閉");
 });
+// ⏱ 連續工作提醒
+const _wtInp = document.getElementById("work-timer-input");
+if (_wtInp) _wtInp.addEventListener("change", (e) => {
+  settings.workTimer = e.target.checked;
+  if (!e.target.checked) { _workAccumMs = 0; _workSegStart = 0; _workNotifiedAt = 0; saveWorkTimer(); }
+  saveSettings(); renderWorkTimer();
+  showToast(e.target.checked ? "⏱ 連續工作提醒已開啟" : "已關閉連續工作提醒");
+});
+const _wrInp = document.getElementById("work-rest-mins-input");
+if (_wrInp) _wrInp.addEventListener("change", (e) => {
+  settings.workRestMins = parseInt(e.target.value, 10) || 60;
+  _workNotifiedAt = 0;   // 換門檻 → 重新算提醒時機
+  saveSettings(); renderWorkTimer();
+  showToast(`⏱ 超過 ${settings.workRestMins} 分鐘會提醒休息`);
+});
+// 點計時器 → 講清楚目前狀況 (不做任何會擋人的事)
+const _wtBtn = document.getElementById("work-timer");
+if (_wtBtn) _wtBtn.addEventListener("click", () => {
+  const mins = Math.floor(workedMs() / 60000);
+  if (mins <= 0) { showToast("⏱ 還沒開始計時"); return; }
+  const done = (state.completedParcels || []).length;
+  const limit = Number(settings.workRestMins) || 60;
+  showToast(`⏱ 實際工作 ${mins} 分鐘${done ? `、完成 ${done} 箱` : ""}(超過 ${limit} 分會提醒休息)。停手 5 分鐘以上的空檔不計入;休息滿 30 分鐘會整個重新計算。`, 7000);
+});
 document.getElementById("sound-volume-input").addEventListener("input", (e) => {
   const v = parseInt(e.target.value, 10);
   settings.soundVolume = isNaN(v) ? 50 : Math.max(0, Math.min(100, v));
@@ -14387,7 +14836,7 @@ document.getElementById("manual-create").addEventListener("click", () => {
   const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
 
   // 若已有未完成清單, 警告會覆蓋
-  if (state.items.length > 0) {
+  if (listHasRealWork()) {   // 只剩自動帶入的包材(什麼都沒刷)就別問了, 沒東西會被弄丟
     if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU)。\n\n繼續建立手建單會放棄目前清單, 確定?`)) return;
   }
   // 檢查是否已有此寄件單在當前批次完成過
@@ -14436,6 +14885,17 @@ document.getElementById("manual-create").addEventListener("click", () => {
 });
 
 // 補寄訂單 modal 事件
+// 目前清單裡「有沒有真的會被弄丟的東西」。
+// 為什麼需要:補寄/退貨/入倉 建單時會自動帶入 7 個包材(expected 0 的自由計數),
+//   所以 state.items.length 永遠 ≥ 7 —— 用它判斷「有未完成清單」會每次都跳警告, 但其實什麼都沒有。
+//   警告跳久了就會被無視, 真的有東西要被覆蓋時反而按過去 → 那才是真正的資料遺失。
+function listHasRealWork() {
+  if ((state.completedParcels || []).length > 0) return true;                       // 有包好的箱子
+  if (state.activeParcel && Object.keys(state.activeParcel.items || {}).length) return true;  // 黃框有東西
+  return (state.items || []).some(it => it && !it.essential && ((it.expected || 0) > 0 || (it.packed || 0) > 0))
+      || (state.items || []).some(it => it && it.essential && (it.packed || 0) > 0);  // 包材已經刷了也算
+}
+
 function openReplacementModal(prefillId) {
   document.getElementById("repl-platform-select").value = currentPlatform || "";
   document.getElementById("repl-parcel-id").value = prefillId || "";
@@ -14487,7 +14947,7 @@ document.getElementById("repl-create").addEventListener("click", () => {
   const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
 
   // 若已有未完成清單, 警告會覆蓋
-  if (state.items.length > 0) {
+  if (listHasRealWork()) {   // 只剩自動帶入的包材(什麼都沒刷)就別問了, 沒東西會被弄丟
     if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU)。\n\n繼續建立補寄單會放棄目前清單, 確定?`)) return;
   }
   if ((state.completedParcels || []).find(p => p.id === parcelId)) {
@@ -14606,7 +15066,7 @@ document.getElementById("ret-create").addEventListener("click", () => {
 
   const parcelId = extractParcelId(rawId) || rawId.substring(0, 64);
 
-  if (state.items.length > 0) {
+  if (listHasRealWork()) {   // 只剩自動帶入的包材(什麼都沒刷)就別問了, 沒東西會被弄丟
     if (!confirm(`你目前有未完成的備貨清單 (${state.items.length} SKU)。\n\n繼續建立退貨單會放棄目前清單, 確定?`)) return;
   }
   if ((state.completedParcels || []).find(p => p.id === parcelId)) {
@@ -14680,7 +15140,7 @@ document.getElementById("inb-create").addEventListener("click", () => {
     leaveRoom(true);
   }
   const orderId = rawId.substring(0, 64);
-  if (state.items.length > 0) {
+  if (listHasRealWork()) {   // 只剩自動帶入的包材(什麼都沒刷)就別問了, 沒東西會被弄丟
     if (!confirm(`你目前有未完成的清單 (${state.items.length} SKU)。\n\n繼續建立入倉單會放棄目前清單, 確定?`)) return;
   }
   state = {
@@ -14824,6 +15284,15 @@ function actuallyCompleteShipping(opts) {
   }
   state = { items: [], filter: "all", loadedDate: null, scanMode: false, activeParcel: null, completedParcels: [], appendLevel: 1, continuationOf: null, priorKocaPushed: null, manualMode: false, replacementInfo: null, returnInfo: null, inboundInfo: null, ..._roomKeep };
   saveState();
+  // 🔒【補寄/退貨/入倉 換下一位客人】本機清單清掉了, 但伺服器上的房間清單還是上一位的 →
+  //   下一次同步時 mergeRoomState 會把那整份(連同上一位已刷的數量)推回本機:
+  //   → 建立下一張單時跳「你目前有未完成的備貨清單 (8 SKU)」, 而且上一位的數量會混進下一位。
+  //   所以留在房間時, 一定要「同時把房間的清單也清空」。
+  //   pushRoomListReset() 會設 _pendingListReset, 在伺服器套用前擋掉舊清單的回廣播。
+  if (_keepRoom && state.isRoomHost && typeof pushRoomListReset === "function") {
+    pushRoomListReset();
+    if (typeof syncRoom === "function") syncRoom();   // 盡快讓伺服器套用, 縮短空窗
+  }
   try { localStorage.removeItem(STATE_BACKUP_KEY); } catch(e) {}
   // 通路防呆: 真正收尾(非換下一位客人)後把通路重設為「請先選擇通路」, 下一批要重新明確選, 避免沿用上一批通路而記錯
   if (!_keepRoom) {
@@ -15024,10 +15493,7 @@ document.getElementById("complete-shipping-btn").addEventListener("click", () =>
   // 官方批次多單: 這顆改走「完成總訂單」(逐張各自結算), 不單獨結目前這張, 避免拆散批次
   if (kocaBatchActive()) { reportModal.hidden = true; completeKocaBatch(); return; }
   // 防重複完成: 共同包貨時只讓「開房者」收尾, 避免兩台各存一筆紀錄 + 各扣一次庫存
-  if (state.roomMode && !state.isRoomHost) {
-    alert("👥 共同包貨中,請由「開房的那台」按完成出貨,避免重複扣帳。\n\n如果真的要由這台收尾,請先到房間狀態「離開房間」再完成。");
-    return;
-  }
+  if (!allowNonHostFinish()) return;   // 非房主: 問過就能接手收尾, 不再是死路
   // 📦 包材防呆: 完成前複查當前這張單的包材 (不分刷的順序)
   const _pk = checkActiveParcelPackaging();
   if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
@@ -15339,6 +15805,33 @@ try {
   }
 } catch (e) { console.warn("[migration] 補建連動商品失敗", e); }
 auditBundleRules();   // 🔎 連動/套組設定對不到商品庫就講出來, 不要靜默失效
+// 🏬 通路下拉一律由 PLATFORMS 產生, 不要在 HTML 寫死。
+//   以前有 5 個地方各寫一份 <option> 清單 → 加一個通路(例:福貓)要改 5 個地方, 漏掉一個那邊就選不到。
+//   legacy 通路(7-11/全家/萊爾富/新竹物流)不列入新選單, 但舊紀錄仍顯示得出標籤。
+function syncPlatformSelects() {
+  const opts = Object.entries(PLATFORMS)
+    .filter(([, v]) => v && !v.legacy)
+    .map(([k, v]) => `<option value="${escapeHtml(k)}">${v.emoji || ""} ${escapeHtml(v.label || k)}</option>`)
+    .join("");
+  const TARGETS = [
+    ["platform-select",        '<option value="">— 請先選擇通路 —</option>', ""],
+    ["manual-platform-select", '<option value="">— 請先選擇通路 —</option>', ""],
+    ["repl-platform-select",   '<option value="">— 請先選擇通路 —</option>', ""],
+    ["ret-platform-select",    '<option value="">— 請先選擇通路 —</option>', ""],
+    ["hist-platform-filter",   '<option value="all">全部商家</option>', '<option value="unknown">未指定</option>'],
+  ];
+  for (const [id, head, tail] of TARGETS) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const keep = el.value;                       // 重建前先記住目前選的, 別把使用者的選擇洗掉
+    el.innerHTML = head + opts + tail;
+    if ([...el.options].some(o => o.value === keep)) el.value = keep;
+  }
+}
+syncPlatformSelects();
+loadWorkTimer();      // ⏱ 連續工作計時 (重整/切分頁回來要接得上, 不然一重整就歸零等於沒作用)
+renderWorkTimer();
+setInterval(tickWorkTimer, 60000);   // 每分鐘檢查一次: 更新顯示 / 該不該提醒 / 該不該重置
 // 若上次離線時還在盤點中, 自動進盤點視圖
 if (stockTake) {
   setTimeout(() => {
