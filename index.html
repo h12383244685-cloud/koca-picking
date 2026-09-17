@@ -3414,7 +3414,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v6.8 · 2026-09-07";
+const APP_VERSION = "v6.9 · 2026-09-17";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5759,6 +5759,27 @@ function auditBundleRules() {
     for (const m of (specMap[k] || [])) {
       if (m && m.sku && !library.find(p => p.sku === m.sku)) bad.push(`規格「${k}」對到不存在的 ${m.sku}`);
     }
+  }
+  // 🔢 數量對不上規格名稱的, 也要抓出來。
+  //   規格對應裡「新增一個 SKU」時數量一律預設 1, 加完要手動改 —— 沒改就靜默出錯。
+  //   實際事故 (2026/09): 「Dusty MINI 1收納包及濾芯4組」的濾芯被存成 1, 每張這個套組都少出 3 顆濾芯,
+  //   而且畫面上完全看不出來(清單顯示「濾芯 1/1 完成」, 看起來正常)。
+  //   規則: 規格名稱裡出現「N組 / N個 / N入」而 N ≥ 2, 但底下沒有任何一個 SKU 的數量是 N → 很可能忘了改。
+  const qtyWarn = [];
+  for (const k in specMap) {
+    const arr = specMap[k];
+    if (!Array.isArray(arr) || arr.length === 0) continue;
+    const hints = [...String(k).matchAll(/(\d+)\s*[組個入]/g)].map(x => parseInt(x[1], 10)).filter(n => n >= 2);
+    if (hints.length === 0) continue;
+    for (const n of new Set(hints)) {
+      if (!arr.some(m => (m.qty || 1) === n)) {
+        qtyWarn.push(`規格「${k}」名稱寫 ${n}, 但底下數量是 ${arr.map(m => (m.qty || 1)).join("/")} —— 可能忘了改數量`);
+      }
+    }
+  }
+  if (qtyWarn.length) {
+    console.warn("[audit] 規格數量可能設錯:", qtyWarn);
+    setTimeout(() => showToast(`⚠ ${qtyWarn[0]}(到 📋 規格對應 檢查)`, 10000), 3500);
   }
   if (bad.length) {
     console.warn("[audit] 連動/套組設定對不到商品庫:", bad);
@@ -12996,6 +13017,9 @@ document.getElementById("mapping-cards").addEventListener("change", (e) => {
     saveSpecMap();
     selAdd.value = "";
     renderA1Mapping();
+    // ⚠ 數量預設 1, 但很多套組不是 1 (例如「濾芯4組」要 4)。不講的話就會靜默少出貨 —— 實際發生過。
+    const _p = library.find(p => p.sku === sku);
+    showToast(`已加入 ${(_p && _p.name) || sku},數量預設 1。一張訂單要出多個的話,請改右邊的數量`, 6000);
     return;
   }
   const inpQty = e.target.closest("input[data-map-qty]");
