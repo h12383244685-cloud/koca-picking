@@ -3414,7 +3414,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v6.9 · 2026-09-17";
+const APP_VERSION = "v7.0 · 2026-09-30";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -9262,8 +9262,9 @@ function buildErpList() {
   }
   if (unkeyedOnly) list = list.filter(e => !_erpKeyedIds.has(e.id));
   _erpList = list;
-  _erpMergeKoca();          // 官方出貨單: 同一天合併一張
-  _erpMergeReplacements();  // 補寄單: 同通路+同一天合併一張 (跟一般/手建的格式一樣: 單號全列 + 明細加總)
+  _erpMergeKoca();               // 官方出貨單: 同一天合併一張
+  _erpMergeNormalByPlatform();   // 其他通路一般/手建單: 同通路+同一天合併一張 (蝦皮/MOMO/酷澎/福貓…)
+  _erpMergeReplacements();       // 補寄單: 同通路+同一天合併一張 (跟一般/手建的格式一樣: 單號全列 + 明細加總)
 }
 // ===== 鍵單畫面合併引擎 =====
 // 只是「顯示」合併! 出貨紀錄本身仍各自一筆 (回寫官網/電子發票/重複出貨防呆都靠各自那筆, 不能動)。
@@ -9320,6 +9321,25 @@ function _erpMergeKoca() {
     e => _erpDayOf(e),
     day => "km::" + day,          // 沿用 v3.1 的 id 格式, 既有打勾進度不會消失
     () => "🌐 官方",
+    "normal"
+  );
+}
+// 一般/手建出貨單 — 非官方通路 (蝦皮 / MOMO / 酷澎 / 福貓 / KOL / 面交…) 同通路+同一天合併一張。
+// 為什麼:蝦皮一天可能匯入好幾批 CSV(早上一批、下午一批) + 幾張手建單 → 鍵單時要按好幾次「下一筆」,
+//   而且同一個 SKU 要自己心算加總。官方單早就這樣併了, 其他通路沒理由不併。
+// ⚠ 官方(koca)不在這裡, 它有自己的 _erpMergeKoca (照日期併, 不分通路);
+//   併的只是「鍵單畫面的顯示」, 出貨紀錄本身仍各自一筆, 回寫官網/發票/重複出貨防呆都不受影響。
+function _erpMergeNormalByPlatform() {
+  _erpMergeGroups(
+    e => e.platform !== "koca"
+      && e.orderType !== "return" && e.orderType !== "replacement" && e.orderType !== "inbound"
+      && !e._merged,
+    e => (e.platform || "unknown") + "::" + _erpDayOf(e),
+    k => "nm::" + k,
+    (k, ents) => {
+      const p = PLATFORMS[ents[0].platform] || {};
+      return (p.emoji || "📦") + " " + (p.label || ents[0].platform || "未指定");
+    },
     "normal"
   );
 }
