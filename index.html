@@ -3414,7 +3414,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v7.0 · 2026-09-30";
+const APP_VERSION = "v7.2 · 2026-10-05";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6519,12 +6519,23 @@ const _BUNDLE_NAME_HINTS = /配件組|完整配件|組合包|組合|套組|全�
 function _looksLikeBundleName(name) {
   return _BUNDLE_NAME_HINTS.test(String(name || ""));
 }
+// 「一個商品 = N 個」的包裝規格 (濾芯5個 / 4入 / 3顆…)。
+// 為什麼要抓:官網送來的 qty 是「買幾組」不是「幾顆」, 名稱裡的 N 才是一組幾顆。
+//   不處理的話「濾芯5個 ×1」會被當成 1 顆出貨 —— 少出 4 顆, 而且畫面顯示「1/1 完成」看不出來。
+function _packSizeInName(name) {
+  const m = [...String(name || "").matchAll(/(\d+)\s*(?:入|個|顆|件|支|片|組)/g)]
+    .map(x => parseInt(x[1], 10)).filter(n => n >= 2);
+  return m.length ? Math.max(...m) : 0;
+}
 function _kocaSpecExpand(name, allowSingle) {
   const minCount = allowSingle ? 1 : 2;   // 預設只認「拆成 2 個以上」的套組; allowSingle=單品比對也用(對不到時的最後手段)
   if (!name || typeof specMap !== "object" || !specMap) return null;
-  // 0. 使用者指定過的套組對應最優先 —— 官網和規格表用詞不同時, 這是唯一可靠的來源
+  // 0. 使用者指定過的對應最優先 —— 官網和規格表用詞不同時, 這是唯一可靠的來源。
+  //    ⚠ 這裡故意不檢查 minCount: 使用者親手指定的就是答案, 不管它拆成幾個 SKU。
+  //    以前有檢查 → 像「濾芯5個 = 濾芯×5」這種「一個商品 = 5 顆」的對應只有 1 個 SKU,
+  //    被 minCount>=2 擋掉 → 指定了也沒用, 官網單永遠只算 1 顆。
   const _remembered = kocaBundleMap[normalizeProdName(name)];
-  if (_remembered && Array.isArray(specMap[_remembered]) && specMap[_remembered].length >= minCount) {
+  if (_remembered && Array.isArray(specMap[_remembered]) && specMap[_remembered].length > 0) {
     return specMap[_remembered];
   }
   const direct = specMap[name];
@@ -6809,14 +6820,17 @@ function buildListFromKocaOrder(o, gate) {
     //   實際情形: 官網寫「KOCA Dusty MINI 1 黑騎士(Dusty MINI 1 完整配件組)」, 規格表寫「Dusty MINI 1收納包及濾芯4組」,
     //   兩邊用詞完全不同對不起來 → 舊版就用品名去猜, 猜成「單主機」→ 收納包和濾芯整組沒出貨, 而且畫面上看不出異常。
     //   改成標紅要求指定一次(可以選套組), 指定後永遠記住, 之後同一個品名自動展開。
-    if (_looksLikeBundleName(it.name)
+    //   同理「N入裝」(濾芯5個 / 4入…): 官網的 qty 是「買幾組」不是「幾顆」,
+    //   當成單品就只會出 1 顆, 少出的那幾顆畫面上顯示「1/1 完成」完全看不出來。
+    const _packN = _packSizeInName(it.name);
+    if ((_looksLikeBundleName(it.name) || _packN >= 2)
         && !kocaBundleMap[normalizeProdName(it.name)]
         && !kocaNameMap[normalizeProdName(it.name)]) {
       const ph = `__KOCA_UNMAPPED_${i}`;
       totals[ph] = (totals[ph] || 0) + qty;
       nameOf[ph] = it.name || "(無名稱)";
       unmapped.push(it.name || "(無名稱)");
-      console.warn("[koca] 品名像套組但對不到拆法, 要求使用者指定:", it.name);
+      console.warn("[koca] 品名像套組/N入裝但對不到拆法, 要求使用者指定:", it.name, _packN ? `(名稱寫 ${_packN} 入)` : "");
       return;
     }
     // 官網若有回 sku 就直接用, 沒有才用商品名對
@@ -7463,7 +7477,13 @@ function renderKocaUnmappedPanel() {
   // ★ 套組選項: 規格對應表裡「一個名字拆成多個商品」的那些鍵。
   //   官網的套組講法(完整配件組)和規格表的講法(收納包及濾芯4組)常常完全不同, 靠文字比對永遠對不起來,
   //   只能讓使用者指定一次。選了以後記在 kocaBundleMap, 之後同一個官網品名自動展開整組。
-  const bundleKeys = Object.keys(specMap || {}).filter(k => Array.isArray(specMap[k]) && specMap[k].length >= 2);
+  // 可選的對應: ①拆成多個 SKU 的套組 ②只有 1 個 SKU 但數量 ≥2 的「N 入裝」(例:濾芯5個 = 濾芯×5)
+  //   ②以前沒列出來 → 官網的 5 入裝商品根本沒辦法指定, 永遠只出 1 顆。
+  const bundleKeys = Object.keys(specMap || {}).filter(k => {
+    const v = specMap[k];
+    if (!Array.isArray(v) || v.length === 0) return false;
+    return v.length >= 2 || (v[0] && (v[0].qty || 1) >= 2);
+  });
   const bundleOpts = bundleKeys.map(k => {
     const detail = specMap[k].map(m => {
       const p = library.find(x => x.sku === m.sku);
@@ -11697,7 +11717,7 @@ function renderActiveParcel() {
         </div>
         <span class="ap-qty">× ${qty}</span>
         <button class="ap-btn" data-ap-minus="${escapeHtml(sku)}" title="−1 (刷錯一筆)">−</button>
-        <button class="ap-btn danger" data-ap-clear="${escapeHtml(sku)}" title="清除整個 SKU 從此訂單">🗑</button>
+        <button class="ap-btn" data-ap-plus="${escapeHtml(sku)}" title="+1 (少刷一筆)">＋</button>
       </div>`;
     }).join("");
   }
@@ -13067,6 +13087,19 @@ document.getElementById("active-parcel-items").addEventListener("click", (e) => 
     }
     return;
   }
+  // ＋1: 少刷一筆時直接補, 不用回去備貨清單找 (Kyle 2026/10 要求把 🗑 換成 ＋)
+  const plusBtn = e.target.closest("button[data-ap-plus]");
+  if (plusBtn) {
+    const sku = plusBtn.dataset.apPlus;
+    const idx = state.items.findIndex(it => it.sku === sku);
+    if (idx >= 0) {
+      bumpPickItem(idx, 1);   // 超過應出量時, bumpPickItem 內建的多刷攔截仍會擋
+      showToast(`＋1 ${sku}`);
+    }
+    return;
+  }
+  // 🗑 清除整個 SKU: 按鈕已移除, 但保留處理邏輯 ——
+  //   舊版畫面(還沒更新的裝置)或日後要加回來時仍然有效, 移掉會變成按了沒反應。
   const clearBtn = e.target.closest("button[data-ap-clear]");
   if (clearBtn) {
     const sku = clearBtn.dataset.apClear;
