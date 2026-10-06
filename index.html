@@ -1923,6 +1923,8 @@ footer.summary-bar {
   <!-- 官方批次多單「本批訂單」列 (收合式; 只有官方刷單批次會顯示) -->
   <div id="koca-batch-strip" class="koca-batch-strip" hidden></div>
   <!-- 當前訂單: 放在 picking-view 最上面, 釘在標題列正下方, 一進畫面就在最頂、捲動不跑 -->
+  <!-- 📝 官網訂單備註(缺件補寄等) —— 掛在當前訂單上方, 包完這張之前一直看得到 -->
+  <div id="koca-remark-banner" hidden></div>
   <div id="active-parcel" class="active-parcel" hidden>
     <button type="button" class="active-parcel-bar" id="active-parcel-bar" aria-expanded="true" title="點一下收合 / 展開明細">
       <div class="apbar-head">
@@ -2595,6 +2597,7 @@ footer.summary-bar {
         <button class="btn full outline" id="storage-refresh-btn" style="margin-top: 10px;">↻ 重新計算</button>
         <button class="btn full outline" id="storage-cleanup-btn" style="margin-top: 8px;">🧹 清掉雲端已保存的舊出貨紀錄</button>
         <button class="btn full outline" id="storage-purge-btn" style="margin-top: 8px; border-color: var(--danger); color: var(--danger);">🗑 清空本機全部出貨紀錄(雲端保留)</button>
+        <button class="btn full outline" id="dup-override-log-btn" style="margin-top: 8px;">⛔ 查看「重複出貨放行」紀錄</button>
         <p class="hint" style="font-size: 0.7rem; margin-top: 8px;">
           🧹 <strong>清掉舊的</strong>:只刪已確認存在雲端、且超過 14 天的。<br>
           🗑 <strong>全部清空</strong>:本機一次清乾淨(還沒推上雲端的仍會保留)。<br>
@@ -3414,7 +3417,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v7.2 · 2026-10-05";
+const APP_VERSION = "v7.4 · 2026-10-06";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -6390,6 +6393,8 @@ function clearOrderModeFlags() {
   //   出貨完成時就會「回寫到錯的官網訂單」→ 幫錯誤的訂單標出貨 + 排電子發票。
   //   buildListFromKocaOrder() 會在呼叫本函式「之後」才設定新的 kocaOrderId, 順序不能顛倒。
   state.kocaOrderId = null;
+  // 備註同理: 殘留的話下一張單會掛著別人的「本次不含…」, 比沒有提示更糟。
+  state.kocaRemark = "";
 }
 
 // 📋 逐單防呆:把 CSV 拆成「每一張訂單各自該裝什麼」。
@@ -6526,6 +6531,25 @@ function _packSizeInName(name) {
   const m = [...String(name || "").matchAll(/(\d+)\s*(?:入|個|顆|件|支|片|組)/g)]
     .map(x => parseInt(x[1], 10)).filter(n => n >= 2);
   return m.length ? Math.max(...m) : 0;
+}
+// 📝 從訂單備註裡抓出「本次不含 OOO × N」。
+// 官網缺件時會自動寫這種備註, 例:「缺件補寄批次 #1:本次不含 JOY LITE 收納包 × 1,另單免費補寄」
+// ⚠ 只做「抓出來給人看」, 不自動改數量 —— 這是自由文字, 解析錯會變成少出貨(更難發現)。
+//   由同仁看著提示自己移除, 比我猜錯安全。
+function _parseExcludedFromRemark(remark) {
+  const s = String(remark || "");
+  if (!s) return [];
+  const out = [];
+  // 「本次不含 XXX × 1」/「不含 XXX x1」/「本次不含XXX」
+  const re = /(?:本次)?不含\s*([^,,。;;\n×xX*]+?)\s*(?:[×xX*]\s*(\d+))?(?=[,,。;;\n]|$)/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const nm = (m[1] || "").trim();
+    if (!nm) continue;
+    const qty = m[2] ? parseInt(m[2], 10) : null;
+    out.push({ name: nm, qty, text: nm + (qty ? ` ×${qty}` : "") });
+  }
+  return out;
 }
 function _kocaSpecExpand(name, allowSingle) {
   const minCount = allowSingle ? 1 : 2;   // 預設只認「拆成 2 個以上」的套組; allowSingle=單品比對也用(對不到時的最後手段)
@@ -6758,8 +6782,8 @@ async function fetchKocaOrder(orderId, opts) {
     if (already) {
       const when = fmtShippedWhen(already.completedAt);
       const who = already.completedBy || "(未命名)";
-      SOUND.scanError();
-      if (!confirm(`⛔ 這張官網訂單「已經出過了」!\n\n訂單:${data.orderId}\n出貨時間:${when}\n出貨人員:${who}\n\n再建一次清單就是【重複出貨】,客人會收到兩份。\n\n除非你確定這是要補寄/重出, 否則請按「取消」。\n\n真的還要再建一次清單嗎?`)) {
+      // 跟刷單號那邊用同一道嚴格關卡: 要放行必須手打單號後 4 碼, 按不過去
+      if (!confirmDuplicateShipment(data.orderId, { entry: already, matchType: "官網訂單編號" }, "官網拉單")) {
         setKocaOrderStatus(
           `⛔ <strong>已擋下重複出貨</strong><br>訂單 ${escapeHtml(data.orderId)} 已於 <strong>${escapeHtml(when)}</strong> 由 <strong>${escapeHtml(who)}</strong> 出貨完成。<br><span style="color:var(--text-soft);">若真的要補件, 請改用「補寄訂單」建單(不扣庫存)。</span>`, "err");
         return false;
@@ -6931,12 +6955,23 @@ function buildListFromKocaOrder(o, gate) {
   const codNote = gate && gate.cod ? '<br><strong style="color:#b26b00;">💰 貨到付款(COD):出貨時記得收款。</strong>' : "";
   const expandNote = expandedNames.length
     ? `<br><strong style="color:var(--primary);">📦 套組已展開:${escapeHtml(expandedNames.join("、"))}</strong>(依規格對應表拆成各別商品)` : "";
+  // 📝 官網訂單備註 —— 缺件補寄的說明就寫在這裡 (例:「本次不含 JOY LITE 收納包 × 1, 另單免費補寄」)。
+  //   ⚠ 這段一定要讓同仁看到:套組會被展開成主機+收納包, 但備註明說這次不含收納包 →
+  //     不講的話就會照清單裝進去, 多送一個。存進 state 讓撿貨頁一直掛著, 不是跳一下就消失的 toast。
+  state.kocaRemark = (o && o.remark) ? String(o.remark) : "";
+  const _excl = _parseExcludedFromRemark(state.kocaRemark);
+  const remarkNote = state.kocaRemark
+    ? `<br><span style="display:inline-block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger);">
+         📝 <strong>官網訂單備註</strong><br>${escapeHtml(state.kocaRemark)}
+         ${_excl.length ? `<br><strong>⚠ 這張單「本次不含」:${escapeHtml(_excl.map(x => x.text).join("、"))} —— 請從清單移除再出貨</strong>` : ""}
+       </span>`
+    : "";
   setKocaOrderStatus(
     `✅ 已建立官網出貨清單<br>訂單 <strong>${escapeHtml(o.orderId)}</strong>｜${escapeHtml(o.statusLabel || "")}｜共 ${items.filter(it => !it.essential).length} 個品項` + expandNote +
     (o.shipping && o.shipping.method ? `<br>配送:${escapeHtml(_kocaDeliveryLabel(o.shipping.method))}${o.shipping.storeInfo ? "・" + escapeHtml(o.shipping.storeInfo) : ""}` : "") +
     (o.recipient && o.recipient.name ? `<br>收件人:${escapeHtml(o.recipient.name)}` : "") +
-    codNote,
-    unmapped.length > 0 ? "err" : "ok");
+    codNote + remarkNote,
+    (unmapped.length > 0 || state.kocaRemark) ? "err" : "ok");
 
   _prefillKocaActiveParcel(o); saveState(); // 官網: 商品直接「已刷」進黃框(當前訂單), 同仁再刷包裝 + 手動完成此筆
   showToast(`✅ 官網訂單 ${o.orderId} 已建立清單`);
@@ -10820,6 +10855,58 @@ document.getElementById("history-search").addEventListener("keydown", (e) => {
 
 // ===== 過刷防呆共用: 從出貨紀錄(本機+雲端)找這個「寄件單號」或「官網訂單編號」有沒有出過 =====
 // 用於刷單當下的背景偵測 (見 processScan): 掃到以前出過的單就當場警告。回最近一筆, 沒有回 null。
+// ⛔【重複出貨:最貴的錯誤】整箱貨白送 + 運費 + 客服成本, 而且事後才會發現。
+// 以前只跳一個 confirm —— 同仁手上抱著貨、反射性按「確定」就過去了。
+// 改成「不能用反射動作跳過」: 要放行必須手動打出單號後 4 碼。
+// ⚠ 不是死路 —— 真的要重出(例如客人沒收到要補寄)仍然做得到, 只是要刻意。
+// 放行一律留紀錄 (誰、什麼時候、哪張單), 事後對帳查得到。
+const DUP_OVERRIDE_KEY = "picking_dup_override_log_v1";
+function _logDupOverride(rec) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DUP_OVERRIDE_KEY) || "[]");
+    arr.unshift(rec);
+    localStorage.setItem(DUP_OVERRIDE_KEY, JSON.stringify(arr.slice(0, 200)));
+  } catch (e) {}
+  console.warn("[dup-override] 有人放行了重複出貨:", rec);
+}
+// 回 true = 使用者刻意放行; false = 擋下
+function confirmDuplicateShipment(code, shipped, contextLabel) {
+  const e = shipped.entry;
+  const d = new Date(e.completedAt);
+  const p = n => String(n).padStart(2, "0");
+  const when = `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  // 上次到底出了什麼 —— 不列出來的話, 使用者無從判斷這次是不是真的該重出
+  const what = (e.items || []).filter(it => it && !it.essential && (it.packed || 0) > 0)
+    .map(it => `${it.name || it.sku}×${it.packed}`).join("、") || "(無商品明細)";
+  const tail = String(code).slice(-4).toUpperCase();
+  try { SOUND.scanError(); } catch (_) {}
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  const ans = prompt(
+    `⛔⛔ 這張單號已經出過了 ⛔⛔\n\n` +
+    `單號:${code}\n` +
+    `上次出貨:${when}\n` +
+    `出貨人員:${e.completedBy || "(未命名)"}\n` +
+    `類型:${_histTypeLabel(e)}(比對到${shipped.matchType})\n` +
+    `上次出的東西:${what}\n\n` +
+    `再出一次 = 客人收到兩份,貨和運費都是公司吸收。\n\n` +
+    `【要擋下】直接按取消(建議)\n` +
+    `【真的要重出】請輸入單號最後 4 碼:${tail}\n` +
+    `(若是客人沒收到要補件, 請改用「補寄訂單」—— 那個不扣庫存也不會算成重複出貨)`
+  );
+  if (ans === null) return false;                                   // 取消 = 擋下
+  if (String(ans).trim().toUpperCase() !== tail) {
+    alert(`❌ 後 4 碼不對, 已擋下。\n\n你輸入:${ans}\n正確應為:${tail}\n\n如果不確定, 就是不該重出。`);
+    return false;
+  }
+  _logDupOverride({
+    at: new Date().toISOString(), code, by: settings.myName || "(未命名)",
+    prevAt: e.completedAt, prevBy: e.completedBy || "", prevId: e.id,
+    matchType: shipped.matchType, context: contextLabel || "",
+  });
+  setTimeout(() => showToast(`⚠ 已放行重複出貨 ${code} —— 已記錄,請確認這是刻意的`, 8000), 300);
+  return true;
+}
+
 function findShippedByCode(code) {
   const c = String(code || "").trim().toUpperCase();
   if (!c) return null;
@@ -11321,14 +11408,8 @@ function processScan(code) {
       && !(state.activeParcel && state.activeParcel.id === code)
       && !(state.completedParcels || []).some(p => p.id === code)) {
     const _shipped = findShippedByCode(code);
-    if (_shipped) {
-      SOUND.scanError();
-      const _sd = new Date(_shipped.entry.completedAt);
-      const _sp = n => String(n).padStart(2, "0");
-      const _swhen = `${_sd.getFullYear()}/${_sp(_sd.getMonth() + 1)}/${_sp(_sd.getDate())} ${_sp(_sd.getHours())}:${_sp(_sd.getMinutes())}`;
-      if (!confirm(`⛔ 這張單號「已經出過了」!\n\n單號:${code}\n上次出貨:${_swhen}\n出貨人員:${_shipped.entry.completedBy || "(未命名)"}\n類型:${_histTypeLabel(_shipped.entry)}(比對到${_shipped.matchType})\n\n再出一次就是【重複出貨】,客人會收到兩份。\n\n確定還要繼續開這張單嗎?`)) {
-        return; // 取消 → 擋下, 不開這張
-      }
+    if (_shipped && !confirmDuplicateShipment(code, _shipped, "刷單號開箱")) {
+      return; // 擋下, 不開這張
     }
   }
 
@@ -11664,11 +11745,29 @@ function renderTimingStats() {
       </div>`).join("")}
     </div>`;
 }
+// 📝 官網訂單備註橫幅 —— 建單時的提示會被捲掉, 但備註要一直看得到才有用。
+function renderKocaRemarkBanner() {
+  const el = document.getElementById("koca-remark-banner");
+  if (!el) return;
+  const rk = state.kocaRemark || "";
+  if (!rk) { el.hidden = true; el.innerHTML = ""; return; }
+  const excl = _parseExcludedFromRemark(rk);
+  el.hidden = false;
+  el.innerHTML = `
+    <div style="border:2px solid var(--danger); background:var(--danger-bg); color:var(--danger);
+                border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
+      <div style="font-weight:700;">📝 這張官網訂單有備註 — 出貨前先看</div>
+      <div style="margin-top:4px; color:var(--text);">${escapeHtml(rk)}</div>
+      ${excl.length ? `<div style="margin-top:6px; font-weight:700;">⚠ 本次不含:${escapeHtml(excl.map(x => x.text).join("、"))}<br>
+        <span style="font-weight:400;">清單上如果有這些, 請用「−」減掉再出貨(它會另外開補寄單寄)。</span></div>` : ""}
+    </div>`;
+}
 function renderActiveParcel() {
   const wrapper = document.getElementById("active-parcel");
   const idEl = document.getElementById("active-parcel-id");
   const itemsEl = document.getElementById("active-parcel-items");
   if (!wrapper) return;
+  renderKocaRemarkBanner();
   if (!state.activeParcel) {
     wrapper.hidden = true;
     return;
@@ -13968,6 +14067,7 @@ function backupKeys() {
     ERP_ALIGN_KEY,                          // 上次 ERP 對齊時間
     KOCA_NAME_MAP_KEY,                      // 官網品名 → SKU 記憶對應表 (辛苦對過的別弄丟)
     KOCA_BUNDLE_MAP_KEY,                    // 官網品名 → 套組拆法 記憶表 (弄丟 → 套組又只出主機)
+    DUP_OVERRIDE_KEY,                       // 重複出貨放行紀錄 (稽核用, 不可遺失)
     BUNDLE_RULES_KEY,                       // 連動規則 (自己編的, 弄丟就退回出廠預設)
     PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
     // ⚠ 以下四項漏掉會出事, 不可移除:
@@ -14086,6 +14186,19 @@ document.getElementById("bundle-restore-btn").addEventListener("click", () => {
 document.getElementById("storage-refresh-btn").addEventListener("click", renderStorageUsage);
 document.getElementById("storage-cleanup-btn").addEventListener("click", cleanupLocalHistory);
 document.getElementById("storage-purge-btn").addEventListener("click", purgeLocalHistory);
+// ⛔ 重複出貨放行紀錄 —— 留紀錄不給看等於沒留
+document.getElementById("dup-override-log-btn").addEventListener("click", () => {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(DUP_OVERRIDE_KEY) || "[]"); } catch (e) {}
+  if (!arr.length) { alert("✓ 目前沒有任何「重複出貨放行」紀錄。\n\n(代表沒有人硬把已出過的單再出一次)"); return; }
+  const fmt = t => { const d = new Date(t); const p = n => String(n).padStart(2, "0");
+    return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const lines = arr.slice(0, 30).map((r, i) =>
+    `${i + 1}. ${fmt(r.at)} ${r.by}\n   單號 ${r.code}(${r.context})\n   上次 ${fmt(r.prevAt)} 由 ${r.prevBy || "?"} 出過`);
+  alert(`⛔ 重複出貨放行紀錄(共 ${arr.length} 筆, 顯示最近 ${lines.length} 筆)\n\n` +
+    lines.join("\n\n") +
+    `\n\n這些是「系統擋下、但有人手動輸入後4碼放行」的。\n每一筆都值得確認是不是刻意的。`);
+});
 
 document.getElementById("backup-export-btn").addEventListener("click", () => {
   const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString() } };
