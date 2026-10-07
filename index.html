@@ -3417,7 +3417,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v7.4 · 2026-10-06";
+const APP_VERSION = "v7.5 · 2026-10-06";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5427,9 +5427,22 @@ function loadHistory() {
     const s = localStorage.getItem(HISTORY_KEY);
     if (s) {
       const p = JSON.parse(s);
-      if (Array.isArray(p)) history = p;
+      if (Array.isArray(p)) history = p.map(sanitizeHistoryEntry);
     }
   } catch(e) { console.warn("[storage] loadHistory failed", e); }
+}
+// 🔒 一筆紀錄只要格式壞掉(items/parcels 不是陣列), 後面每個讀它的畫面都會當掉 —— 而出貨紀錄不能刪,
+//    所以一壞就是整個統計分析頁永久打不開。改成在「讀進來的那一刻」就把形狀補正:
+//    只補形狀, 絕不丟掉任何欄位或資料(未知欄位全部原樣保留)。
+function sanitizeHistoryEntry(e) {
+  if (!e || typeof e !== "object") return { items: [], parcels: [], summary: {} };
+  const fix = v => Array.isArray(v) ? v.filter(x => x && typeof x === "object") : [];
+  return {
+    ...e,
+    items: fix(e.items),
+    parcels: fix(e.parcels),
+    summary: (e.summary && typeof e.summary === "object") ? e.summary : {},
+  };
 }
 // 🔒 資料安全命脈: 產生出貨憑證並存檔。存檔失敗必須 rollback (見規範一-1/一-2), 不可讓本批資料消失。
 function appendHistory() {
@@ -6395,6 +6408,7 @@ function clearOrderModeFlags() {
   state.kocaOrderId = null;
   // 備註同理: 殘留的話下一張單會掛著別人的「本次不含…」, 比沒有提示更糟。
   state.kocaRemark = "";
+  state.kocaRemarkApplied = null;
 }
 
 // 📋 逐單防呆:把 CSV 拆成「每一張訂單各自該裝什麼」。
@@ -6532,10 +6546,57 @@ function _packSizeInName(name) {
     .map(x => parseInt(x[1], 10)).filter(n => n >= 2);
   return m.length ? Math.max(...m) : 0;
 }
+// 依訂單備註的「本次不含 OOO × N」自動把清單裡那一項扣掉。
+// ⚠ 只在「確定是哪一項」時才動 —— 備註寫的是人看的名字(JOY LITE 收納包),
+//   要對到清單裡的品名(Joy Lite 1 投影機收納包)。比對規則:
+//   把備註的名字拆成關鍵詞, 每個關鍵詞都要出現在該品項名稱裡, 而且「只能對到一項」。
+//   對到 0 項或 2 項以上 → 不動, 保留紅色橫幅讓同仁自己判斷 (寧可他手動減, 也不要我猜錯少出貨)。
+// 回傳: [{text, sku, name, removed}] 給呼叫端報告
+function applyRemarkExclusions() {
+  const excl = _parseExcludedFromRemark(state.kocaRemark || "");
+  if (!excl.length) return [];
+  const done = [];
+  for (const ex of excl) {
+    const toks = _nameTokens(ex.name);
+    if (!toks.length) { done.push({ ...ex, removed: 0, why: "名稱無法解析" }); continue; }
+    // 每個關鍵詞都要是品項名稱(正規化後)的子字串
+    const hits = (state.items || []).filter(it => {
+      if (!it || it.essential || it.unmapped) return false;
+      if ((it.expected || 0) <= 0 && (it.packed || 0) <= 0) return false;
+      const n = normalizeProdName((it.name || "") + " " + (it.sku || ""));
+      return toks.every(t => n.includes(t));
+    });
+    if (hits.length !== 1) {
+      done.push({ ...ex, removed: 0, why: hits.length === 0 ? "清單裡找不到對應品項" : `對到 ${hits.length} 項, 不敢自動刪` });
+      continue;
+    }
+    const it = hits[0];
+    const cut = ex.qty != null ? Math.min(ex.qty, it.expected || 0) : (it.expected || 0);
+    if (cut <= 0) { done.push({ ...ex, removed: 0, why: "清單上本來就沒有" }); continue; }
+    it.expected = Math.max(0, (it.expected || 0) - cut);
+    it.packed = Math.max(0, Math.min(it.packed || 0, it.expected));
+    // 黃框(當前訂單)也要同步扣掉, 否則出貨紀錄還是會記成有出
+    if (state.activeParcel && state.activeParcel.items) {
+      const cur = state.activeParcel.items[it.sku] || 0;
+      const left = Math.max(0, Math.min(cur, it.expected));
+      if (left > 0) state.activeParcel.items[it.sku] = left;
+      else delete state.activeParcel.items[it.sku];
+    }
+    it._excludedByRemark = (it._excludedByRemark || 0) + cut;   // 留痕: 這項是依備註扣掉的
+    // ⚠ 備註說要扣 N 個, 但清單上只有 cut 個 —— 數字不符一定要講出來, 不能扣完就說「搞定」
+    const short = (ex.qty != null && cut < ex.qty) ? (ex.qty - cut) : 0;
+    done.push({ ...ex, removed: cut, short: short, sku: it.sku, name: it.name });
+  }
+  // expected 和 packed 都歸零的品項直接從清單移除 (本次根本不出這個)
+  state.items = (state.items || []).filter(it => !(it._excludedByRemark && (it.expected || 0) <= 0 && (it.packed || 0) <= 0));
+  return done;
+}
+
 // 📝 從訂單備註裡抓出「本次不含 OOO × N」。
 // 官網缺件時會自動寫這種備註, 例:「缺件補寄批次 #1:本次不含 JOY LITE 收納包 × 1,另單免費補寄」
-// ⚠ 只做「抓出來給人看」, 不自動改數量 —— 這是自由文字, 解析錯會變成少出貨(更難發現)。
-//   由同仁看著提示自己移除, 比我猜錯安全。
+// ⚠ 這是自由文字, 解析錯會變成少出貨(很難發現), 所以只在「完全有把握」時才自動扣:
+//   關鍵詞全部對得上、而且只對到 1 項 → 自動扣。對不到或對到多項 → 一律不動, 改成紅字叫同仁自己核對。
+//   扣的數量跟備註寫的對不上時也要講出來(short), 絕不可以扣完就顯示「✓ 搞定」。
 function _parseExcludedFromRemark(remark) {
   const s = String(remark || "");
   if (!s) return [];
@@ -6973,7 +7034,22 @@ function buildListFromKocaOrder(o, gate) {
     codNote + remarkNote,
     (unmapped.length > 0 || state.kocaRemark) ? "err" : "ok");
 
-  _prefillKocaActiveParcel(o); saveState(); // 官網: 商品直接「已刷」進黃框(當前訂單), 同仁再刷包裝 + 手動完成此筆
+  _prefillKocaActiveParcel(o); // 官網: 商品直接「已刷」進黃框(當前訂單), 同仁再刷包裝 + 手動完成此筆
+  // 📝 依訂單備註「本次不含 OOO × N」自動扣掉 —— 要在 prefill 之後做, 連黃框一起扣乾淨
+  const _exApplied = applyRemarkExclusions();
+  state.kocaRemarkApplied = _exApplied;   // 橫幅要照「實際結果」顯示, 不可以自己再猜一次
+  saveState();
+  if (_exApplied.length) {
+    const okList = _exApplied.filter(x => x.removed > 0);
+    const noList = _exApplied.filter(x => x.removed <= 0);
+    if (okList.length) {
+      setTimeout(() => showToast(`📝 已依訂單備註扣掉:${okList.map(x => `${x.name}×${x.removed}`).join("、")}`, 8000), 700);
+    }
+    if (noList.length) {
+      // 自動對不到 → 一定要講, 不能默默跳過, 否則同仁以為系統處理好了
+      setTimeout(() => showToast(`⚠ 備註說「本次不含 ${noList.map(x => x.text).join("、")}」但系統${noList[0].why},請自己確認清單`, 10000), 1500);
+    }
+  }
   showToast(`✅ 官網訂單 ${o.orderId} 已建立清單`);
   SOUND.parcelFinish();
   if (window.__homeOverride) window.__homeOverride = false; // ★ 跟其他建單入口一致: 建完直接切進撿貨頁, 不要停在匯入頁
@@ -10913,8 +10989,11 @@ function findShippedByCode(code) {
   const all = allHistory(); // 本機+雲端, 已新→舊排序
   for (const e of all) {
     if (state.continuationOf && e.id === state.continuationOf) continue; // 正在追加的原單: 還沒刪只是暫留, 不算「已出過」
-    if (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound") continue; // 退貨/補寄/入倉不算「出過這張」(比照 kocaShippedMap, 避免噪音警告)
-    if (e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
+    // 退貨/補寄/入倉: 同一張【官網訂單編號】本來就會再出現一次(補寄就是針對原單再寄), 比對官網單號會變成噪音警告 → 跳過。
+    // ⚠ 但【實體物流單號】不一樣: 一張黑貓/超商標籤只能用一次, 補寄的標籤被重刷同樣是重複出貨(等於多付一次運費+商品),
+    //   所以單號比對一定要留著查。以前整筆 continue 把這個洞一起放掉了。
+    const _skipOrderNo = (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound");
+    if (!_skipOrderNo && e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
     const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c
       || (pp.trackingNo && String(pp.trackingNo).toUpperCase() === c)); // 物流單號(黑貓/超商)也算: 刷標籤條碼一樣要擋得住過刷
     if (p) return { entry: e, matchType: "寄件單號" };
@@ -11758,8 +11837,21 @@ function renderKocaRemarkBanner() {
                 border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
       <div style="font-weight:700;">📝 這張官網訂單有備註 — 出貨前先看</div>
       <div style="margin-top:4px; color:var(--text);">${escapeHtml(rk)}</div>
-      ${excl.length ? `<div style="margin-top:6px; font-weight:700;">⚠ 本次不含:${escapeHtml(excl.map(x => x.text).join("、"))}<br>
-        <span style="font-weight:400;">清單上如果有這些, 請用「−」減掉再出貨(它會另外開補寄單寄)。</span></div>` : ""}
+      ${excl.length ? (() => {
+        // ⚠ 這裡一定要用 applyRemarkExclusions() 的「實際結果」, 不可以自己再猜一次。
+        //   猜的版本會把「清單裡本來就沒這項」誤判成「已經扣掉了」→ 橫幅寫「✓ 不用動手」,
+        //   但其實系統什麼都沒做, 同仁就不會去確認。寫錯比不寫更糟。
+        const applied = Array.isArray(state.kocaRemarkApplied) ? state.kocaRemarkApplied : null;
+        const head = `<div style="margin-top:6px; font-weight:700;">⚠ 本次不含:${escapeHtml(excl.map(x => x.text).join("、"))}</div>`;
+        if (!applied) return head + `<div style="margin-top:4px; font-weight:700;">❗ 清單上如果有這些, 請用「−」減掉再出貨</div>`;
+        const ok = applied.filter(x => x.removed > 0 && !x.short);
+        const partial = applied.filter(x => x.removed > 0 && x.short);   // 扣了, 但數量跟備註對不上
+        const bad = applied.filter(x => x.removed <= 0);
+        return head
+          + (ok.length ? `<div style="margin-top:4px; color:var(--success); font-weight:700;">✓ 已自動扣掉:${escapeHtml(ok.map(x => `${x.name}×${x.removed}`).join("、"))}(會另外開補寄單寄)</div>` : "")
+          + (partial.length ? `<div style="margin-top:4px; font-weight:700;">❗ 數量對不上:${escapeHtml(partial.map(x => `備註說不含 ${x.name}×${x.qty}, 但清單上只有 ${x.removed} 個(已全部扣掉)`).join("、"))} —— 請自己再核對一次</div>` : "")
+          + (bad.length ? `<div style="margin-top:4px; font-weight:700;">❗ ${escapeHtml(bad.map(x => `${x.text}:${x.why}`).join("、"))} —— 請自己核對清單</div>` : "");
+      })() : ""}
     </div>`;
 }
 function renderActiveParcel() {
