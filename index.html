@@ -1767,6 +1767,9 @@ footer.summary-bar {
   <div class="panel" id="tab-content-history" hidden>
     <h2>📜 出貨紀錄</h2>
 
+    <!-- 🌐 官網回寫失敗的常駐警告 (不是 toast 閃一下, 貨出了但官網停在未出貨一定要看得到) -->
+    <div id="fulfill-pending-banner" hidden></div>
+
     <input type="file" id="history-merge-file" accept=".csv,.txt" style="display: none;">
 
     <div id="history-stats" class="hint" style="background: var(--primary-light); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
@@ -3273,9 +3276,7 @@ footer.summary-bar {
         📅 <input type="date" id="erp-date" style="font-size:0.85rem; padding:3px 6px; border:1px solid var(--border,#ccc); border-radius:6px;">
       </label>
       <button class="btn outline" id="erp-date-all" style="font-size:0.72rem; padding:3px 10px;">全部日期</button>
-      <label style="font-size:0.8rem; display:flex; align-items:center; gap:5px;">
-        <input type="checkbox" id="erp-unkeyed-only" checked style="transform:scale(1.2);"> 只看未鍵入
-      </label>
+      <button class="btn outline" id="erp-show-keyed" style="font-size:0.72rem; padding:3px 10px;"></button>
       <span id="erp-progress" style="font-size:0.8rem; color:var(--text-soft); font-weight:700; margin-left:auto;"></span>
     </div>
     <div id="erp-helper-body" style="min-height:120px;"></div>
@@ -3417,7 +3418,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v7.5 · 2026-10-06";
+const APP_VERSION = "v8.2 · 2026-10-08";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -4176,12 +4177,108 @@ async function pushKocaOutbound(entry) {
 // ⚠ 這是「會改到官網訂單」的寫入操作: 官網會據此自動排程 7 天後開立電子發票。
 //   所以預設關閉 (settings.kocaFulfillEnabled), 要在 ⚙ 外部整合 手動開啟。
 //   只對「來源是官網訂單」的出貨單生效 (entry.kocaOrderId), 且補寄/退貨/入倉一律不回寫。
+// ===== 🌐 官網回寫補送佇列 =====
+// 回寫官網「已出貨」失敗時, 以前只跳一行 toast 就放掉 → 那張單在官網永遠停在「未出貨」。
+//   後果很具體:客人看官網以為沒出貨來問、官網可能重複安排出貨, 而倉庫這邊完全不知道。
+//   toast 只閃一下, 在倉庫根本沒人會看到; 而且「完成總訂單」一次結算十幾張,
+//   網路抖一下就可能好幾張一起靜默失敗。
+//   出貨紀錄上雲早就有補送佇列了(pendingCloudHistory), 這條一直沒做 —— 同樣的問題只修了一半。
+const PENDING_FULFILL_KEY = "picking_pending_koca_fulfill_v1";
+let pendingFulfill = [];          // [{id, kocaOrderId, trackingNo, carrierLabel, at, tries, lastError, fatal}]
+let _flushingFulfill = false;
+const PENDING_FULFILL_MAX = 500;
+function savePendingFulfill() {
+  try {
+    if (pendingFulfill.length) localStorage.setItem(PENDING_FULFILL_KEY, JSON.stringify(pendingFulfill));
+    else localStorage.removeItem(PENDING_FULFILL_KEY);
+  } catch (e) { console.warn("[koca-fulfill] 佇列存檔失敗", e); }
+}
+function loadPendingFulfill() {
+  try { const s = localStorage.getItem(PENDING_FULFILL_KEY); if (s) { const a = JSON.parse(s); if (Array.isArray(a)) pendingFulfill = a; } }
+  catch (e) { console.warn("[koca-fulfill] 佇列載入失敗", e); }
+}
+function _enqueueFulfill(job) {
+  if (!job || !job.kocaOrderId) return;
+  const i = pendingFulfill.findIndex(x => x && x.id === job.id);
+  if (i >= 0) pendingFulfill[i] = { ...pendingFulfill[i], ...job };
+  else pendingFulfill.push(job);
+  if (pendingFulfill.length > PENDING_FULFILL_MAX) pendingFulfill = pendingFulfill.slice(-PENDING_FULFILL_MAX);
+  savePendingFulfill();
+  renderFulfillPending();
+}
+function _dequeueFulfill(id) {
+  const before = pendingFulfill.length;
+  pendingFulfill = pendingFulfill.filter(x => x && x.id !== id);
+  if (pendingFulfill.length !== before) { savePendingFulfill(); renderFulfillPending(); }
+}
+// 這些錯誤重試幾次都不會好 —— 留在佇列裡「標記起來」給人看, 但不再自動重試(以免一直打官網)。
+//   ⚠ 不可以直接丟掉:丟掉就又變成「官網停在未出貨而沒人知道」。
+const _FULFILL_FATAL = new Set(["order_not_found", "invalid_tracking_number", "trackingNo_required"]);
+async function flushPendingFulfill(opts) {
+  opts = opts || {};
+  if (_flushingFulfill) return;
+  if (!pendingFulfill.length) return;
+  if (!settings.syncWorkerUrl || !navigator.onLine) return;
+  _flushingFulfill = true;
+  let ok = 0;
+  try {
+    for (const job of [...pendingFulfill]) {
+      if (!job) continue;
+      if (job.fatal && !opts.force) continue;          // 手動按「重試」才會再試 fatal 的
+      const e = history.find(h => h && h.id === job.id);
+      const r = await _doKocaFulfill(e || { id: job.id, kocaOrderId: job.kocaOrderId, parcels: [] }, job);
+      if (r.done) { _dequeueFulfill(job.id); ok++; }
+      else {
+        job.tries = (job.tries || 0) + 1;
+        job.lastError = r.error || "unknown";
+        job.fatal = _FULFILL_FATAL.has(r.error);
+        _enqueueFulfill(job);
+      }
+    }
+  } finally { _flushingFulfill = false; }
+  if (ok > 0) showToast(`🌐 已補回寫官網 ${ok} 張訂單`);
+  renderFulfillPending();
+}
+// 畫面上要看得到「還有幾張沒回寫」—— 這是 toast 閃一下的相反:常駐、點得進去、可以手動重試。
+function renderFulfillPending() {
+  const el = document.getElementById("fulfill-pending-banner");
+  if (!el) return;
+  const n = pendingFulfill.length;
+  if (!n) { el.hidden = true; el.innerHTML = ""; return; }
+  const fatal = pendingFulfill.filter(x => x && x.fatal);
+  el.hidden = false;
+  el.innerHTML = `<div style="border:2px solid var(--danger); background:var(--danger-bg); color:var(--danger);
+      border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
+    <div style="font-weight:800;">⚠ 有 ${n} 張官網訂單「還沒回寫成已出貨」</div>
+    <div style="margin-top:3px; color:var(--text);">貨已經出了, 但官網那邊還停在未出貨 —— 客人看了可能以為沒寄。</div>
+    ${fatal.length ? `<div style="margin-top:4px; font-weight:700;">其中 ${fatal.length} 張需要人工處理:${escapeHtml(fatal.slice(0,5).map(x => `${x.kocaOrderId}(${x.lastError})`).join("、"))}</div>` : ""}
+    <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn sm" id="fulfill-retry-btn" style="background:var(--danger); color:#fff;">🔄 立刻重試</button>
+      <button class="btn outline sm" id="fulfill-list-btn">查看清單</button>
+    </div>
+  </div>`;
+}
 async function pushKocaFulfill(entry) {
   if (!entry || !settings.kocaFulfillEnabled) return;
   if (!entry.kocaOrderId) return;                                  // 不是從官網訂單建的單
   if (entry.kocaFulfilled) return;                                 // 已回寫過, 不重複
   if (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound") return;
   if (!settings.syncWorkerUrl) return;
+  const r = await _doKocaFulfill(entry);
+  if (!r.done) {
+    // ❗ 失敗不可以就這樣算了 —— 進補送佇列, 開機/網路恢復/開出貨紀錄時會自動再試。
+    _enqueueFulfill({
+      id: entry.id, kocaOrderId: entry.kocaOrderId,
+      at: new Date().toISOString(), tries: 1,
+      lastError: r.error || "unknown", fatal: _FULFILL_FATAL.has(r.error),
+    });
+  }
+}
+// 真正執行回寫。回傳 { done:true } 或 { done:false, error:"…" }。
+// 補送佇列和當下推送共用這一支, 保證兩條路規則完全一致。
+async function _doKocaFulfill(entry) {
+  if (!entry || !entry.kocaOrderId) return { done: false, error: "no_order_id" };
+  if (!settings.syncWorkerUrl) return { done: false, error: "no_worker_url" };
 
   // 物流單號: 從已完成的包裹裡挑「真的是物流業者的單號」的那個。
   // 官網訂單編號 (KOCA…) 本身不是物流單號, 不能當 trackingNo 送回去。
@@ -4217,21 +4314,25 @@ async function pushKocaFulfill(entry) {
       entry.kocaFulfilledAt = new Date().toISOString();
       try { saveHistory(); } catch (e) {}
       setTimeout(() => showToast(`🌐 官網訂單已標記出貨 (${entry.kocaOrderId})`), 1000);
-    } else if (data.error === "already_fulfilled") {
+      return { done: true };
+    }
+    if (data.error === "already_fulfilled") {
       entry.kocaFulfilled = true;   // 官網早就標了 (可能人工出過), 視為完成, 不要一直重試
       try { saveHistory(); } catch (e) {}
       console.warn("[koca-fulfill] already fulfilled", data);
-    } else {
-      const msg = data.error === "trackingNo_required" ? "官網要求宅配單號"
-        : data.error === "invalid_tracking_number" ? "官網說宅配單號格式錯誤"
-        : data.error === "order_not_ready" ? `官網說此單不可出貨 (${data.status || "?"})`
-        : data.error === "order_not_found" ? "官網查無此訂單"
-        : (data.error || res.status);
-      setTimeout(() => showToast(`⚠ 官網回寫失敗: ${msg}`), 1000);
-      console.warn("[koca-fulfill] failed", data);
+      return { done: true };
     }
+    const msg = data.error === "trackingNo_required" ? "官網要求宅配單號"
+      : data.error === "invalid_tracking_number" ? "官網說宅配單號格式錯誤"
+      : data.error === "order_not_ready" ? `官網說此單不可出貨 (${data.status || "?"})`
+      : data.error === "order_not_found" ? "官網查無此訂單"
+      : (data.error || res.status);
+    setTimeout(() => showToast(`⚠ 官網回寫失敗: ${msg}(已排入重試)`), 1000);
+    console.warn("[koca-fulfill] failed", data);
+    return { done: false, error: String(data.error || res.status || "http_error") };
   } catch (e) {
-    setTimeout(() => showToast(`⚠ 官網回寫錯誤: ${(e.message || e)}`.slice(0, 50)), 1000);
+    console.warn("[koca-fulfill] network error", e);
+    return { done: false, error: "network" };   // 斷網/逾時 → 一定要重試
   }
 }
 
@@ -5500,6 +5601,37 @@ function appendHistory() {
   return entry;
 }
 
+// 🔴 一張官網單結算時清單是空的(商品被刪光 / 從來沒帶進來) → 照樣留一筆紀錄。
+//   出貨紀錄是「不可遺失」等級的資料, 而「一張訂單曾經被拉進來包」本身就是必須留下的事實。
+//   以前這種單是直接丟掉的, 事後完全查不到 —— 連它存在過都不知道 (Kyle 回報:訂單完全遺失資料, 怎麼找都找不到)。
+//   這筆紀錄不扣庫存、不回寫官網(本來就沒商品可扣), 只負責「讓它查得到」。
+function _recordEmptyKocaOrder(orderId, meta) {
+  if (!orderId) return null;
+  const entry = {
+    id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+    completedAt: new Date().toISOString(),
+    completedBy: (settings.myName || "").trim() || "(未命名)",
+    platform: "koca",
+    kocaOrderId: orderId,
+    items: [],
+    parcels: (meta && meta.trackingNo) ? [{ id: String(meta.trackingNo), items: {}, _emptyAtSettle: true }] : [],
+    appendLevel: 1, continuationOf: null, priorKocaPushed: null,
+    orderType: ORDER_TYPE.NORMAL,
+    replacementInfo: null, returnInfo: null, inboundInfo: null,
+    emptyAtSettle: true,                       // 🔎 查詢/統計要認得這是「空清單」而不是正常出貨
+    note: "⚠ 結算時這張單的商品清單是空的 — 沒有扣庫存、沒有回寫官網, 請人工確認這張單到底出了沒",
+    recipientName: (meta && meta.recipient) || "",
+    trackingNo: (meta && meta.trackingNo) || "",
+    summary: { totalSku: 0, completedSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 },
+  };
+  history.unshift(entry);
+  if (!saveHistory()) { history.shift(); console.warn("[history] 空單留痕存檔失敗", orderId); return null; }
+  // 也推上雲端 —— 不然只有這台看得到, 換台查就又變成「找不到」
+  try { pushHistoryToCloud(entry); } catch (e) { console.warn("[history] 空單留痕上雲失敗", e); }
+  console.warn("[history] 空清單官網單, 已留痕:", orderId);
+  return entry;
+}
+
 // 安全網：確保 specMap 有所有 DEFAULT_SPEC_MAP 的預設項目
 function ensureSpecMapDefaults() {
   let changed = false;
@@ -5882,6 +6014,28 @@ function getShippedBySkuMap() {
     }
   }
   return shipped;
+}
+// 🔧 把刷錯的商品從「已完成的箱子」裡拿出來 (最後完成的那箱先拿, 因為剛剛刷錯的多半在最後一箱)。
+//   回傳 { removed, boxes } —— 實際拿掉幾件、動到哪幾箱。
+//   空掉的箱子**不刪**: 箱號就是寄件單號, 刪了那張單會變成沒出過, 下次刷同一個號碼又會被當成新的一箱。
+//   ⚠ 只能單機用。共同包貨時箱子以伺服器為準(見 applyRoomSync: serverParcels 會蓋掉本機),
+//     偷偷改本機這份下次同步就被還原, 等於「改了又自己變回來」—— 呼叫端必須先擋掉房間模式。
+function _pullFromCompletedParcels(sku, need) {
+  const boxes = [];
+  let left = Math.max(0, Number(need) || 0);
+  const parcels = Array.isArray(state.completedParcels) ? state.completedParcels : [];
+  for (let i = parcels.length - 1; i >= 0 && left > 0; i--) {
+    const p = parcels[i];
+    if (!p || !p.items || typeof p.items !== "object") continue;
+    const have = parseFloat(p.items[sku]);
+    if (isNaN(have) || have <= 0) continue;
+    const take = Math.min(have, left);
+    const rest = have - take;
+    if (rest > 0) p.items[sku] = rest; else delete p.items[sku];
+    left -= take;
+    boxes.push(`${p.id}(−${take})`);
+  }
+  return { removed: Math.max(0, (Number(need) || 0) - left), boxes };
 }
 // ===== 📍 儲位 (WMS 階段一) =====
 // 商品放在哪個櫃位。只存在商品庫 (library[].location) → 會跟著「主檔連動」自動同步到其他裝置, 不必另外做同步。
@@ -6984,8 +7138,40 @@ function buildListFromKocaOrder(o, gate) {
   const psel = document.getElementById("platform-select");
   if (psel) psel.value = "koca";
 
-  // 官方批次多單: 已有清單 + 目前是官方批次 → 收好目前這張, 直接開新的一張撿貨頁 (不走合併 modal)
-  if (state.items.length > 0 && kocaBatchActive() && currentPlatform === "koca") {
+  // 🔒 重新拉「目前正在包的這一張」= 想重來一次, 不是新的一張單。
+  //   以前照樣走下面的批次分支, 結果: _suspendActiveKocaOrder() 把目前這張存進 suspended[這個單號],
+  //   接著又把 state.kocaOrderId 設成同一個單號 → 批次裡同一張單變成兩份(一份躺在 suspended, 一份是當前)。
+  //   結算時當前這份會蓋掉 suspended 那份 → 已經按過「完成此筆」的箱子**整箱從出貨紀錄裡消失**。
+  //   貨實際出去了卻沒記到、庫存也沒扣, 而且畫面上完全看不出來。改成走跟「回刷同一個單號」一樣的路。
+  if (o.orderId && state.kocaOrderId === o.orderId && state.items.length > 0) {
+    _saveKocaOrderSnapshot(o.orderId, items);   // 先更新原始內容, 重新帶入才拿得到最新的
+    const _prods = (state.items || []).filter(it => it && !it.essential);
+    const _packedNow = _prods.reduce((s, it) => s + (it.packed || 0), 0);
+    const _boxes = (state.completedParcels || []).length;
+    if (!confirm(
+      `🔁 你已經在這張單了(目前已裝 ${_packedNow} 件${_boxes ? `、另有 ${_boxes} 箱已完成` : ""})。\n\n` +
+      `要照官網訂單重新帶入商品、從頭來一次嗎?\n\n` +
+      `【確定】= 清掉目前刷的, 照官網訂單重新帶入(已完成的箱子不會動)\n【取消】= 保持現狀`)) {
+      setKocaOrderStatus(`已保持現狀(訂單 ${escapeHtml(o.orderId)} 本來就在包了)。`, "ok");
+      return true;
+    }
+    reloadKocaOrderItems(o.orderId);
+    state.kocaRemark = (o && o.remark) ? String(o.remark) : "";
+    state.kocaRemarkApplied = applyRemarkExclusions();
+    saveState();
+    render();
+    setKocaOrderStatus(`🔁 已重新帶入訂單 <strong>${escapeHtml(o.orderId)}</strong> 的商品(已完成的箱子沒有動)。`, "ok");
+    return true;
+  }
+
+  // 官方批次多單: 目前是官方批次 → 收好目前這張, 直接開新的一張撿貨頁 (不走合併 modal)
+  // 🔴 這裡以前多一個條件 `state.items.length > 0`, 造成**整張訂單憑空消失**:
+  //    同仁把某張官網單的商品全部刪掉(Kyle 回報過的操作)→ 清單變空 →
+  //    再刷下一張時這個條件不成立, 就掉到最底下的 else 走 `_startKocaBatch()`,
+  //    而那個函式是直接 `state.kocaBatch = {...}` **整包換掉** → 前一張單連同它的批次紀錄一起被抹掉。
+  //    結果:沒有出貨紀錄、沒有警告、「完成總訂單」還顯示「結算 1 張」一切正常 —— 事後完全查不到那張單。
+  //    判斷「現在有沒有在包官網批次」要看 kocaBatchActive(), 不是看清單裡還剩幾項。
+  if (kocaBatchActive() && currentPlatform === "koca") {
     _suspendActiveKocaOrder();          // 目前這張快照進批次
     _addKocaBatchOrder(o, gate);        // 新的一張加進批次
     state.items = items;
@@ -7224,6 +7410,11 @@ function _prefillKocaActiveParcel(o) {
   startParcel(String(parcelId));
   const _tn = (o && o.shipping && o.shipping.trackingNo) || "";
   if (state.activeParcel && _tn && String(_tn) !== String(parcelId)) state.activeParcel.trackingNo = String(_tn);
+  // 🧾 綠界物流訂單編號: 出貨當下就記進這箱。
+  //   官網的寄件代碼只會留**最新一張**, 寄件單重開之後舊代碼就查不到了 ——
+  //   我們自己記的這份才是唯一追得回來的線索。出貨紀錄的搜尋已經含 ecpayNo。
+  const _ec = (o && (o.ecpayNo || (o.shipping && o.shipping.ecpayNo))) || "";
+  if (state.activeParcel && _ec) state.activeParcel.ecpayNo = String(_ec);
   for (const it of (state.items || [])) {
     if (it.essential) continue;   // 包材不預填 (留給同仁刷)
     if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
@@ -7242,6 +7433,7 @@ function _kocaOrderMeta(o, gate) {
     statusLabel: (o && o.statusLabel) || "",
     cod: !!(gate && gate.cod),
     trackingNo: (o && o.shipping && o.shipping.trackingNo) || "",  // 宅配/超商的物流單號: 回刷時刷標籤條碼也要對得到
+    ecpayNo: (o && (o.ecpayNo || (o.shipping && o.shipping.ecpayNo))) || "",  // 綠界物流訂單編號: 寄件單重開後唯一追得回來的線索
   };
 }
 function _startKocaBatch(o, gate) {
@@ -7295,10 +7487,31 @@ function findKocaBatchOrderId(scanned) {
   if (String(state.kocaOrderId || "").toUpperCase() === up) return state.kocaOrderId;
   const byId = state.kocaBatch.orderList.find(id => String(id).toUpperCase() === up);
   if (byId) return byId;
-  return state.kocaBatch.orderList.find(id => {
+  const byTrack = state.kocaBatch.orderList.find(id => {
     const m = state.kocaBatch.meta && state.kocaBatch.meta[id];
     return m && m.trackingNo && String(m.trackingNo).toUpperCase() === up;
-  }) || null;
+  });
+  if (byTrack) return byTrack;
+  // 🔎 超商標籤的條碼/QR 不等於寄件代碼, 而是把它「包在裡面」:
+  //   ・7-11  刷到 7X1001G395890506, 真正的代碼是 G3958905(夾在中間)
+  //   ・全家  掃 QR 得到 1635154195550594165BC15
+  //           = 16351541955(寄件代碼) + 50594165(廠商編號/綠界物流訂單編號) + BC15
+  //   以前這裡只做「完全相等」比對 → 同仁刷標籤上的條碼, 系統認不出是哪張單, 只能用眼睛抄號碼。
+  //   改成:掃到的字串裡有沒有包含某張單的寄件代碼或綠界編號。
+  //   ⚠ 一定要「剛好只對到一張」。對到多張寧可回 null 讓它走原本的流程, 也不要挑錯單。
+  const squash = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const sc = squash(scanned);
+  if (sc.length < 6) return null;
+  const hits = [];
+  for (const id of state.kocaBatch.orderList) {
+    const m = (state.kocaBatch.meta && state.kocaBatch.meta[id]) || {};
+    for (const val of [m.trackingNo, m.ecpayNo, id]) {
+      const v = squash(val);
+      if (v.length < 6) continue;
+      if (sc.includes(v) || v.includes(sc)) { hits.push(id); break; }
+    }
+  }
+  return hits.length === 1 ? hits[0] : null;
 }
 // 一張官網單「刷齊了嗎」: 非包材品項全部 packed>=expected 或 已標缺貨
 function isKocaOrderItemsDone(items) {
@@ -7338,6 +7551,21 @@ function reloadKocaOrderItems(orderId) {
   // 保留包材(自由計數, 同仁可能已經刷了), 商品部分整批換回原始的
   const keepEssential = (state.items || []).filter(it => it && it.essential);
   state.items = snap.map(it => ({ ...it, packed: 0 })).concat(keepEssential);
+  // ⚠ 這張單如果已經有「完成的箱子」, 那些貨是真的裝進箱子了, packed 必須從那個量起算。
+  //   以前一律從 0 重算 → 紀錄變成「2 箱, 但商品只記 1 份」→ 出去 2 份、庫存只扣 1 份, 畫面上完全看不出來。
+  const _floor = getShippedBySkuMap();
+  for (const it of state.items) {
+    if (it.essential) continue;
+    it.packed = _floor[it.sku] || 0;
+  }
+  // 箱子裡有、但這張官網單上沒有的 SKU(例如刷錯加進去又按了完成此筆) → 補一列進來。
+  //   不補的話它只存在於箱子裡, 出貨紀錄的商品欄少算它, 庫存就不會扣到 —— 一樣是無聲的錯帳。
+  for (const sku in _floor) {
+    if (!_floor[sku] || state.items.some(it => it.sku === sku)) continue;
+    const p = library.find(x => x.sku === sku);
+    state.items.push({ sku, name: (p && p.name) || sku, category: (p && p.category) || "其他",
+                       expected: 0, packed: _floor[sku] });
+  }
   // 黃框重開, 商品照官網單預填 (跟第一次建單時一致), 包材維持空白讓同仁刷
   const meta = (state.kocaBatch && state.kocaBatch.meta && state.kocaBatch.meta[orderId]) || {};
   state.activeParcel = { id: orderId, items: {}, startedAt: new Date().toISOString() };
@@ -7346,7 +7574,7 @@ function reloadKocaOrderItems(orderId) {
     if (it.essential || it.unmapped) continue;
     const q = it.expected || 0;
     if (q <= 0) continue;
-    it.packed = q;
+    it.packed = (it.packed || 0) + q;   // 已完成箱子的量 + 這次重新帶入的量
     state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + q;
   }
   state.scanMode = true;
@@ -7456,7 +7684,7 @@ async function completeKocaBatch() {
   const batch = state.kocaBatch;
   const savedState = state;
   const savedDate = state.loadedDate;
-  let settled = 0; const failedIds = [];
+  let settled = 0; const failedIds = []; const emptyIds = [];
   currentPlatform = "koca";
   for (const id of ids) {
     const snap = batch.suspended[id];
@@ -7477,7 +7705,13 @@ async function completeKocaBatch() {
       settled++;
       delete batch.suspended[id];      // 這張已安全落帳 → 從批次移除, 避免重按時重複落帳
     } else if (!entry && _lastHistorySaveOk) {
-      delete batch.suspended[id];      // 空清單(無商品可記, 非失敗) → 移除, 避免整批卡住結不掉
+      // 🔴 空清單(清單裡一項商品都沒有)。以前是直接 delete 丟掉 —— 那張單就**從此不存在**,
+      //    出貨紀錄查不到、雲端查不到、連「它曾經被拉進來過」都沒有痕跡, 事後完全無從追查。
+      //    改成:照樣留一筆紀錄下來, 標記「清單是空的」, 讓它在出貨紀錄裡看得到。
+      //    不扣庫存、不回寫官網(本來就沒東西可扣), 純粹是不讓一張訂單無聲消失。
+      _recordEmptyKocaOrder(id, (batch.meta && batch.meta[id]) || {});
+      emptyIds.push(id);
+      delete batch.suspended[id];      // 已經留下痕跡了才移除, 避免整批卡住結不掉
     } else {
       failedIds.push(id);              // 真的存檔失敗 → 留在批次裡, 不清空 (資料安全)
     }
@@ -7514,6 +7748,16 @@ async function completeKocaBatch() {
   render();
   SOUND.shipDone();
   showToast(`✓ 總訂單完成:${settled} 張各自已結算並存紀錄`);
+  // 🔴 有空清單的單 → 一定要當場講。這種單沒扣庫存也沒回寫官網, 不講的話沒有人會發現。
+  if (emptyIds.length) {
+    SOUND.scanError();
+    setTimeout(() => alert(
+      `⚠ 有 ${emptyIds.length} 張官網單結算時「清單是空的」\n\n` +
+      emptyIds.join("\n") + "\n\n" +
+      `這幾張**沒有扣庫存、也沒有回寫官網**。\n` +
+      `已經在出貨紀錄裡留了一筆標記(不是正常出貨), 可以查得到。\n\n` +
+      `請確認這幾張到底出了沒 —— 商品被刪光、或根本沒帶進來, 都會變成這樣。`), 400);
+  }
   backupSoon("完成總訂單");
 }
 
@@ -9367,6 +9611,14 @@ function saveErpKeyed() { try { localStorage.setItem(ERP_KEYED_KEY, JSON.stringi
 const ERP_LINE_KEY = "picking_erp_line_done_v1";
 let _erpLineDone = (() => { try { const s = localStorage.getItem(ERP_LINE_KEY); const a = s ? JSON.parse(s) : []; return new Set(Array.isArray(a) ? a : []); } catch (e) { return new Set(); } })();
 function saveErpLineDone() { try { localStorage.setItem(ERP_LINE_KEY, JSON.stringify([..._erpLineDone])); } catch (e) {} }
+// 清掉某張卡的逐項打勾 (卡鍵完了 / 內容換了)。打勾是 "卡id::SKU" 的形式。
+function _erpClearLineTicks(cardId) {
+  if (!cardId) return;
+  const pre = String(cardId) + "::";
+  let changed = false;
+  for (const k of [..._erpLineDone]) if (k.startsWith(pre)) { _erpLineDone.delete(k); changed = true; }
+  if (changed) saveErpLineDone();
+}
 let _erpList = [];
 let _erpIdx = 0;
 function erpCopy(text) {
@@ -9379,8 +9631,11 @@ function erpCopyFallback(t, done) {
   try { const ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); }
   catch (e) { showToast("⚠ 複製失敗, 請長按手動複製"); }
 }
+// 鍵單畫面預設只看「還沒鍵入」的 —— 已經鍵過的翻過去只是浪費時間 (Kyle: 把「只看未鍵入」刪掉)。
+// 要回頭核對已鍵過的, 按上面那顆「查看已鍵入的 N 張」臨時切換, 看完會自己切回來。
+let _erpShowKeyed = false;
 function buildErpList() {
-  const unkeyedOnly = document.getElementById("erp-unkeyed-only") && document.getElementById("erp-unkeyed-only").checked;
+  const unkeyedOnly = !_erpShowKeyed;
   const dateEl = document.getElementById("erp-date");
   const dateVal = dateEl && dateEl.value ? dateEl.value : ""; // YYYY-MM-DD (本地日期), 空=全部
   let list = allHistory().filter(e => e.orderType !== "inbound"); // 入倉不需鍵 ERP 出貨
@@ -9403,6 +9658,17 @@ function buildErpList() {
 function _erpDayOf(e) {
   const d = new Date(e.completedAt);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// 🔑 合併卡的 id 一定要跟著「它合併了哪幾張單」一起變。
+//   以前固定用 "km::日期", 結果:早上 3 張併成一卡 → 打勾 → 標示已鍵入 →
+//   下午又出 2 張, 併出來的新卡 id 還是同一個 "km::日期" → **舊的打勾原封不動套上去**
+//   → 新卡一打開品項就是 ✓ 打勾狀態, 同仁看到打勾就跳過 → 那 2 張永遠沒鍵進正航, 正航少記 2 台。
+//   畫面上完全看不出異常, 這是最危險的那種錯。
+function _erpSig(ents) {
+  const s = (ents || []).map(e => e && e.id).filter(Boolean).sort().join(",");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }
 function _erpMergeGroups(pred, keyOf, idOf, labelOf, orderType) {
   const groups = new Map();
@@ -9432,7 +9698,7 @@ function _erpMergeGroups(pred, keyOf, idOf, labelOf, orderType) {
     const latest = ents.reduce((a, b) => String(a.completedAt) > String(b.completedAt) ? a : b);
     const who = [...new Set(ents.map(x => x.completedBy).filter(Boolean))].join("、");
     const merged = {
-      id: idOf(k),
+      id: idOf(k, ents),
       _merged: true, _mergedIds: ents.map(x => x.id), _mergedCount: ents.length,
       _mergedLabel: labelOf(k, ents),
       completedAt: latest.completedAt, completedBy: who,
@@ -9450,7 +9716,7 @@ function _erpMergeKoca() {
   _erpMergeGroups(
     e => e.platform === "koca" && e.orderType !== "return" && e.orderType !== "replacement" && !e._merged,
     e => _erpDayOf(e),
-    day => "km::" + day,          // 沿用 v3.1 的 id 格式, 既有打勾進度不會消失
+    (day, ents) => "km::" + day + "#" + _erpSig(ents),   // 內容一變 id 就變 → 打勾不會被下一批沿用
     () => "🌐 官方",
     "normal"
   );
@@ -9466,7 +9732,7 @@ function _erpMergeNormalByPlatform() {
       && e.orderType !== "return" && e.orderType !== "replacement" && e.orderType !== "inbound"
       && !e._merged,
     e => (e.platform || "unknown") + "::" + _erpDayOf(e),
-    k => "nm::" + k,
+    (k, ents) => "nm::" + k + "#" + _erpSig(ents),
     (k, ents) => {
       const p = PLATFORMS[ents[0].platform] || {};
       return (p.emoji || "📦") + " " + (p.label || ents[0].platform || "未指定");
@@ -9479,13 +9745,30 @@ function _erpMergeReplacements() {
   _erpMergeGroups(
     e => e.orderType === "replacement" && !e._merged,
     e => (e.platform || "unknown") + "::" + _erpDayOf(e),
-    k => "rm::" + k,
+    (k, ents) => "rm::" + k + "#" + _erpSig(ents),
     (k, ents) => "📮 " + ((PLATFORMS[ents[0].platform] && PLATFORMS[ents[0].platform].label) || ents[0].platform || "") + " 補寄",
     "replacement"
   );
 }
 // 已鍵判斷: 合併卡 = 底下每一筆都鍵了才算鍵 (鍵入狀態永遠記在「真正的紀錄 id」上, 不記在合併卡上)
 function _erpIsKeyed(e) { return !!e && (e._merged ? e._mergedIds.every(id => _erpKeyedIds.has(id)) : _erpKeyedIds.has(e.id)); }
+// 「查看已鍵入的 N 張」按鈕。N 要照目前的日期範圍算, 不是全部歷史。
+function _renderErpShowKeyedBtn() {
+  const btn = document.getElementById("erp-show-keyed");
+  if (!btn) return;
+  if (_erpShowKeyed) { btn.textContent = "↩ 回到待鍵入"; btn.style.borderColor = "var(--primary)"; btn.style.color = "var(--primary)"; return; }
+  const dateEl = document.getElementById("erp-date");
+  const dateVal = dateEl && dateEl.value ? dateEl.value : "";
+  let n = 0;
+  for (const e of allHistory()) {
+    if (!e || e.orderType === "inbound" || !_erpKeyedIds.has(e.id)) continue;
+    if (dateVal && _erpDayOf(e) !== dateVal) continue;
+    n++;
+  }
+  btn.textContent = n ? `✓ 查看已鍵入的 ${n} 張` : "";
+  btn.style.display = n ? "" : "none";
+  btn.style.borderColor = ""; btn.style.color = "";
+}
 function erpRow(label, value, suffixHtml) {
   return `<div class="erp-field"><span class="erp-label">${label}</span><span class="erp-value">${escapeHtml(String(value))}${suffixHtml || ""}</span></div>`;
 }
@@ -9493,7 +9776,14 @@ function renderErpHelper() {
   const body = document.getElementById("erp-helper-body");
   const prog = document.getElementById("erp-progress");
   if (!body) return;
-  if (_erpList.length === 0) { body.innerHTML = '<div style="text-align:center; color:var(--text-soft); padding:24px;">沒有可鍵入的紀錄 🎉</div>'; if (prog) prog.textContent = ""; return; }
+  if (_erpList.length === 0) {
+    body.innerHTML = _erpShowKeyed
+      ? '<div style="text-align:center; color:var(--text-soft); padding:24px;">這個日期沒有已鍵入的紀錄</div>'
+      : '<div style="text-align:center; color:var(--success); font-weight:700; padding:24px;">✓ 這個日期的單都鍵完了 🎉</div>';
+    if (prog) prog.textContent = "";
+    _renderErpShowKeyedBtn();   // ⚠ 這裡以前直接 return, 連「查看已鍵入的 N 張」都不見了 → 鍵完就再也回不去核對
+    return;
+  }
   if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1;
   if (_erpIdx < 0) _erpIdx = 0;
   const e = _erpList[_erpIdx];
@@ -9568,7 +9858,10 @@ function renderErpHelper() {
     });
   }
   body.innerHTML = html;
-  if (prog) prog.textContent = `${_erpIdx + 1} / ${_erpList.length} · 已鍵 ${_erpList.filter(x => _erpIsKeyed(x)).length}`;
+  if (prog) prog.textContent = _erpShowKeyed
+    ? `${_erpIdx + 1} / ${_erpList.length}(含已鍵入)`
+    : `還有 ${_erpList.length} 張要鍵 · 第 ${_erpIdx + 1} 張`;
+  _renderErpShowKeyedBtn();
   const markBtn = document.getElementById("erp-mark-keyed");
   if (markBtn) { markBtn.textContent = keyed ? "↩ 取消已鍵入" : "✓ 標示已鍵入 · 下一筆"; markBtn.style.background = keyed ? "var(--text-soft)" : "var(--success)"; }
   // 上一筆/下一筆 顯示「是哪張訂單」(通路·時間·單數·已鍵勾), 末端則灰掉提示
@@ -9625,7 +9918,9 @@ document.getElementById("erp-jump-bottom").addEventListener("click", () => {
 });
 document.getElementById("erp-prev").addEventListener("click", () => { if (_erpIdx > 0) { _erpIdx--; renderErpHelper(); } });
 document.getElementById("erp-next").addEventListener("click", () => { if (_erpIdx < _erpList.length - 1) { _erpIdx++; renderErpHelper(); } });
-document.getElementById("erp-unkeyed-only").addEventListener("change", () => { buildErpList(); _erpIdx = 0; renderErpHelper(); });
+document.getElementById("erp-show-keyed").addEventListener("click", () => {
+  _erpShowKeyed = !_erpShowKeyed; buildErpList(); _erpIdx = 0; renderErpHelper();
+});
 document.getElementById("erp-date").addEventListener("change", () => { buildErpList(); _erpIdx = 0; renderErpHelper(); });
 document.getElementById("erp-date-all").addEventListener("click", () => { document.getElementById("erp-date").value = ""; buildErpList(); _erpIdx = 0; renderErpHelper(); });
 document.getElementById("erp-mark-keyed").addEventListener("click", () => {
@@ -9633,9 +9928,13 @@ document.getElementById("erp-mark-keyed").addEventListener("click", () => {
   const ids = e._merged ? e._mergedIds : [e.id];  // 合併卡: 一次標/取消底下每一筆真實紀錄
   if (_erpIsKeyed(e)) { ids.forEach(id => _erpKeyedIds.delete(id)); saveErpKeyed(); renderErpHelper(); return; }
   ids.forEach(id => _erpKeyedIds.add(id)); saveErpKeyed();
-  const unkeyedOnly = document.getElementById("erp-unkeyed-only").checked;
-  if (unkeyedOnly) { buildErpList(); if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1; renderErpHelper(); if (_erpList.length === 0) showToast("全部鍵完了 🎉"); }
-  else { if (_erpIdx < _erpList.length - 1) _erpIdx++; renderErpHelper(); }
+  // 🧹 這張卡鍵完了, 它的逐項打勾就沒用了 → 清掉。
+  //   第二道防線:萬一哪天 id 又變成會重複的, 殘留的打勾也不會被下一張卡沿用成「看起來已經鍵過」。
+  _erpClearLineTicks(e.id);
+  buildErpList();
+  if (_erpIdx >= _erpList.length) _erpIdx = _erpList.length - 1;
+  renderErpHelper();
+  if (_erpList.length === 0) showToast("全部鍵完了 🎉");
 });
 document.getElementById("erp-helper-body").addEventListener("click", (e) => {
   const line = e.target.closest("[data-erp-line]");
@@ -9966,11 +10265,16 @@ function matchesHistorySearch(entry, q) {
   if (!q) return true;
   const haystack = [];
   haystack.push(entry.id, entry.platform, entry.completedBy);
+  // 🔎 一張單一定要能用「不只一種代號」查得到。
+  //   以前這裡漏了 kocaOrderId —— 官網單查得到純粹是因為箱號剛好等於訂單編號,
+  //   一旦箱號存的是物流單號(超商/黑貓標籤), 官網訂單編號就完全搜不到了。
+  //   出貨紀錄是出事時唯一的追查依據, 查詢入口少一個就可能變成「怎麼找都找不到」(Kyle 回報)。
+  haystack.push(entry.kocaOrderId, entry.trackingNo, entry.ecpayNo, entry.recipientName, entry.note);
   for (const it of (entry.items || [])) {
     haystack.push(it.sku, it.name, it.category);
   }
   for (const p of (entry.parcels || [])) {
-    haystack.push(p.id, p.packedBy);
+    haystack.push(p.id, p.packedBy, p.trackingNo, p.ecpayNo);   // 箱號之外, 物流單號/綠界代碼也要能查
   }
   if (entry.replacementInfo) {
     const r = entry.replacementInfo;
@@ -10019,15 +10323,22 @@ const LOGI_META = {
   delivered:         { emoji: "✅", label: "已送達",   group: "done" },
   exception:         { emoji: "⚠️", label: "配送異常", group: "alert" },
   cancelled:         { emoji: "🚫", label: "已取消",   group: "alert" },
-  unknown:           { emoji: "❔", label: "狀態未知", group: "prep" },
+  // ⚠ unknown 以前歸在 "prep"(準備中) —— 那是在說謊:
+  //   貨早就寄出去了、物流單號也有, 只是官網回不出狀態, 卻顯示成「準備中(建單/交件前)」。
+  //   「查不到」跟「還沒出」是完全不同的兩件事, 混在一起就看不出哪些單真的需要人去追。
+  unknown:           { emoji: "❔", label: "官網查不到狀態", group: "unsure" },
 };
 const _logiMeta = (s) => LOGI_META[s] || LOGI_META.unknown;
-const LOGI_GROUP_ORDER = ["alert", "transit", "done", "prep"];
+const LOGI_GROUP_ORDER = ["alert", "unsure", "transit", "done", "prep", "pending"];
 const LOGI_GROUP_META = {
   alert:   { emoji: "⚠️", label: "需要處理 (異常 / 取消)",   color: "var(--danger)" },
+  // 「查不到」自成一組, 而且排在運送中前面 —— 這是唯一需要人去追的一類, 藏在最下面等於沒有
+  unsure:  { emoji: "❔", label: "查不到狀態 (要自己追)",    color: "#92400e" },
   transit: { emoji: "🚚", label: "運送中 / 到店待取",       color: "var(--primary)" },
   done:    { emoji: "✅", label: "已送達",                  color: "var(--success)" },
   prep:    { emoji: "🕐", label: "準備中 (建單 / 交件前)",   color: "var(--text-soft)" },
+  // 「還沒去查」跟「還沒出貨」是兩回事, 混在一起會讓人以為貨還沒寄
+  pending: { emoji: "⏳", label: "還沒查過官網狀態",        color: "var(--text-soft)" },
 };
 const _isCodMethod = (m) => /COD/i.test(String(m || "")) || /貨到付款/.test(String(m || ""));
 
@@ -10101,8 +10412,66 @@ function collectShippedKocaOrders(days) {
     if (!prev || Date.parse(prev.completedAt) < t) byOrder.set(e.kocaOrderId, e);
   }
   return Array.from(byOrder.values())
-    .map(e => ({ orderId: e.kocaOrderId, completedAt: e.completedAt, completedBy: e.completedBy || "" }))
+    .map(e => ({
+      orderId: e.kocaOrderId, completedAt: e.completedAt, completedBy: e.completedBy || "",
+      // 收件人:官網查得到就用官網的; 查不到時至少還有出貨當下記的這個。
+      // ⚠ 不可以叫 recipientName —— 下面 {...o, ...c} 會被官網快取(可能是空字串)蓋掉。
+      ourRecipient: e.recipientName || "",
+      // 📦 這張單到底寄了什麼 —— 以前整個被丟掉, 所以物流總覽每張卡片都只有單號和收件人,
+      //   看到「配送異常」也不知道裡面是一台吸塵器還是一片濾芯, 根本沒辦法判斷要怎麼處理 (Kyle 回報)。
+      shipped: (e.items || [])
+        .filter(it => it && !it.essential && (it.packed || 0) > 0)
+        .map(it => ({ sku: it.sku, name: it.name || it.sku, qty: it.packed })),
+      // 出貨時我們自己記下的物流單號: 官網查不到狀態時至少還有這個可以去物流公司查
+      ourTrackingNo: (() => {
+        for (const p of (e.parcels || [])) {
+          if (p && p.trackingNo && String(p.trackingNo) !== String(e.kocaOrderId)) return String(p.trackingNo);
+        }
+        for (const p of (e.parcels || [])) {
+          if (p && p.id && String(p.id) !== String(e.kocaOrderId)) return String(p.id);
+        }
+        return "";
+      })(),
+      // 🧾 綠界編號: 寄件單被重開時, 官網只會留最新那張的代碼 —— 這個是唯一追得回舊單的線索
+      ourEcpayNo: (() => {
+        for (const p of (e.parcels || [])) if (p && p.ecpayNo) return String(p.ecpayNo);
+        return "";
+      })(),
+    }))
     .sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
+}
+
+// 📦 其他通路的包裹 (蝦皮 / MOMO / 福貓 / 手建 / 補寄 …)。
+//   這些單的物流狀態查不到 —— 狀態是跟官網 API 拉的, 非官網通路沒有這個來源。
+//   但「查不到狀態」不等於「不該出現」:至少要看得到**有這個包裹、單號是多少、裡面裝什麼**,
+//   不然同仁要找一張蝦皮的單只能翻出貨紀錄 (Kyle:「至少要看得到包裹和單號」)。
+//   ⚠ 退貨/入倉不列 —— 那是進來的貨, 不是寄出去的包裹, 放這裡只會變噪音。
+function collectOtherChannelShipments(days) {
+  const all = allHistory();
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+  const out = [];
+  for (const e of all) {
+    if (!e) continue;
+    if (e.orderType === "return" || e.orderType === "inbound") continue;
+    // 官網的一般單已經在上面的狀態看板了, 不重複列 (補寄除外: 它是另一個實體包裹, 而且官網查不到它自己的狀態)
+    if (e.platform === "koca" && e.kocaOrderId && e.orderType !== "replacement") continue;
+    const t = Date.parse(e.completedAt);
+    if (!(t >= cutoff)) continue;
+    const shipped = (e.items || [])
+      .filter(it => it && !it.essential && (it.packed || 0) > 0)
+      .map(it => ({ sku: it.sku, name: it.name || it.sku, qty: it.packed }));
+    const parcels = (e.parcels || [])
+      .filter(p => p && p.id)
+      .map(p => ({ id: String(p.id), trackingNo: p.trackingNo ? String(p.trackingNo) : "",
+                   ecpayNo: p.ecpayNo ? String(p.ecpayNo) : "" }));
+    out.push({
+      entryId: e.id, platform: e.platform || "unknown", orderType: e.orderType || "normal",
+      kocaOrderId: e.kocaOrderId || "", completedAt: e.completedAt, completedBy: e.completedBy || "",
+      recipient: e.recipientName || (e.replacementInfo && e.replacementInfo.customerName) || "",
+      shipped, parcels,
+    });
+  }
+  return out.sort((a, b) => (String(a.completedAt) < String(b.completedAt) ? 1 : -1));
 }
 
 // ===== 今日物流總覽 (設定 → 物流總覽) =====
@@ -10158,15 +10527,17 @@ function renderLogisticsBoard() {
   }
   const orders = collectShippedKocaOrders(_logiDays);
   if (orders.length === 0) {
-    el.innerHTML = `<div class="hint" style="padding:14px; border:1px solid var(--border); border-radius:10px;">近 ${_logiDays} 天沒有這台出過的官網單。</div>`;
+    // ⚠ 沒有官網單不等於沒出貨 —— 蝦皮/手建/補寄照樣要看得到, 以前這裡直接 return 整頁空白
+    el.innerHTML = `<div class="hint" style="padding:14px; border:1px solid var(--border); border-radius:10px;">近 ${_logiDays} 天沒有這台出過的官網單。</div>`
+      + _otherChannelHtml(_logiDays);
     return;
   }
 
-  const groups = { alert: [], transit: [], done: [], prep: [] };
+  const groups = { alert: [], unsure: [], transit: [], done: [], prep: [], pending: [] };
   let unqueried = 0;
   for (const o of orders) {
     const c = _logiCache[o.orderId];
-    if (!c) { unqueried++; groups.prep.push({ ...o, _pending: true }); continue; }
+    if (!c) { unqueried++; groups.pending.push({ ...o, _pending: true }); continue; }
     groups[_logiMeta(c.status).group].push({ ...o, ...c });
   }
 
@@ -10175,47 +10546,143 @@ function renderLogisticsBoard() {
       ? `<span style="background:var(--success-bg); color:var(--success); font-weight:800; padding:1px 8px; border-radius:999px; font-size:0.68rem;">💰 貨到付款·已送達 → 確認收款</span>`
       : `<span style="background:var(--warn-bg); color:#92400e; font-weight:700; padding:1px 8px; border-radius:999px; font-size:0.68rem;">💰 貨到付款</span>`);
 
+  // 出貨多久了 —— 處理異常時「3 小時前」和「4 天前」要做的事完全不同
+  const sinceTxt = (iso) => {
+    const t = Date.parse(iso);
+    if (!t) return "";
+    const h = (Date.now() - t) / 3600000;
+    if (h < 1) return "剛剛出貨";
+    if (h < 24) return `${Math.floor(h)} 小時前出貨`;
+    const d = Math.floor(h / 24);
+    return `${d} 天前出貨`;
+  };
+  // 📦 這箱寄了什麼。以前整個沒顯示 → 看到「配送異常」也不知道裡面是一台吸塵器還是一片濾芯,
+  //    沒辦法判斷要補寄、要退款、還是先打給客人 (Kyle:「商品寄送顯示得不夠明確」)。
+  const shippedTxt = (o) => {
+    const list = Array.isArray(o.shipped) ? o.shipped : [];
+    if (!list.length) return `<div style="font-size:0.73rem; color:var(--text-soft); margin-top:3px;">📦 (這筆紀錄沒有商品明細)</div>`;
+    const rows = list.map(it =>
+      `<span style="display:inline-block; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:1px 7px; margin:2px 3px 0 0; font-size:0.72rem;">
+         ${escapeHtml(it.name)} <strong>×${it.qty}</strong></span>`).join("");
+    const total = list.reduce((s, it) => s + (it.qty || 0), 0);
+    return `<div style="margin-top:4px;">
+      <span style="font-size:0.72rem; color:var(--text-soft);">📦 共 ${total} 件</span><br>${rows}</div>`;
+  };
   const card = (o) => {
-    const m = o._pending ? { emoji: "⏳", label: "尚未查詢" } : _logiMeta(o.status);
-    const track = o.trackingNo
+    const m = o._pending ? { emoji: "⏳", label: "還沒查過官網" } : _logiMeta(o.status);
+    // 官網給的物流單號優先; 沒有就用我們出貨當下自己記的那個 (至少有東西可以去物流公司查)
+    const tNo = o.trackingNo || o.ourTrackingNo || "";
+    const tSrc = (!o.trackingNo && o.ourTrackingNo) ? "(出貨時記的)" : "";
+    const carrier = o.carrier ? escapeHtml(o.carrier) + " " : "";
+    const track = tNo
       ? (o.trackingUrl
-          ? `<a href="${escapeHtml(o.trackingUrl)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:underline;">${escapeHtml(o.carrier || "物流")} ${escapeHtml(o.trackingNo)} ↗</a>`
-          : `${escapeHtml(o.carrier || "物流")} ${escapeHtml(o.trackingNo)}`)
-      : "";
+          ? `<a href="${escapeHtml(o.trackingUrl)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:underline;">${carrier}${escapeHtml(tNo)} ↗</a>`
+          : `${carrier}${escapeHtml(tNo)}<span style="color:var(--text-soft);">${tSrc}</span>`)
+      : `<span style="color:var(--danger); font-weight:700;">沒有物流單號 — 查不到貨在哪</span>`;
     return `<div style="border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:7px; background:var(--surface);">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
         <span style="font-weight:800; font-size:0.9rem;">${m.emoji} ${m.label}${o.statusLabel && o.statusLabel !== m.label ? ` <span style="color:var(--text-soft); font-weight:500; font-size:0.72rem;">(${escapeHtml(o.statusLabel)})</span>` : ""}</span>
         ${codBadge(o)}
       </div>
-      <div style="font-family:ui-monospace,monospace; font-size:0.78rem; margin-top:3px;">${escapeHtml(o.orderId)}</div>
-      ${o.recipientName ? `<div style="font-size:0.75rem; color:var(--text-soft);">👤 ${escapeHtml(o.recipientName)}</div>` : ""}
-      ${track ? `<div style="font-size:0.75rem; margin-top:2px;">🚚 ${track}</div>` : ""}
-      ${o.eta ? `<div style="font-size:0.7rem; color:var(--text-soft);">預計送達 ${escapeHtml(o.eta)}</div>` : ""}
+      ${shippedTxt(o)}
+      <div style="font-family:ui-monospace,monospace; font-size:0.78rem; margin-top:5px;">${escapeHtml(o.orderId)}</div>
+      ${(o.recipientName || o.ourRecipient) ? `<div style="font-size:0.75rem; color:var(--text-soft);">👤 ${escapeHtml(o.recipientName || o.ourRecipient)}</div>` : ""}
+      <div style="font-size:0.75rem; margin-top:2px;">🚚 ${track}</div>
+      ${(o.ecpayNo || o.ourEcpayNo) ? `<div style="font-size:0.72rem; color:var(--text-soft); margin-top:1px;">🧾 綠界 ${escapeHtml(o.ecpayNo || o.ourEcpayNo)}</div>` : ""}
+      <div style="font-size:0.7rem; color:var(--text-soft); margin-top:2px;">
+        🕐 ${escapeHtml(sinceTxt(o.completedAt))}${o.completedBy ? " · " + escapeHtml(o.completedBy) : ""}${o.eta ? " · 預計送達 " + escapeHtml(o.eta) : ""}</div>
     </div>`;
   };
 
   const nAlert = groups.alert.length, nTransit = groups.transit.length, nDone = groups.done.length;
+  const nUnsure = groups.unsure.length;
   const codDue = groups.done.filter(o => _isCodMethod(o.paymentMethod)).length;
+  // 📦 今天總共寄出去幾件 —— 整頁最常被問的數字, 以前要自己一張一張數
+  const totalPieces = orders.reduce((s, o) => s + (o.shipped || []).reduce((x, it) => x + (it.qty || 0), 0), 0);
   let html = `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
     <span style="background:var(--danger-bg); color:var(--danger); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">⚠ 異常 ${nAlert}</span>
+    ${nUnsure ? `<span style="background:var(--warn-bg); color:#92400e; font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">❔ 查不到 ${nUnsure}</span>` : ""}
     <span style="background:var(--primary-light); color:var(--primary); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">🚚 在途 ${nTransit}</span>
     <span style="background:var(--success-bg); color:var(--success); font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">✅ 已送達 ${nDone}</span>
     ${codDue ? `<span style="background:var(--warn-bg); color:#92400e; font-weight:800; padding:3px 10px; border-radius:999px; font-size:0.76rem;">💰 COD已送達 ${codDue}</span>` : ""}
+    <span style="background:var(--bg); border:1px solid var(--border); color:var(--text-soft); font-weight:700; padding:3px 10px; border-radius:999px; font-size:0.76rem;">📦 ${orders.length} 單 · ${totalPieces} 件</span>
   </div>`;
 
   for (const gk of LOGI_GROUP_ORDER) {
     const arr = groups[gk];
     if (!arr.length) continue;
     const gm = LOGI_GROUP_META[gk];
-    const open = (gk === "alert" || gk === "transit") ? "open" : "";
+    // 異常、查不到、在途預設展開 —— 這三類才需要人動作; 已送達/準備中/還沒查收起來
+    const open = (gk === "alert" || gk === "unsure" || gk === "transit") ? "open" : "";
     html += `<details ${open} style="margin-bottom:10px;">
       <summary style="cursor:pointer; font-weight:800; color:${gm.color}; padding:4px 0;">${gm.emoji} ${gm.label} · ${arr.length}</summary>
       <div style="margin-top:6px;">${arr.map(card).join("")}</div>
     </details>`;
   }
 
+  html += _otherChannelHtml(_logiDays);
   if (_logiLoading) html += `<div id="logi-progress" class="hint" style="margin-top:6px;">更新中…</div>`;
   el.innerHTML = html;
+}
+
+// 📦 其他通路區塊 (蝦皮 / MOMO / 福貓 / 手建 / 補寄)。
+//   預設**收合** —— 蝦皮一天可能上百單, 攤開會把上面真正要處理的官網異常整個淹掉。
+//   收合但標題寫清楚有幾單幾件, 要找的時候打開就有。
+function _otherChannelHtml(days) {
+  let list = [];
+  try { list = collectOtherChannelShipments(days) || []; } catch (e) { console.warn("[logi] 其他通路整理失敗", e); return ""; }
+  if (!list.length) return "";
+  const byPlat = {};
+  for (const o of list) (byPlat[o.platform] = byPlat[o.platform] || []).push(o);
+  const totalPieces = list.reduce((s, o) => s + o.shipped.reduce((x, it) => x + (it.qty || 0), 0), 0);
+
+  const row = (o) => {
+    const p = PLATFORMS[o.platform] || {};
+    const isRep = o.orderType === "replacement";
+    // 單號: 箱號 + (不同的話) 物流單號 —— 兩個都列, 因為同仁手上拿到的可能是其中任一個
+    const nums = [];
+    for (const pc of o.parcels) {
+      nums.push(pc.id);
+      if (pc.trackingNo && pc.trackingNo !== pc.id) nums.push(pc.trackingNo);
+      if (pc.ecpayNo && pc.ecpayNo !== pc.id && pc.ecpayNo !== pc.trackingNo) nums.push("綠界 " + pc.ecpayNo);
+    }
+    const numTxt = nums.length
+      ? nums.map(n => `<span style="font-family:ui-monospace,monospace; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:0 5px; margin-right:4px; font-size:0.73rem;">${escapeHtml(n)}</span>`).join("")
+      : `<span style="color:var(--danger); font-weight:700; font-size:0.73rem;">沒有單號</span>`;
+    const items = o.shipped.length
+      ? o.shipped.map(it => `${escapeHtml(it.name)}×${it.qty}`).join("、")
+      : "(沒有商品明細)";
+    const t = Date.parse(o.completedAt);
+    const when = t ? new Date(t).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    return `<div style="border:1px solid var(--border); border-radius:8px; padding:7px 9px; margin-bottom:5px; background:var(--surface);">
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <span style="font-weight:700; font-size:0.78rem;">${p.emoji || "📦"} ${escapeHtml(p.label || o.platform)}</span>
+        ${isRep ? `<span style="background:var(--warn-bg); color:#92400e; font-weight:700; padding:0 7px; border-radius:999px; font-size:0.66rem;">補寄</span>` : ""}
+        ${o.recipient ? `<span style="color:var(--text-soft); font-size:0.72rem;">👤 ${escapeHtml(o.recipient)}</span>` : ""}
+      </div>
+      <div style="margin-top:4px;">${numTxt}</div>
+      <div style="font-size:0.73rem; color:var(--text); margin-top:3px;">📦 ${escapeHtml(items)}</div>
+      <div style="font-size:0.68rem; color:var(--text-soft); margin-top:2px;">🕐 ${escapeHtml(when)}${o.completedBy ? " · " + escapeHtml(o.completedBy) : ""}</div>
+    </div>`;
+  };
+
+  const inner = Object.entries(byPlat)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([plat, arr]) => {
+      const p = PLATFORMS[plat] || {};
+      return `<div style="margin-bottom:8px;">
+        <div style="font-weight:800; font-size:0.78rem; color:var(--text-soft); margin-bottom:4px;">${p.emoji || "📦"} ${escapeHtml(p.label || plat)} · ${arr.length} 單</div>
+        ${arr.map(row).join("")}
+      </div>`;
+    }).join("");
+
+  return `<details style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px;">
+    <summary style="cursor:pointer; font-weight:800; color:var(--text-soft); padding:4px 0;">
+      📦 其他通路的包裹 · ${list.length} 單 · ${totalPieces} 件
+    </summary>
+    <div class="hint" style="margin:6px 0 8px;">蝦皮 / MOMO / 福貓 / 手建 / 補寄。<strong>這些查不到物流狀態</strong>(狀態是跟官網拉的),這裡只列出包裹、單號和內容,方便你找單。</div>
+    <div style="margin-top:4px;">${inner}</div>
+  </details>`;
 }
 
 // 出貨紀錄卡片上的物流小徽章 (讀快取; 沒查過就給一顆查詢鈕)
@@ -10998,7 +11465,27 @@ function findShippedByCode(code) {
       || (pp.trackingNo && String(pp.trackingNo).toUpperCase() === c)); // 物流單號(黑貓/超商)也算: 刷標籤條碼一樣要擋得住過刷
     if (p) return { entry: e, matchType: "寄件單號" };
   }
-  return null;
+  // 🔎 超商條碼/QR 把真正的代碼包在裡面(7-11 的 7X1001G395890506、全家 QR 的 寄件代碼+廠商編號+BC15),
+  //   完全相等比對會整個漏掉 → 刷標籤重出同一張單不會被擋, 等於過刷防呆對超商單形同虛設。
+  //   這裡做第二輪「包含比對」, 一樣要剛好只對到一張才算(對到多張寧可不擋, 讓後面流程處理)。
+  const sq = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const sc = sq(c);
+  if (sc.length < 6) return null;
+  const hits = [];
+  for (const e of all) {
+    if (state.continuationOf && e.id === state.continuationOf) continue;
+    for (const pp of (e.parcels || [])) {
+      let on = null;
+      for (const [f, v] of [["寄件單號", pp && pp.id], ["物流單號", pp && pp.trackingNo], ["綠界編號", pp && pp.ecpayNo]]) {
+        const x = sq(v);
+        if (x.length < 6) continue;
+        if (sc.includes(x) || x.includes(sc)) { on = f; break; }
+      }
+      if (on) { hits.push({ entry: e, matchType: on + "(從條碼認出)" }); break; }
+    }
+    if (hits.length > 1) return null;   // 對到多張就不敢判斷
+  }
+  return hits.length === 1 ? hits[0] : null;
 }
 function _histTypeLabel(e) {
   return e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
@@ -11410,6 +11897,26 @@ function processScan(code) {
       //   多刷的會以「額外商品」列在清單上(無應出量、自由計數), 出貨紀錄/扣庫存/ERP鍵單照常計入。
       // 房間模式必須先送 item_add 同步商品本身, 否則伺服器找不到此商品, 後續 scan_sku 件數會被丟棄
       if (state.manualMode || state.roomMode || state.kocaOrderId || kocaBatchActive()) {
+        // 🔒 官網單的內容是固定的 → 刷到「這張單上根本沒有的商品」幾乎都是刷錯(拿錯貨 / 刷到隔壁單的貨)。
+        //   而且一旦按下「完成此筆」, 這件就鎖進箱子裡, 連「−」都會被擋 → 照樣寫進出貨紀錄、照樣扣庫存 (Kyle 回報)。
+        //   以前「多刷清單上已有的商品」會問一次, 這個更危險的卻只跳一行 toast —— 保護力剛好反過來。
+        //   手建 / 補寄 / 退貨 / 入倉 本來就是自由計數, 不在此限; 包材(essential)也不擋。
+        const _offOrder = (state.kocaOrderId || kocaBatchActive())
+          && !state.manualMode && !state.replacementInfo && !state.returnInfo && !state.inboundInfo
+          && !matchedProd.essential;
+        if (_offOrder) {
+          SOUND.scanError();
+          if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+          if (!confirm(
+            `⚠ 這張官網單上沒有這個商品\n\n` +
+            `${matchedProd.sku} ${matchedProd.name || ""}\n\n` +
+            `【取消】= 刷錯了, 不要加 (建議先確認是不是拿錯貨 / 刷到別張單的貨)\n` +
+            `【確定】= 客人加購 / 補件, 加進這張單`)) {
+            showToast(`已略過 ${matchedProd.sku}(沒有加進這張單)`);
+            renderPicking();
+            return;
+          }
+        }
         const newItem = {
           sku: matchedProd.sku,
           name: matchedProd.name || "",
@@ -12117,8 +12624,36 @@ function bumpPickItem(idx, delta, options) {
     const skuShipped = shipped[it.sku] || 0;
     if (it.packed + delta < skuShipped) {
       const label = it.essential ? "已使用" : "已確認出貨";
-      showToast(`⛔ ${it.sku} ${label} ${skuShipped} 件無法減到那麼少`);
-      return;
+      // 🔧 刷錯的東西一定要有辦法拿掉。
+      //   以前這裡直接 return → 只要按過一次「完成此筆」, 刷錯的商品就永遠鎖在箱子裡拿不掉,
+      //   照樣寫進出貨紀錄、照樣扣庫存, 而且清單上還一直看得到它 (Kyle 回報:「刷錯的商品不會消失」)。
+      //   官網單更慘: 平常「重刷箱號重新打開那箱」的救法, 在官網單會被批次切換接走 → 完全沒有出路。
+      //   這時候還沒落帳(出貨紀錄還沒寫), 是工作中的清單 —— 問一句、同意就連箱子一起扣, 才是對的。
+      const need = skuShipped - (it.packed + delta);
+      if (state.roomMode) {
+        // 共同包貨: 箱子以伺服器為準, 改本機這份下次同步會被還原 → 不能假裝改掉了
+        SOUND.scanError();
+        alert(`⛔ ${it.sku} ${it.name || ""}\n\n這 ${skuShipped} 件在已完成的箱子裡, 共同包貨時不能直接扣。\n\n請改成「刷一次那箱的寄件單號」把那箱重新打開, 改完再完成一次。`);
+        return;
+      }
+      SOUND.scanError();
+      if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+      if (!confirm(
+        `⛔ ${it.sku} ${it.name || ""}\n\n` +
+        `這 ${skuShipped} 件已經在「已完成的箱子」裡了(${label})。\n\n` +
+        `是刷錯要拿掉嗎?\n\n` +
+        `【確定】= 連箱子裡的 ${need} 件一起拿掉(刷錯時用)\n` +
+        `【取消】= 不動`)) {
+        showToast("已保持原樣");
+        return;
+      }
+      const _pull = _pullFromCompletedParcels(it.sku, need);
+      if (_pull.removed < need) {
+        // 數字對不上就不要硬做 —— 寧可什麼都不改, 也不要改一半
+        showToast(`⚠ 箱子裡只找到 ${_pull.removed} 件(需要 ${need} 件), 沒有變更, 請自己確認`, 8000);
+        return;
+      }
+      showToast(`🔧 已從箱子拿掉 ${it.sku} ×${need} — ${_pull.boxes.join("、")}`, 6000);
     }
   }
   // 🔒【多刷攔截】刷超過應出量時, 一定要「聽得出來」+「擋一下」。
@@ -12157,6 +12692,19 @@ function bumpPickItem(idx, delta, options) {
     if (ap.items[it.sku] === 0) delete ap.items[it.sku];
     if (delta > 0) ap.lastSku = it.sku; // 釘住列顯示「最後刷的 SKU」
     renderActiveParcel();
+  }
+  // 🧹 官網單上「本來就沒有、是刷進來的額外商品」被減回 0 → 整列收掉, 不要留一行 0/0 的空殼。
+  //   同仁刷錯之後把它減到 0, 清單上卻還掛著那一列 —— 看起來像「刷錯的商品還在」, 下一張單也還看得到 (Kyle 回報)。
+  //   ⚠ 只收「官網單的額外品項」:
+  //     ・手建/補寄/退貨/入倉 全部都是 expected=0 的自由計數, 收掉會把人家正常的列刪掉
+  //     ・共同包貨的清單以伺服器為準, 本機刪了下次同步又回來
+  //     ・unmapped(對不到的紅字品項) 要留著讓人處理
+  if (delta < 0 && it.packed === 0 && !it.essential && !it.unmapped && (it.expected || 0) === 0
+      && (state.kocaOrderId || kocaBatchActive())
+      && !state.manualMode && !state.roomMode
+      && !state.replacementInfo && !state.returnInfo && !state.inboundInfo) {
+    const _gone = state.items.splice(idx, 1)[0];
+    if (_gone) showToast(`🧹 已把「${_gone.name || _gone.sku}」從這張單移除`);
   }
   if (delta > 0 && navigator.vibrate) navigator.vibrate(12);
   saveState();
@@ -12199,7 +12747,7 @@ function switchTab(t) {
   document.getElementById("tab-content-history").hidden = (t !== "history");
   document.getElementById("tab-content-logistics").hidden = (t !== "logistics");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
-  if (t === "history") { _histShowAll = false; renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); } // 切到歷史: 回到只畫最近 N 筆; 先畫本機, 再強制拉雲端最新, 順手補推沒上雲的
+  if (t === "history") { _histShowAll = false; renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); renderFulfillPending(); flushPendingFulfill(); } // 切到歷史: 回到只畫最近 N 筆; 先畫本機, 再強制拉雲端最新, 順手補推沒上雲的 + 補回寫官網
   if (t === "logistics") { fetchCloudHistory(true).then(() => openLogisticsView()).catch(() => openLogisticsView()); } // 切到物流: 先拉雲端紀錄(別台出的官網單也算), 再開總覽
   if (t === "inventory") {
     renderInventory(); // 切到倉庫清冊時重新渲染
@@ -14162,6 +14710,7 @@ function backupKeys() {
     DUP_OVERRIDE_KEY,                       // 重複出貨放行紀錄 (稽核用, 不可遺失)
     BUNDLE_RULES_KEY,                       // 連動規則 (自己編的, 弄丟就退回出廠預設)
     PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
+    PENDING_FULFILL_KEY,                    // 還沒回寫官網「已出貨」的訂單 (弄丟 = 官網永遠停在未出貨, 沒人會發現)
     // ⚠ 以下四項漏掉會出事, 不可移除:
     STOCK_APPLIED_KEY,                      // 已扣過庫存的出貨紀錄 id。沒帶走 → 新機補扣時「上次對齊後的每一筆都再扣一次」
     ERP_KEYED_KEY, ERP_LINE_KEY,            // 哪些單已鍵進正航 ERP。沒帶走 → 不知道鍵過沒 → 重複鍵單/漏鍵, 直接錯帳
@@ -15629,8 +16178,21 @@ const STOCK_APPLIED_KEY = "picking_stock_applied_v1";
 let _stockAppliedIds = (() => { try { const a = JSON.parse(localStorage.getItem(STOCK_APPLIED_KEY) || "[]"); return new Set(Array.isArray(a) ? a : []); } catch (e) { return new Set(); } })();
 function saveStockApplied() {
   try {
-    const arr = [..._stockAppliedIds];
-    localStorage.setItem(STOCK_APPLIED_KEY, JSON.stringify(arr.slice(-3000)));  // 只留最近 3000 筆, 舊的用 ERP 基準時間擋掉
+    // ⚠ 以前是 slice(-3000) —— **用筆數砍**。出貨紀錄 id 的前半段就是建立時的毫秒時間,
+    //   砍掉最舊的 N 筆不等於砍掉「已經不需要的」:只要 ERP 基準線比被砍掉的那些還舊,
+    //   reconcileStockFromCloud 就會認為那幾筆還沒扣 → **同一筆庫存再扣一次**(多扣看不出來)。
+    //   官方一個月就 ~2000 筆, 3000 筆大約只撐 6 週。
+    //   改成「用時間砍」:只丟掉比 ERP 對齊基準更舊的 —— 那些本來就會被 cutoff 跳過, 丟了絕對安全。
+    const baseline = getLastErpAlign();
+    const keepFrom = baseline ? (baseline - 7 * 86400000)      // 基準再往前留 7 天緩衝
+                              : (Date.now() - 90 * 86400000);  // 從未對齊過 → 保守留 90 天
+    const kept = [..._stockAppliedIds].filter(id => {
+      const t = parseInt(String(id).split("_")[0], 10);
+      return !t || isNaN(t) ? true : t >= keepFrom;            // 認不出時間的(舊格式)一律留著
+    });
+    const out = kept.length > 20000 ? kept.slice(-20000) : kept;  // 僅作為最後防線, 正常不會碰到
+    _stockAppliedIds = new Set(out);
+    localStorage.setItem(STOCK_APPLIED_KEY, JSON.stringify(out));
   } catch (e) {}
 }
 // 主機: 把「雲端上還沒套用到本機庫存」的出貨紀錄補扣起來 (包含別台手機包的單)
@@ -16145,6 +16707,7 @@ renderRoomBadge();
 window.addEventListener("online", () => {
   if (state.roomMode) { _syncFailCount = 0; syncRoom(); }
   flushPendingCloudHistory(); // 網路恢復 → 補推積著沒上雲的出貨紀錄
+  flushPendingFulfill();      // 網路恢復 → 補回寫官網「已出貨」(不補的話官網會一直停在未出貨)
   renderRoomBadge();
 });
 window.addEventListener("offline", () => { _syncFailCount = 2; renderRoomBadge(); });
@@ -16153,8 +16716,24 @@ renderNetStatus();
 setInterval(renderNetStatus, 15000);
 // 每日自動備份 (3 秒後跑, 避免阻塞 init)
 setTimeout(() => { if (typeof doDailyBackupIfNeeded === "function") doDailyBackupIfNeeded(false); }, 3000);
+// 官網回寫警告橫幅上的兩顆按鈕
+document.addEventListener("click", (ev) => {
+  if (ev.target && ev.target.id === "fulfill-retry-btn") {
+    showToast("🔄 重試中…");
+    flushPendingFulfill({ force: true });   // 手動重試連 fatal 的也再試一次
+    return;
+  }
+  if (ev.target && ev.target.id === "fulfill-list-btn") {
+    const txt = pendingFulfill.map(x =>
+      `${x.kocaOrderId}\n  試過 ${x.tries || 0} 次 · ${x.lastError || "?"}${x.fatal ? " (需人工處理)" : ""}`).join("\n\n");
+    alert(`還沒回寫官網的訂單 (${pendingFulfill.length} 張)\n\n${txt}\n\n` +
+      `這些貨已經出了, 但官網那邊還是「未出貨」。\n請到官網後台手動標記, 或確認訂單編號是否正確。`);
+  }
+});
 // 出貨紀錄雲端補送: 開機若有積著沒上雲的紀錄, 稍後補推 (等 settings/網路就緒)
 setTimeout(() => { try { flushPendingCloudHistory(); } catch (e) {} }, 2500);
+// 官網回寫補送: 開機先讀佇列、畫出警告橫幅, 再試一次補回寫
+setTimeout(() => { try { loadPendingFulfill(); renderFulfillPending(); flushPendingFulfill(); } catch (e) {} }, 3000);
 setTimeout(() => { try { checkStorageUsage(); } catch (e) {} }, 5000); // 開機估一次儲存空間, 接近上限就提醒
 // 資料安全: 此機未設定自動備份就提醒 (沒設 Discord = 資料只在本機, 換機/清快取會全沒)
 setTimeout(() => {
