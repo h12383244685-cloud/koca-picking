@@ -1984,7 +1984,7 @@ footer.summary-bar {
              class="scan-input">
       <div class="hint" id="scan-carrier-hint" style="font-size: 0.6875rem; margin-top: 4px; color: var(--text-soft);">
         💡 蝦皮 / 黑貓 / 國際小包 → 直接刷 QR<br>
-        💡 7-11 / 全家 → QR 是內部代碼, <strong>用下方按鈕手動輸入</strong>
+        💡 7-11 / 全家 → <strong>刷條碼就好</strong>(系統會自動認出代碼);只有 QR 掃不出來時才用下方按鈕
       </div>
       <button class="btn full" id="manual-parcel-id-btn" style="margin-top: 8px; padding: 12px; background: #166534; color: white; font-weight: 700; font-size: 0.875rem;">
         📝 手動輸入 7-11 / 全家 編號
@@ -3418,7 +3418,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v8.2 · 2026-10-08";
+const APP_VERSION = "v8.4 · 2026-10-13";
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -5570,6 +5570,9 @@ function appendHistory() {
     id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     completedAt: new Date().toISOString(),
     completedBy: (settings.myName || "").trim() || "(未命名)", // 誰完成這筆 (設定的暱稱)
+    appVersion: APP_VERSION,   // 🏷 哪一版包的。沒有這個就沒人知道同仁手機更新了沒 ——
+                               //   而舊版裝置照樣會製造已經修掉的錯帳(訂單消失 / ERP 重複打勾 / 回寫遺失…),
+                               //   出事後也查不出是哪台、哪版造成的。每日對帳機器人會回報版本分布。
     platform: currentPlatform || "unknown",
     kocaOrderId: state.kocaOrderId || null,   // 來源官網訂單編號 (出貨後回寫官網用)
     items,
@@ -5611,6 +5614,7 @@ function _recordEmptyKocaOrder(orderId, meta) {
     id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     completedAt: new Date().toISOString(),
     completedBy: (settings.myName || "").trim() || "(未命名)",
+    appVersion: APP_VERSION,
     platform: "koca",
     kocaOrderId: orderId,
     items: [],
@@ -7415,6 +7419,9 @@ function _prefillKocaActiveParcel(o) {
   //   我們自己記的這份才是唯一追得回來的線索。出貨紀錄的搜尋已經含 ecpayNo。
   const _ec = (o && (o.ecpayNo || (o.shipping && o.shipping.ecpayNo))) || "";
   if (state.activeParcel && _ec) state.activeParcel.ecpayNo = String(_ec);
+  // 🚚 物流商記在包裹上(不是記在訂單上)—— 統計要算的是「幾件走 7-11」, 單位是包裹
+  const _cl = _kocaCarrierLabel(o);
+  if (state.activeParcel && _cl) state.activeParcel.carrierLabel = _cl;
   for (const it of (state.items || [])) {
     if (it.essential) continue;   // 包材不預填 (留給同仁刷)
     if (it.unmapped) continue;    // 對不到 SKU 的品項不預填 (避免用假 SKU)
@@ -7427,8 +7434,45 @@ function _prefillKocaActiveParcel(o) {
   }
   state.scanMode = true; // 展開裝箱掃描面板, 方便同仁接著刷包裝
 }
+// 🚚 這張官網單走哪一家物流。官網本來就有回 deliveryMethod / carrier / storeInfo,
+//   但以前只拿來「顯示」, 沒有存進出貨紀錄 → 事後完全算不出「7-11 幾件、全家幾件、黑貓幾件」。
+//   超商取貨看店名最準(店名一定帶品牌); 宅配看 carrier。
+function _kocaCarrierLabel(o) {
+  const sh = (o && o.shipping) || {};
+  const store = String(sh.storeInfo || "");
+  if (/7-?\s?11|7-?ELEVEN|統一超商/i.test(store)) return "7-11";
+  if (/全家|FamilyMart|FamiPort/i.test(store)) return "全家";
+  if (/萊爾富|Hi-?Life/i.test(store)) return "萊爾富";
+  if (/OK\s?mart|OK超商/i.test(store)) return "OK mart";
+  const car = String(sh.carrier || "");
+  if (/黑貓|宅急便|TCAT/i.test(car)) return "黑貓宅急便";
+  if (/新竹/i.test(car)) return "新竹物流";
+  if (/郵政/i.test(car)) return "中華郵政";
+  if (car) return car;                                  // 官網給什麼就記什麼, 不自作聰明
+  if (sh.method === "home-delivery") return "宅配";
+  if (sh.method === "store-pickup") return "超商取貨";
+  return "";
+}
+// 一個包裹是哪家物流。優先用出貨當下記下來的(確定), 沒有才用單號格式推測。
+//   ⚠ 推測一定要標示出來 —— 舊紀錄沒有存 carrierLabel, 只能看單號長相, 那是推的不是確定的。
+//   格式依據:2026/10/06–13 實際 443 筆官方包裹的分佈
+//   G+7碼 / G+11碼 = 7-11(184+30) · 16 開頭 11 碼 = 全家(73) · 12 碼純數字 = 黑貓(133)
+//   50 開頭 8 碼 = 綠界廠商編號, 不是物流單號(11)
+function parcelCarrierOf(p) {
+  if (p && p.carrierLabel) return { label: String(p.carrierLabel), sure: true };
+  const t = String((p && p.trackingNo) || "").trim().toUpperCase();
+  if (!t) return { label: "沒有物流單號", sure: false };
+  if (/^[A-Z]\d{7}$/.test(t) || /^[A-Z]\d{11}$/.test(t)) return { label: "7-11", sure: false };
+  if (/^16\d{9}$/.test(t)) return { label: "全家", sure: false };
+  if (/^\d{12}$/.test(t)) return { label: "黑貓宅急便", sure: false };
+  if (/^50\d{6}$/.test(t)) return { label: "無法判斷", sure: false };
+  return { label: "無法判斷", sure: false };
+}
 function _kocaOrderMeta(o, gate) {
   return {
+    deliveryMethod: (o && o.shipping && o.shipping.method) || "",
+    storeInfo: (o && o.shipping && o.shipping.storeInfo) || "",
+    carrierLabel: _kocaCarrierLabel(o),   // 出貨當下就記下來, 之後統計不必用猜的
     recipient: (o && o.recipient && o.recipient.name) || "",
     statusLabel: (o && o.statusLabel) || "",
     cod: !!(gate && gate.cod),
@@ -10290,7 +10334,17 @@ function matchesHistorySearch(entry, q) {
     haystack.push(d.toLocaleDateString("zh-TW"));
     haystack.push(d.toLocaleString("zh-TW"));
   }
-  return haystack.some(f => f != null && String(f).toLowerCase().includes(q));
+  if (haystack.some(f => f != null && String(f).toLowerCase().includes(q))) return true;
+  // 🔎 搜尋框裡可能是「整串刷進來的條碼」, 而紀錄裡存的是抽出來的短碼。
+  //   例:貼 833001G497544551 進去搜, 紀錄存的卻是 G4975445 → 原本會找不到。
+  //   把查詢字串也跑一次 extractParcelId, 用抽出來的再比一次。
+  try {
+    const alt = String(extractParcelId(String(q).toUpperCase()) || "").toLowerCase();
+    if (alt && alt !== q && alt.length >= 6) {
+      return haystack.some(f => f != null && String(f).toLowerCase().includes(alt));
+    }
+  } catch (e) { /* 抽不出來就算了, 不影響一般搜尋 */ }
+  return false;
 }
 
 // ---- 出貨紀錄 render ----
@@ -10620,9 +10674,53 @@ function renderLogisticsBoard() {
     </details>`;
   }
 
+  html += _carrierBreakdownHtml(_logiDays);
   html += _otherChannelHtml(_logiDays);
   if (_logiLoading) html += `<div id="logi-progress" class="hint" style="margin-top:6px;">更新中…</div>`;
   el.innerHTML = html;
+}
+
+// 🚚 官方訂單「各家物流各幾件」—— Kyle 要算運費/對帳用的數字。
+//   單位是**包裹**不是訂單(一張單可能兩箱)。
+//   出貨當下有記 carrierLabel 的算「確定」, 舊紀錄只能看單號格式推測 → 一定要標示出來。
+function _carrierBreakdownHtml(days) {
+  const all = allHistory();
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+  const tally = {};   // label -> {parcels, items, sure, guess}
+  let totalP = 0, totalI = 0, guessN = 0;
+  for (const e of all) {
+    if (!e || e.platform !== "koca" || !e.kocaOrderId) continue;
+    if (e.orderType === "return" || e.orderType === "inbound") continue;
+    const t = Date.parse(e.completedAt);
+    if (!(t >= cutoff)) continue;
+    for (const p of (e.parcels || [])) {
+      if (!p) continue;
+      const c = parcelCarrierOf(p);
+      const row = tally[c.label] = tally[c.label] || { parcels: 0, items: 0, sure: 0, guess: 0 };
+      row.parcels++; totalP++;
+      const n = Object.values(p.items || {}).reduce((s, q) => s + (Number(q) || 0), 0);
+      row.items += n; totalI += n;
+      if (c.sure) row.sure++; else { row.guess++; guessN++; }
+    }
+  }
+  if (totalP === 0) return "";
+  const rows = Object.entries(tally).sort((a, b) => b[1].parcels - a[1].parcels);
+  const body = rows.map(([label, v]) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid var(--border);">
+      <span style="font-weight:700; font-size:0.84rem;">${escapeHtml(label)}
+        ${v.guess ? `<span style="color:var(--text-soft); font-weight:500; font-size:0.68rem;">(${v.guess} 筆是看單號推測的)</span>` : ""}</span>
+      <span style="font-family:ui-monospace,monospace; font-size:0.84rem; white-space:nowrap;">
+        <strong>${v.parcels}</strong> 箱 · ${v.items} 件</span>
+    </div>`).join("");
+  return `<details open style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px;">
+    <summary style="cursor:pointer; font-weight:800; padding:4px 0;">🚚 官方訂單 各家物流 · 近 ${days} 天 ${totalP} 箱</summary>
+    <div style="margin-top:6px;">${body}
+      <div style="display:flex; justify-content:space-between; padding:6px 2px; font-weight:800;">
+        <span>合計</span><span style="font-family:ui-monospace,monospace;">${totalP} 箱 · ${totalI} 件</span></div>
+    </div>
+    ${guessN ? `<div class="hint" style="margin-top:4px;">⚠ 其中 ${guessN} 箱是<strong>用物流單號的長相推測</strong>的(出貨當時沒有記物流商)。<br>
+      v8.4 之後出的單會直接記下來, 不必用猜的。</div>` : ""}
+  </details>`;
 }
 
 // 📦 其他通路區塊 (蝦皮 / MOMO / 福貓 / 手建 / 補寄)。
@@ -11527,6 +11625,13 @@ function extractParcelId(raw) {
   // 加邊界檢查避免在更長數字串中被截斷
   const c711 = s.match(/(?<!\d)C\d{10,15}(?!\d)/);
   if (c711) return c711[0];
+  // 2b. 7-11 交貨便 16 碼物流條碼: 前綴(3碼)+001 + 【代碼 = 1 英文字母 + 7 數字】 + 尾碼(2碼)
+  //   實際樣本: 7X1001·G3958905·06  /  833001·G4975445·51
+  //   以前整串原封不動存進去 → 當前訂單顯示 833001G497544551 這種長串, 跟出貨單上印的代碼對不起來,
+  //   同仁要用眼睛從裡面找出 G4975445, 而且出貨紀錄也搜不到那個代碼。
+  //   ⚠ 舊紀錄存的是整串, 不過 findShippedByCode() 有包含比對, 新短碼仍對得到舊的整串紀錄。
+  const s711 = s.match(/^[A-Z0-9]{3}001([A-Z]\d{7})\d{2}$/);
+  if (s711) return s711[1];
   // 3. 國際小包: 2 字母 + 9-12 位數字 + TW 結尾 (例: EE123456789TW)
   const intl = s.match(/[A-Z]{2}\d{9,12}TW\b/);
   if (intl) return intl[0];
@@ -11589,11 +11694,14 @@ function detectCarriers(parcelId) {
   if (/^TW\d{11,}[A-Z]?$/.test(s)) return ["shopee"];        // 蝦皮店到家 (TW + 11碼以上, 尾字母可有可無, 例 TW…H / TW2674049666687)
   if (/^7[A-Z0-9]{2}001C\d{6,}$/.test(s)) return ["seven11"]; // 7-11 交貨便 物流條碼 (7BE001C… / 7X2001C…)
   if (/^C\d{10,15}$/.test(s)) return ["seven11"];            // 7-11 交貨便服務代碼 (C92826941076)
+  if (/^[A-Z]\d{7}$/.test(s)) return ["seven11"];            // 7-11 交貨便代碼 (從 16 碼條碼抽出來的: G3958905 / G4975445)
   if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];       // 中華郵政 / 國際
   if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];           // 全家 FamiPort 取貨號
   if (/^4297\d{12}$/.test(s)) return ["fami"];               // 全家 物流條碼 16 位 (4297661510258048)
   if (/^\d{2}[A-Z]{2}\d{9}$/.test(s)) return ["hilife"];     // 萊爾富 寄件代碼 (26KN825151502)
+  if (/^\d[A-Z]{2}\d{9}$/.test(s)) return ["hilife"];        // 萊爾富 寄件代碼 12 碼 (蝦皮出的: 6QC940032500)
   if (/^0015\d{12}$/.test(s)) return ["hilife"];             // 萊爾富 物流條碼 16 位 (0015359310000018)
+  if (/^0242\d{12}$/.test(s)) return ["hilife"];             // 萊爾富 物流條碼 16 位 另一種前綴 (0242003910000008)
   if (/^\d{6}[A-Z0-9]{8}$/.test(s)) return ["shopee_order"]; // 蝦皮訂單編號 (14碼混英數)
   if (/^\d{10}$/.test(s)) return ["hct"];                    // 10 位純數字 = 新竹物流 (3409499343 / 4965180371…)
   if (/^\d{12}$/.test(s)) return ["blackcat", "hct"];        // 12 位純數字: 黑貓或新竹 (使用者點對的)
