@@ -407,6 +407,23 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
   min-height: 48px;
 }
 .btn:active { transform: translateY(1px); opacity: .9; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 🎨 按鈕顏色規則 —— 改 UI 前請先讀這段                             │
+   │                                                                  │
+   │  .btn            橘色實心 = 這一頁的「主要動作」, 每頁最多一顆     │
+   │                  例:出貨完成 / 完成總訂單 / 建立清單              │
+   │  .btn.secondary  淡橘 = 次要動作, 按了不會不可逆                  │
+   │  .btn.outline    外框 = 中性動作(查看 / 切換 / 匯出)              │
+   │  .btn.danger     紅色 = **會刪資料或不可逆**                      │
+   │                                                                  │
+   │ ⚠ 判斷標準很簡單:「按下去之後能不能自己復原?」                   │
+   │    不能 → 一律加 danger。                                        │
+   │    清空紀錄、還原出廠預設、忘記記憶、刪除對應 都屬於這類。         │
+   │    (⌨ 數字鍵盤的「🗑 清空」只是清輸入框, 不算)                   │
+   │                                                                  │
+   │ 為什麼要訂這條規則:同仁趕貨時不會讀文字, 只看顏色和位置。         │
+   │    把刪資料的鈕做成跟「查看」一樣的外框藍, 遲早會被誤按。          │
+   └──────────────────────────────────────────────────────────────────┘ */
 .btn.secondary { background: var(--primary-light); color: var(--primary); }
 .btn.danger { background: var(--danger-bg); color: var(--danger); }
 .btn.outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
@@ -1725,7 +1742,7 @@ footer.summary-bar {
       <button class="settings-card" id="open-replacement-order-btn">
         <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="12" height="10" rx="1.5"/><path d="M15 9l4 4-4 4"/><path d="M19 13H9"/></svg></div>
         <div class="card-title">補寄訂單</div>
-        <div class="card-desc">售後 · 不扣庫存</div>
+        <div class="card-desc">售後 · 會扣庫存</div>
       </button>
       <button class="settings-card" id="open-return-order-btn">
         <div class="card-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="8" width="12" height="10" rx="1.5"/><path d="M9 9L5 13l4 4"/><path d="M5 13h10"/></svg></div>
@@ -1750,9 +1767,20 @@ footer.summary-bar {
       <summary>已建立的對應 (<span id="spec-map-count">0</span>)</summary>
       <p class="hint" style="margin-bottom:6px;">這是系統記住的「規格 → SKU」對應，下次匯入會自動套用 (跨通路共用)。</p>
       <div id="spec-map-list" class="hint" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafbfc;">尚無資料</div>
-      <button class="btn full sm outline" id="restore-spec-map-btn" style="margin-top:8px;">↻ 還原 Koca 預設對應</button>
+      <button class="btn full sm danger" id="restore-spec-map-btn" style="margin-top:8px;">↻ 還原 Koca 預設對應</button>
       <button class="btn full sm secondary" id="add-spec-map-btn" style="margin-top:8px;">➕ 新增規格對應</button>
       <button class="btn full sm danger" id="clear-spec-map-btn" style="margin-top:8px;">🗑 全部清空 (含預設)</button>
+    </details>
+
+    <!-- 🧠 官網品名記憶:這三種記憶都是「第一次遇到某個官網品名時, 由當下的同仁回答」的,
+         答完就永遠生效、不再詢問。以前完全看不到也刪不掉 —— 答錯就每張同品名的單都錯, 而且沒人知道。 -->
+    <details>
+      <summary>🧠 官網品名記憶 (<span id="koca-memory-count">0</span>)</summary>
+      <p class="hint" style="margin-bottom:6px;">
+        系統第一次遇到某個官網品名時會問一次,之後就照記住的做、不再問。<br>
+        <strong>覺得某張單帶出來的東西不對,就把那筆刪掉</strong> —— 下次遇到會重新問。
+      </p>
+      <div id="koca-memory-list" class="hint" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fafbfc;">尚無資料</div>
     </details>
 
     <details>
@@ -2280,7 +2308,7 @@ footer.summary-bar {
       <details style="margin-bottom:8px;">
         <summary style="font-weight:600; font-size:0.85rem;">📮 補寄 / ↩️ 退貨 / 🏭 入倉</summary>
         <div style="font-size:0.8rem; line-height:1.9; padding:6px 4px;">
-          • <strong>補寄</strong>:售後補件。客人手機選填。<strong>不扣庫存、不推</strong>。<br>
+          • <strong>補寄</strong>:售後補件。客人手機選填。<strong>會扣庫存</strong>(貨真的出去了)、不推外部。<br>
           • <strong>退貨確認</strong>:收回商品,依原因分倉——良品→一般倉、商品瑕疵→報廢倉、商品故障→檢修倉。<br>
           • <strong>入倉驗收</strong>:進貨。填進貨單號 → 刷/點商品。完成後<strong>加進一般倉庫存</strong>,不推。<br>
           💡 連續多位客人:刷下一位單號會跳「換下一位?」自動收上一筆。
@@ -2572,7 +2600,7 @@ footer.summary-bar {
       </p>
       <div id="bundle-rules-list" style="margin-top: 14px;"></div>
       <button class="btn full outline" id="bundle-add-btn" style="margin-top: 10px;">＋ 新增一條連動規則</button>
-      <button class="btn full outline" id="bundle-restore-btn" style="margin-top: 8px;">↻ 還原成出廠預設</button>
+      <button class="btn full danger" id="bundle-restore-btn" style="margin-top: 8px;">↻ 還原成出廠預設</button>
     </div>
 
     <div id="settings-view-backup" class="settings-subview" hidden>
@@ -2599,7 +2627,7 @@ footer.summary-bar {
         <div id="storage-usage"></div>
         <button class="btn full outline" id="storage-refresh-btn" style="margin-top: 10px;">↻ 重新計算</button>
         <button class="btn full outline" id="storage-cleanup-btn" style="margin-top: 8px;">🧹 清掉雲端已保存的舊出貨紀錄</button>
-        <button class="btn full outline" id="storage-purge-btn" style="margin-top: 8px; border-color: var(--danger); color: var(--danger);">🗑 清空本機全部出貨紀錄(雲端保留)</button>
+        <button class="btn full danger" id="storage-purge-btn" style="margin-top: 8px;">🗑 清空本機全部出貨紀錄(雲端保留)</button>
         <button class="btn full outline" id="dup-override-log-btn" style="margin-top: 8px;">⛔ 查看「重複出貨放行」紀錄</button>
         <p class="hint" style="font-size: 0.7rem; margin-top: 8px;">
           🧹 <strong>清掉舊的</strong>:只刪已確認存在雲端、且超過 14 天的。<br>
@@ -3418,7 +3446,10 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v8.4 · 2026-10-13";
+const APP_VERSION = "v9.1 · 2026-10-15";
+// 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
+//   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
+const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
 
 // 通路設定 - parser 之後若有客製化 (各通路 CSV 格式不同), 在 parserFor() 加 dispatch
 // ★ 單一通路設定來源: 新增通路只改這裡 (label/emoji/customer/kocaCustomer 全部集中)
@@ -3733,18 +3764,7 @@ function getActiveMemberCount() {
   ).length;
 }
 
-function getAdaptiveSyncInterval() {
-  const idleMs = Date.now() - _lastUserActivity;
-  const memberCount = getActiveMemberCount();
-  // Burst 模式: 對方剛有動作, 維持快速輪詢 (僅雙人時)
-  if (_activityBurstUntil && Date.now() < _activityBurstUntil && memberCount > 1) {
-    return ROOM_CONFIG.BURST_MS;
-  }
-  // 獨自一人 → 慢速輪詢就夠 (久未操作再放更慢)
-  if (memberCount <= 1) return idleMs > ROOM_CONFIG.SOLO_IDLE_MS ? ROOM_CONFIG.SOLO_IDLE_MS : ROOM_CONFIG.SOLO_MS;
-  if (_consecutiveNoChange >= ROOM_CONFIG.NOCHANGE_BEFORE_IDLE && idleMs > ROOM_CONFIG.IDLE_THRESHOLD_MS) return ROOM_CONFIG.IDLE_MS;
-  return ROOM_CONFIG.BASE_MS;
-}
+// (已移除 getAdaptiveSyncInterval:全檔沒有任何地方呼叫它, 輪詢間隔實際是由 startSyncTimer 決定)
 let library = []; // [{sku, name, category}]
 let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
@@ -3784,6 +3804,16 @@ const STOCKTAKE_HISTORY_KEY = "picking_stocktake_history_v1";
 // { 正規化後的官網品名: "SKU" }。指定過一次就永遠記得, 之後同一個品名自動帶入。
 const KOCA_NAME_MAP_KEY = "picking_koca_name_map_v1";
 let kocaNameMap = {};
+// 🧠 官網品名 → 「要不要帶出連動子項」的記憶。true = 整組 / false = 只出這一項。
+//   key 用官網品名(正規化後), 跟規格對應表同一套邏輯:同一個 SKU 在不同品名下答案可以不同。
+//   例:補寄單寫「JOY LITE收納包」→ false(只出收納包);其他品名若真的是整組 → true。
+const KOCA_BUNDLE_CHOICE_KEY = "picking_koca_bundle_choice_v1";
+let kocaBundleChoice = {};
+function saveKocaBundleChoice() { try { localStorage.setItem(KOCA_BUNDLE_CHOICE_KEY, JSON.stringify(kocaBundleChoice)); } catch (e) {} }
+function loadKocaBundleChoice() {
+  try { const s = localStorage.getItem(KOCA_BUNDLE_CHOICE_KEY); if (s) { const p = JSON.parse(s); if (p && typeof p === "object") kocaBundleChoice = p; } }
+  catch (e) { kocaBundleChoice = {}; }
+}
 function saveKocaNameMap() {
   try { localStorage.setItem(KOCA_NAME_MAP_KEY, JSON.stringify(kocaNameMap)); if (typeof scheduleMasterPush === "function") scheduleMasterPush(); } catch (e) {}
 }
@@ -4121,8 +4151,12 @@ function buildPickingOutboundPayload(entry) {
 async function pushKocaOutbound(entry) {
   if (!settings.kocaOutboundEnabled) return;
   if (!entry || entry.kocaPushed) return;
-  // 補寄/退貨/入倉不推 (避免亂扣)
-  if (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound") return;
+  // 退貨/入倉不推 —— 那不是出貨, 推了才會亂扣。
+  // 📤 補寄從 v8.7 起**要推**(Kyle:「只要是出貨都要去扣庫存…通常都是全部同樣處理」)。
+  //   補寄的貨真的出去了, 本機已經扣(v8.6), 對外系統沒道理不扣, 不然兩邊帳會越差越多。
+  //   ⚠ 撞號疑慮已確認沒有:doc_no 是用【這筆紀錄的 id】產生的(generateDocNo(entry.completedAt, entry.id)),
+  //     補寄雖然跟原單共用 kocaOrderId, 但它是獨立的一筆紀錄 → 自己的 doc_no → 對方以 doc_no 去重, 不會重複計。
+  if (entry.orderType === "return" || entry.orderType === "inbound") return;
   if (!settings.syncWorkerUrl) { setTimeout(() => showToast("⚠ KOCA 推送需先設定同步 Worker URL"), 800); return; }
   // 只送真正商品 SKU: 排除包裝/零件 (essential), qty>0
   // 追加合併: 只推「本次新增的量」= 現在 packed - 原單已推的量, 避免原始商品被重複扣
@@ -4262,6 +4296,10 @@ async function pushKocaFulfill(entry) {
   if (!entry || !settings.kocaFulfillEnabled) return;
   if (!entry.kocaOrderId) return;                                  // 不是從官網訂單建的單
   if (entry.kocaFulfilled) return;                                 // 已回寫過, 不重複
+  // ⚠ 這支跟「扣庫存 / 推出貨量」不同類, 補寄**刻意不回寫**, 不要跟著一起改:
+  //   回寫的是【訂單狀態 = 已出貨】, 而補寄跟原單共用同一個 kocaOrderId, 原單早就標過已出貨了。
+  //   再標一次最好的情況是官網回 already_fulfilled(白做), 最壞是把原單的物流單號覆蓋成補寄的。
+  //   補寄是「同一張訂單的第二個包裹」, 不是「這張訂單被出貨了」。
   if (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound") return;
   if (!settings.syncWorkerUrl) return;
   const r = await _doKocaFulfill(entry);
@@ -7004,7 +7042,7 @@ async function fetchKocaOrder(orderId, opts) {
       // 跟刷單號那邊用同一道嚴格關卡: 要放行必須手打單號後 4 碼, 按不過去
       if (!confirmDuplicateShipment(data.orderId, { entry: already, matchType: "官網訂單編號" }, "官網拉單")) {
         setKocaOrderStatus(
-          `⛔ <strong>已擋下重複出貨</strong><br>訂單 ${escapeHtml(data.orderId)} 已於 <strong>${escapeHtml(when)}</strong> 由 <strong>${escapeHtml(who)}</strong> 出貨完成。<br><span style="color:var(--text-soft);">若真的要補件, 請改用「補寄訂單」建單(不扣庫存)。</span>`, "err");
+          `⛔ <strong>已擋下重複出貨</strong><br>訂單 ${escapeHtml(data.orderId)} 已於 <strong>${escapeHtml(when)}</strong> 由 <strong>${escapeHtml(who)}</strong> 出貨完成。<br><span style="color:var(--text-soft);">若真的要補件, 請改用「補寄訂單」建單。</span>`, "err");
         return false;
       }
     }
@@ -7036,6 +7074,8 @@ function buildListFromKocaOrder(o, gate) {
 
   const totals = {};     // sku -> qty
   const nameOf = {};     // sku -> 官網商品名 (對不到 library 時用)
+  const srcNameOf = {};  // sku -> 帶出它的「官網品名」(連動要問一次時, 記憶就以這個品名為 key)
+  const userMappedSkus = new Set();  // 同仁在「未對應品項」下拉選單親手指定過的品名所對到的 SKU
   const unmapped = [];   // 對不到 SKU 的品項
   const expandedNames = []; // 依規格對應表展開的套組品名 (給提示用)
   const specExpandedSkus = new Set(); // 由規格對應表展開出來的 SKU: 已是完整拆解, 不可再被連動規則展開一次 (會變兩倍)
@@ -7101,6 +7141,13 @@ function buildListFromKocaOrder(o, gate) {
     }
     totals[sku] = (totals[sku] || 0) + qty;
     nameOf[sku] = prod.name;
+    srcNameOf[sku] = it.name || "";     // 記住是官網的哪個品名帶出這個 SKU (連動要問一次時當記憶的 key)
+    // 🔒 這個品名是同仁親手指定過的嗎?(存在 kocaNameMap = 他在下拉選單選的)
+    //   Kyle:「我只有選擇收納包的情況下, 系統就應該辨識出我只需要收納包,
+    //          不然前面的點選組合不就沒有意義了嗎」—— 他是對的。
+    //   以前只有「套組(多個 SKU)」才被當成使用者的決定; 指定成單一商品的完全不算,
+    //   連動規則照樣往上加主機 → 等於指定了也沒用。
+    if (kocaNameMap[normalizeProdName(it.name || "")]) userMappedSkus.add(sku);
   });
 
   // 依 library 順序組清單
@@ -7108,7 +7155,7 @@ function buildListFromKocaOrder(o, gate) {
   for (const p of library) {
     if (totals[p.sku] > 0) {
       // _fromSpec: 這個 SKU 是規格對應表拆出來的完整內容 → 下面的連動展開要跳過它, 否則子項會被加兩次
-      items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0, _fromSpec: specExpandedSkus.has(p.sku) });
+      items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0, _fromSpec: specExpandedSkus.has(p.sku), _srcName: srcNameOf[p.sku] || "", _userMapped: userMappedSkus.has(p.sku) });
     }
   }
   // 對不到 SKU 的品項 (標紅, 不能刷但看得到)
@@ -7122,6 +7169,7 @@ function buildListFromKocaOrder(o, gate) {
     }
   }
   // 官網訂單: 商品連動 — 把連動規則的 trigger 商品(如投影機收納組)的子項(投影機主機)也展開進清單
+  _lastBundleExpanded = null;
   _expandKocaBundles(items);
   // 必要商品 (自由計數)
   for (const p of library) {
@@ -7206,6 +7254,15 @@ function buildListFromKocaOrder(o, gate) {
   const codNote = gate && gate.cod ? '<br><strong style="color:#b26b00;">💰 貨到付款(COD):出貨時記得收款。</strong>' : "";
   const expandNote = expandedNames.length
     ? `<br><strong style="color:var(--primary);">📦 套組已展開:${escapeHtml(expandedNames.join("、"))}</strong>(依規格對應表拆成各別商品)` : "";
+  // 🔔 依「記住的選擇」多帶出來的東西 —— 一定要留在畫面上, 不是 toast 閃一下。
+  //   官網單上沒有這些, 是系統自己加的; 加錯了(第一次答錯)就會每張單都多出貨。
+  const bundleNote = _lastBundleExpanded
+    ? `<br><span style="display:inline-block;margin-top:6px;padding:7px 10px;border-radius:8px;background:var(--warn-bg);color:#92400e;border:1px solid #f0c080;">
+         📦 <strong>這些是系統自動加的,官網單上沒有</strong><br>
+         ${escapeHtml(_lastBundleExpanded.desc)}<br>
+         <span style="font-size:0.9em;">因為「${escapeHtml(_lastBundleExpanded.from)}」記住要帶整組。<br>
+         不該出的話請用「−」減掉;要改這個記憶到 ⚙ 設定 → 🧠 官網品名記憶。</span>
+       </span>` : "";
   // 📝 官網訂單備註 —— 缺件補寄的說明就寫在這裡 (例:「本次不含 JOY LITE 收納包 × 1, 另單免費補寄」)。
   //   ⚠ 這段一定要讓同仁看到:套組會被展開成主機+收納包, 但備註明說這次不含收納包 →
   //     不講的話就會照清單裝進去, 多送一個。存進 state 讓撿貨頁一直掛著, 不是跳一下就消失的 toast。
@@ -7218,7 +7275,7 @@ function buildListFromKocaOrder(o, gate) {
        </span>`
     : "";
   setKocaOrderStatus(
-    `✅ 已建立官網出貨清單<br>訂單 <strong>${escapeHtml(o.orderId)}</strong>｜${escapeHtml(o.statusLabel || "")}｜共 ${items.filter(it => !it.essential).length} 個品項` + expandNote +
+    `✅ 已建立官網出貨清單<br>訂單 <strong>${escapeHtml(o.orderId)}</strong>｜${escapeHtml(o.statusLabel || "")}｜共 ${items.filter(it => !it.essential).length} 個品項` + expandNote + bundleNote +
     (o.shipping && o.shipping.method ? `<br>配送:${escapeHtml(_kocaDeliveryLabel(o.shipping.method))}${o.shipping.storeInfo ? "・" + escapeHtml(o.shipping.storeInfo) : ""}` : "") +
     (o.recipient && o.recipient.name ? `<br>收件人:${escapeHtml(o.recipient.name)}` : "") +
     codNote + remarkNote,
@@ -7374,14 +7431,65 @@ function _expandKocaBundles(items) {
   // 先算出「如果要加, 會加什麼」, 不動 items
   const plan = [];   // [{sku, name, qty}]
   const triggers = [];
+  const askNames = [];   // 這次需要問一次的官網品名
   for (const it of items) {
     if (it.essential || it.unmapped) continue;
     if (it._fromSpec) continue; // 規格對應表已經拆好完整內容, 再展開一次會變兩倍 (買1組變主機2、濾芯8)
+    // 🔒 同仁親手指定過「這個官網品名 = 這一個商品」→ 那就是答案, 系統不該再自己加東西。
+    //   不然「指定」這個動作就沒有意義 —— 他明明選了只要收納包, 系統還是塞一台主機進去。
+    //   要整組的話, 正確做法是把品名指定成「套組」(規格對應表, 可以一個品名對多個 SKU)。
+    if (it._userMapped) continue;
     const rule = BUNDLE_RULES.find(r => r.trigger === it.sku);
     if (!rule || !Array.isArray(rule.children)) continue;
+
+    // 🔴 修正一:子項已經在這張單上了, 就不要再加。
+    //   官網單把主機和收納包分成兩列時, 舊版會把「已經有的主機」再加一次 → 主機變 ×2。
+    //   實測:官網 主機×1 + 收納包×1 → App 建出 主機×2。這是正常購買就會踩到的錯帳。
+    //   訂單已經寫明數量了, 連動只該補「單上沒有的」。
+    const missing = rule.children.filter(c => !items.some(x => x.sku === c.sku && !x.essential));
+    if (missing.length === 0) continue;
+
+    // 🧠 修正二:要補子項時, 依「官網品名」問一次並記住 (Kyle:「跟第一筆刷組合包一樣, 自行選擇」)。
+    //   為什麼用官網品名當 key:補寄單寫「JOY LITE收納包」= 只出收納包;
+    //   其他品名可能真的是整組。同一個 SKU 在不同品名下答案可以不同, 跟規格對應表同一套邏輯。
+    const srcKey = normalizeProdName(it._srcName || it.name || it.sku);
+    const decided = srcKey ? kocaBundleChoice[srcKey] : undefined;
+    if (decided === false) continue;                       // 記得:這個品名不帶子項
+    if (decided !== true) { askNames.push({ it, rule, missing, srcKey }); continue; }
+
     triggers.push(it.name || it.sku);
-    for (const c of rule.children) {
+    for (const c of missing) {
       const addQty = (c.qty || 1) * (it.expected || 0);
+      if (addQty <= 0) continue;
+      const libP = library.find(p => p.sku === c.sku);
+      const nm = (libP && libP.name) || c.name || c.sku;
+      const hit = plan.find(x => x.sku === c.sku);
+      if (hit) hit.qty += addQty;
+      else plan.push({ sku: c.sku, name: nm, qty: addQty, category: (libP && libP.category) || "其他" });
+    }
+  }
+
+  // ❓ 沒記過的品名 → 問一次, 答案永遠記住 (之後同一個品名不會再問)
+  for (const a of askNames) {
+    const childDesc = a.missing.map(c => {
+      const libP = library.find(p => p.sku === c.sku);
+      return `${(libP && libP.name) || c.name || c.sku}×${(c.qty || 1) * (a.it.expected || 0)}`;
+    }).join("、");
+    const shown = a.it._srcName || a.it.name || a.it.sku;
+    SOUND.scanError();
+    const yes = confirm(
+      `📦 這個商品要一起帶出其他東西嗎?(只會問這一次)\n\n` +
+      `官網寫的品名:${shown}\n` +
+      `對應商品:${a.it.name}×${a.it.expected}\n\n` +
+      `【確定】= 這是整組, 一起加入:${childDesc}\n` +
+      `【取消】= 只出「${a.it.name}」, 不加別的\n\n` +
+      `※ 補寄單 / 客人單買配件 → 選「取消」\n` +
+      `※ 答案會記住, 以後同一個品名不會再問(要改到 ⚙ 設定 → 📦 連動規則)`);
+    if (a.srcKey) { kocaBundleChoice[a.srcKey] = yes; saveKocaBundleChoice(); }
+    if (!yes) continue;
+    triggers.push(a.it.name || a.it.sku);
+    for (const c of a.missing) {
+      const addQty = (c.qty || 1) * (a.it.expected || 0);
       if (addQty <= 0) continue;
       const libP = library.find(p => p.sku === c.sku);
       const nm = (libP && libP.name) || c.name || c.sku;
@@ -7402,9 +7510,15 @@ function _expandKocaBundles(items) {
   }
   const desc = plan.map(p => `${p.name}×${p.qty}`).join("、");
   console.log("[koca] 連動自動加入:", desc);
+  // 🔔 把「系統憑什麼這樣做」講出來, 而且要留在畫面上(toast 閃一下同仁不會看到)。
+  //   記憶是第一次遇到該品名時由當下的同仁回答的 —— 趕貨時按錯很正常,
+  //   而答錯之後就永遠不會再問、也沒有任何提示 → 每一張同品名的單都默默多出一台主機。
+  //   所以每次依記憶帶出東西時, 都要寫明「是哪個品名、帶出了什麼」, 錯了當場就看得見。
+  _lastBundleExpanded = { desc, from: [...new Set(triggers)].join("、") };
   setTimeout(() => showToast(`📦 連動已自動加入:${desc}(客人只買配件的話請手動移除)`, 6000), 500);
   return items;
 }
+let _lastBundleExpanded = null;   // 這次建單依連動規則加了什麼 (給建單狀態訊息顯示)
 // 官網訂單: 商品直接「已刷」進當前訂單(黃框), 同仁只要再刷包裝 + 手動完成此筆 (官網內容可信, 不用一件件刷商品)
 function _prefillKocaActiveParcel(o) {
   // 當前訂單(黃框)一律顯示 KOCA 訂單編號 (Kyle: 看黑貓宅配號會認不出是哪張單)。
@@ -7459,14 +7573,15 @@ function _kocaCarrierLabel(o) {
 //   G+7碼 / G+11碼 = 7-11(184+30) · 16 開頭 11 碼 = 全家(73) · 12 碼純數字 = 黑貓(133)
 //   50 開頭 8 碼 = 綠界廠商編號, 不是物流單號(11)
 function parcelCarrierOf(p) {
-  if (p && p.carrierLabel) return { label: String(p.carrierLabel), sure: true };
+  if (p && p.carrierLabel) return { label: String(p.carrierLabel), sure: true, why: "出貨當下記下來的" };
   const t = String((p && p.trackingNo) || "").trim().toUpperCase();
-  if (!t) return { label: "沒有物流單號", sure: false };
-  if (/^[A-Z]\d{7}$/.test(t) || /^[A-Z]\d{11}$/.test(t)) return { label: "7-11", sure: false };
-  if (/^16\d{9}$/.test(t)) return { label: "全家", sure: false };
-  if (/^\d{12}$/.test(t)) return { label: "黑貓宅急便", sure: false };
-  if (/^50\d{6}$/.test(t)) return { label: "無法判斷", sure: false };
-  return { label: "無法判斷", sure: false };
+  // ⚠ 分不出來時一定要講「為什麼」。只寫「無法判斷」等於把問題丟回給人, 而他還是不知道要去查什麼。
+  if (!t) return { label: "沒有物流單號", sure: false, why: "這箱沒有存到物流單號 — 可能是建單時官網還沒產生單號, 或這張是手動開的" };
+  if (/^[A-Z]\d{7}$/.test(t) || /^[A-Z]\d{11}$/.test(t)) return { label: "7-11", sure: false, why: "單號是「英文字母 + 7 或 11 碼數字」= 7-11 交貨便" };
+  if (/^16\d{9}$/.test(t)) return { label: "全家", sure: false, why: "單號是「16 開頭 11 碼」= 全家寄件代碼" };
+  if (/^\d{12}$/.test(t)) return { label: "黑貓宅急便", sure: false, why: "單號是 12 碼純數字 = 黑貓" };
+  if (/^50\d{6}$/.test(t)) return { label: "無法判斷", sure: false, why: "存到的是「50 開頭 8 碼」= 綠界廠商編號, 那不是物流單號, 所以看不出走哪一家" };
+  return { label: "無法判斷", sure: false, why: `單號「${t}」的格式不在已知的任何一種(7-11 / 全家 / 黑貓)` };
 }
 function _kocaOrderMeta(o, gate) {
   return {
@@ -10516,8 +10631,11 @@ function collectOtherChannelShipments(days) {
       .map(it => ({ sku: it.sku, name: it.name || it.sku, qty: it.packed }));
     const parcels = (e.parcels || [])
       .filter(p => p && p.id)
+      // items 一定要帶 —— 逐箱顯示「這箱裝了什麼」靠它。
+      //   手建單一筆常常裝二十幾箱, 沒有逐箱內容就只能看到一長串加總, 等於找不到單。
       .map(p => ({ id: String(p.id), trackingNo: p.trackingNo ? String(p.trackingNo) : "",
-                   ecpayNo: p.ecpayNo ? String(p.ecpayNo) : "" }));
+                   ecpayNo: p.ecpayNo ? String(p.ecpayNo) : "",
+                   items: (p.items && typeof p.items === "object") ? { ...p.items } : {} }));
     out.push({
       entryId: e.id, platform: e.platform || "unknown", orderType: e.orderType || "normal",
       kocaOrderId: e.kocaOrderId || "", completedAt: e.completedAt, completedBy: e.completedBy || "",
@@ -10686,7 +10804,7 @@ function renderLogisticsBoard() {
 function _carrierBreakdownHtml(days) {
   const all = allHistory();
   const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
-  const tally = {};   // label -> {parcels, items, sure, guess}
+  const tally = {};   // label -> {parcels, items, sure, guess, bad:[]}
   let totalP = 0, totalI = 0, guessN = 0;
   for (const e of all) {
     if (!e || e.platform !== "koca" || !e.kocaOrderId) continue;
@@ -10696,26 +10814,53 @@ function _carrierBreakdownHtml(days) {
     for (const p of (e.parcels || [])) {
       if (!p) continue;
       const c = parcelCarrierOf(p);
-      const row = tally[c.label] = tally[c.label] || { parcels: 0, items: 0, sure: 0, guess: 0 };
+      const row = tally[c.label] = tally[c.label] || { parcels: 0, items: 0, sure: 0, guess: 0, bad: [] };
       row.parcels++; totalP++;
       const n = Object.values(p.items || {}).reduce((s, q) => s + (Number(q) || 0), 0);
       row.items += n; totalI += n;
       if (c.sure) row.sure++; else { row.guess++; guessN++; }
+      // 分不出來的, 把「是哪一張、單號長怎樣、為什麼分不出來」留下來給人去查
+      if (c.label === "無法判斷" || c.label === "沒有物流單號") {
+        row.bad.push({ orderId: e.kocaOrderId, parcelId: p.id || "", trackingNo: p.trackingNo || "",
+                       at: e.completedAt, by: e.completedBy || "", why: c.why });
+      }
     }
   }
   if (totalP === 0) return "";
   const rows = Object.entries(tally).sort((a, b) => b[1].parcels - a[1].parcels);
-  const body = rows.map(([label, v]) => `
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid var(--border);">
+  const _fmt = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+  const body = rows.map(([label, v]) => {
+    const head = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 2px;">
       <span style="font-weight:700; font-size:0.84rem;">${escapeHtml(label)}
         ${v.guess ? `<span style="color:var(--text-soft); font-weight:500; font-size:0.68rem;">(${v.guess} 筆是看單號推測的)</span>` : ""}</span>
       <span style="font-family:ui-monospace,monospace; font-size:0.84rem; white-space:nowrap;">
         <strong>${v.parcels}</strong> 箱 · ${v.items} 件</span>
-    </div>`).join("");
+    </div>`;
+    if (!v.bad.length) return `<div style="border-bottom:1px solid var(--border);">${head}</div>`;
+    // 分不出來的 → 可以展開看是哪幾張、為什麼
+    const whys = [...new Set(v.bad.map(b => b.why))];
+    const list = v.bad.slice(0, 30).map(b => `
+      <div style="padding:5px 0 5px 10px; border-left:2px solid var(--border); margin:4px 0;">
+        <div style="font-family:ui-monospace,monospace; font-size:0.74rem;">${escapeHtml(b.orderId)}</div>
+        <div style="font-size:0.72rem; color:var(--text-soft);">
+          🚚 ${b.trackingNo ? escapeHtml(b.trackingNo) : "(空白)"}
+          ${b.parcelId && b.parcelId !== b.orderId ? " · 箱號 " + escapeHtml(b.parcelId) : ""}
+          · ${escapeHtml(_fmt(b.at))}${b.by ? " · " + escapeHtml(b.by) : ""}</div>
+      </div>`).join("");
+    return `<div style="border-bottom:1px solid var(--border);">${head}
+      <details style="margin:2px 0 6px 2px;">
+        <summary style="cursor:pointer; font-size:0.74rem; color:var(--danger); font-weight:700;">為什麼分不出來?點開看這 ${v.bad.length} 箱</summary>
+        <div style="margin-top:4px; font-size:0.74rem; background:var(--warn-bg); color:#92400e; padding:7px 9px; border-radius:7px;">
+          ${whys.map(w => "• " + escapeHtml(w)).join("<br>")}
+        </div>
+        ${list}
+        ${v.bad.length > 30 ? `<div class="hint">…還有 ${v.bad.length - 30} 箱(只列前 30 箱)</div>` : ""}
+      </details></div>`;
+  }).join("");
   return `<details open style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px;">
     <summary style="cursor:pointer; font-weight:800; padding:4px 0;">🚚 官方訂單 各家物流 · 近 ${days} 天 ${totalP} 箱</summary>
     <div style="margin-top:6px;">${body}
-      <div style="display:flex; justify-content:space-between; padding:6px 2px; font-weight:800;">
+      <div style="display:flex; justify-content:space-between; gap:10px; padding:6px 2px; font-weight:800;">
         <span>合計</span><span style="font-family:ui-monospace,monospace;">${totalP} 箱 · ${totalI} 件</span></div>
     </div>
     ${guessN ? `<div class="hint" style="margin-top:4px;">⚠ 其中 ${guessN} 箱是<strong>用物流單號的長相推測</strong>的(出貨當時沒有記物流商)。<br>
@@ -10737,29 +10882,36 @@ function _otherChannelHtml(days) {
   const row = (o) => {
     const p = PLATFORMS[o.platform] || {};
     const isRep = o.orderType === "replacement";
-    // 單號: 箱號 + (不同的話) 物流單號 —— 兩個都列, 因為同仁手上拿到的可能是其中任一個
-    const nums = [];
-    for (const pc of o.parcels) {
-      nums.push(pc.id);
-      if (pc.trackingNo && pc.trackingNo !== pc.id) nums.push(pc.trackingNo);
-      if (pc.ecpayNo && pc.ecpayNo !== pc.id && pc.ecpayNo !== pc.trackingNo) nums.push("綠界 " + pc.ecpayNo);
-    }
-    const numTxt = nums.length
-      ? nums.map(n => `<span style="font-family:ui-monospace,monospace; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:0 5px; margin-right:4px; font-size:0.73rem;">${escapeHtml(n)}</span>`).join("")
-      : `<span style="color:var(--danger); font-weight:700; font-size:0.73rem;">沒有單號</span>`;
-    const items = o.shipped.length
-      ? o.shipped.map(it => `${escapeHtml(it.name)}×${it.qty}`).join("、")
-      : "(沒有商品明細)";
     const t = Date.parse(o.completedAt);
     const when = t ? new Date(t).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    const nameOf = (sku) => { const q = library.find(x => x.sku === sku); return (q && q.name) || sku; };
+    // 🧾 逐箱列出「這一箱的單號 + 這一箱裝了什麼」。
+    //   以前是把整筆紀錄的所有單號併成一排、所有商品加總成一行 ——
+    //   手建單一筆常常裝二十幾箱, 併起來等於「7 個單號 + 一長串商品」, 完全看不出哪箱裝什麼,
+    //   要找某一張單根本沒辦法用 (Kyle 回報)。
+    const boxes = (o.parcels || []).map((pc, i) => {
+      const nums = [pc.id];
+      if (pc.trackingNo && pc.trackingNo !== pc.id) nums.push(pc.trackingNo);
+      if (pc.ecpayNo && pc.ecpayNo !== pc.id && pc.ecpayNo !== pc.trackingNo) nums.push("綠界 " + pc.ecpayNo);
+      const chips = nums.map(n => `<span style="font-family:ui-monospace,monospace; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:0 5px; margin-right:4px; font-size:0.73rem;">${escapeHtml(n)}</span>`).join("");
+      const ent = Object.entries(pc.items || {}).filter(([s, q]) => (q || 0) > 0);
+      const inner = ent.length
+        ? ent.map(([s, q]) => `${escapeHtml(nameOf(s))}×${q}`).join("、")
+        : "(這箱沒有商品明細)";
+      return `<div style="padding:5px 0 5px 9px; border-left:2px solid var(--border); margin:5px 0;">
+        <div>${(o.parcels.length > 1 ? `<span style="color:var(--text-soft); font-size:0.7rem; margin-right:6px; display:inline-block;">第 ${i + 1} 箱</span>` : "")}${chips}</div>
+        <div style="font-size:0.73rem; margin-top:2px;">📦 ${inner}</div>
+      </div>`;
+    }).join("");
+    const totalQ = (o.shipped || []).reduce((s, it) => s + (it.qty || 0), 0);
     return `<div style="border:1px solid var(--border); border-radius:8px; padding:7px 9px; margin-bottom:5px; background:var(--surface);">
       <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
         <span style="font-weight:700; font-size:0.78rem;">${p.emoji || "📦"} ${escapeHtml(p.label || o.platform)}</span>
         ${isRep ? `<span style="background:var(--warn-bg); color:#92400e; font-weight:700; padding:0 7px; border-radius:999px; font-size:0.66rem;">補寄</span>` : ""}
         ${o.recipient ? `<span style="color:var(--text-soft); font-size:0.72rem;">👤 ${escapeHtml(o.recipient)}</span>` : ""}
+        <span style="color:var(--text-soft); font-size:0.72rem; margin-left:auto;">${o.parcels.length} 箱 · 共 ${totalQ} 件</span>
       </div>
-      <div style="margin-top:4px;">${numTxt}</div>
-      <div style="font-size:0.73rem; color:var(--text); margin-top:3px;">📦 ${escapeHtml(items)}</div>
+      ${boxes || `<div style="font-size:0.73rem; color:var(--danger); font-weight:700; margin-top:4px;">沒有單號</div>`}
       <div style="font-size:0.68rem; color:var(--text-soft); margin-top:2px;">🕐 ${escapeHtml(when)}${o.completedBy ? " · " + escapeHtml(o.completedBy) : ""}</div>
     </div>`;
   };
@@ -11532,7 +11684,7 @@ function confirmDuplicateShipment(code, shipped, contextLabel) {
     `再出一次 = 客人收到兩份,貨和運費都是公司吸收。\n\n` +
     `【要擋下】直接按取消(建議)\n` +
     `【真的要重出】請輸入單號最後 4 碼:${tail}\n` +
-    `(若是客人沒收到要補件, 請改用「補寄訂單」—— 那個不扣庫存也不會算成重複出貨)`
+    `(若是客人沒收到要補件, 請改用「補寄訂單」—— 那個不會算成重複出貨)`
   );
   if (ans === null) return false;                                   // 取消 = 擋下
   if (String(ans).trim().toUpperCase() !== tail) {
@@ -11632,6 +11784,14 @@ function extractParcelId(raw) {
   //   ⚠ 舊紀錄存的是整串, 不過 findShippedByCode() 有包含比對, 新短碼仍對得到舊的整串紀錄。
   const s711 = s.match(/^[A-Z0-9]{3}001([A-Z]\d{7})\d{2}$/);
   if (s711) return s711[1];
+  // 2c. 全家 QR: 【寄件代碼 11 碼(16 開頭)】+ 廠商編號(長度不定, 可含字母) + 尾碼
+  //   實際樣本:
+  //     綠界開的  1635154195550594165BC15 = 16351541955 + 50594165      + BC15
+  //     蝦皮開的  16351861469SHP3628452193GC18 = 16351861469 + SHP3628452193 + GC18
+  //   以前完全沒有解析全家 QR → 整串 23~28 碼直接當成單號, 畫面上就是一長串亂碼 (Kyle 回報「單顯示錯誤」)。
+  //   ⚠ 後面一定要有字母才算數:純數字的長字串是萊爾富/全家的一維物流條碼(0242…/4297…), 不可以被切。
+  const sFami = s.match(/^(16\d{9})(?=.*[A-Z])[A-Z0-9]{6,}$/);
+  if (sFami) return sFami[1];
   // 3. 國際小包: 2 字母 + 9-12 位數字 + TW 結尾 (例: EE123456789TW)
   const intl = s.match(/[A-Z]{2}\d{9,12}TW\b/);
   if (intl) return intl[0];
@@ -11697,11 +11857,20 @@ function detectCarriers(parcelId) {
   if (/^[A-Z]\d{7}$/.test(s)) return ["seven11"];            // 7-11 交貨便代碼 (從 16 碼條碼抽出來的: G3958905 / G4975445)
   if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];       // 中華郵政 / 國際
   if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];           // 全家 FamiPort 取貨號
-  if (/^4297\d{12}$/.test(s)) return ["fami"];               // 全家 物流條碼 16 位 (4297661510258048)
+  if (/^16\d{9}$/.test(s)) return ["fami"];                  // 全家 寄件代碼 11 位 (16351541955 / 16351861469) — 兩張實體標籤確認
+  // ⚠⚠ 以下「16 碼純數字」的前綴規則**證據薄弱, 不要再往下加**:
+  //   實際查 2026-06~10 的 314 筆 16 碼純數字, 其中 274 筆的前 4 碼是**跟著日期遞增**的流水序號
+  //   (6月 4254 → 10月 5179), 而且**橫跨 MOMO / 蝦皮 / 官方 / 酷澎所有通路**
+  //   → 前 4 碼是出貨日期序號, **不是物流商代碼**。
+  //   `4297` 在全部資料裡只出現 1 筆(2026-07-02), 正好落在那天的序號上 —— 它不是「全家的前綴」。
+  //   `0242` 也只有 1 筆, 是 Kyle 2026-10-12 測萊爾富時刷的那一張。
+  //   保留這兩條只是為了「有張標籤確實長這樣」, 但**單一樣本不足以當規則**, 判出來的結果不可當真。
+  //   要真正分辨物流商, 正解是出貨當下把官網/蝦皮給的 carrier 存進紀錄(見 _kocaCarrierLabel), 不是猜單號。
+  if (/^4297\d{12}$/.test(s)) return ["fami"];               // ⚠ 單一樣本 (4297661510258048, 2026-07-02 官方)
   if (/^\d{2}[A-Z]{2}\d{9}$/.test(s)) return ["hilife"];     // 萊爾富 寄件代碼 (26KN825151502)
   if (/^\d[A-Z]{2}\d{9}$/.test(s)) return ["hilife"];        // 萊爾富 寄件代碼 12 碼 (蝦皮出的: 6QC940032500)
-  if (/^0015\d{12}$/.test(s)) return ["hilife"];             // 萊爾富 物流條碼 16 位 (0015359310000018)
-  if (/^0242\d{12}$/.test(s)) return ["hilife"];             // 萊爾富 物流條碼 16 位 另一種前綴 (0242003910000008)
+  if (/^0015\d{12}$/.test(s)) return ["hilife"];             // ⚠ 證據:資料裡 25 筆, 但全部是「官方」通路, 沒有直接證明是萊爾富 (規則早於本次改版)
+  if (/^0242\d{12}$/.test(s)) return ["hilife"];             // ⚠ 單一樣本 (0242003910000008) — 來自 Kyle 2026-10-12 的萊爾富標籤, 待更多樣本驗證
   if (/^\d{6}[A-Z0-9]{8}$/.test(s)) return ["shopee_order"]; // 蝦皮訂單編號 (14碼混英數)
   if (/^\d{10}$/.test(s)) return ["hct"];                    // 10 位純數字 = 新竹物流 (3409499343 / 4965180371…)
   if (/^\d{12}$/.test(s)) return ["blackcat", "hct"];        // 12 位純數字: 黑貓或新竹 (使用者點對的)
@@ -11914,6 +12083,7 @@ function processScan(code) {
     fetchKocaOrder(_rawForSku);
     return;
   }
+  const _rawScanned = code;                 // 留著原始刷進來的字串, 開箱時一起存(見 startParcel)
   code = _isKnownProduct ? _rawForSku : extractParcelId(code);
   if (!code) {
     _scanMultiplier = 1; renderMultiplierBadge();
@@ -12161,7 +12331,7 @@ function processScan(code) {
       if (!_pk.ok) { SOUND.scanError(); if (!confirm(_pk.message)) return; }
       // 🔒 沒收成功就絕不能開新箱 —— startParcel 會直接蓋掉 activeParcel, 舊箱刷的東西會全部消失。
       if (!finalizeActiveParcel(false)) { showToast("⚠ 上一箱還沒收掉, 先處理完再開新的"); return; }
-      startParcel(code);
+      startParcel(code, _rawScanned);
       showToast("📦 開新訂單 " + code);
     }
   } else {
@@ -12201,7 +12371,7 @@ function processScan(code) {
         setTimeout(() => alert(`⚠ 注意: 該 parcel 含 ${orphanSkus.join(", ")} 的 SKU 已不在當前清單, 無法撤銷該部分計數。`), 100);
       }
     }
-    startParcel(code);
+    startParcel(code, _rawScanned);
     SOUND.parcelStart();
     showToast("📦 開始裝箱 " + code);
   }
@@ -12212,11 +12382,17 @@ function processScan(code) {
   _scanMultiplier = 1; renderMultiplierBadge();
 }
 
-function startParcel(id) {
+function startParcel(id, rawScan) {
   state.activeParcel = {
     id, items: {},
     startedAt: new Date().toISOString(),
   };
+  // 🧾 原始掃描字串:只有在「被解析過」(抽出來的跟刷進來的不一樣)時才存。
+  //   為什麼需要:超商 QR/條碼會被 extractParcelId() 切出其中一段當單號,
+  //   切完原始字串就不見了 —— 萬一規則判斷錯(例如全家 QR 的長度跟我們以為的不同),
+  //   事後完全沒辦法回推那箱到底刷到什麼, 也沒辦法重新對回蝦皮訂單。
+  //   留著原始值幾十個字元, 但它是出事時唯一的線索。
+  if (rawScan && String(rawScan) !== String(id)) state.activeParcel.rawScan = String(rawScan);
 }
 
 // 把一箱的內容跟「今天還沒出的訂單」比對。
@@ -12649,7 +12825,7 @@ function render() {
   updateResumeBanner();
   if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); renderKocaBatchStrip(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
   else if (inMapping && !homeOverride) renderA1Mapping();
-  else { renderMenu(); renderSpecMapList(); renderEssentialList(); if (currentTab === "history") renderHistory(); } // 出貨紀錄較重: 只在該分頁時才畫 (開機/其他頁略過, 縮短載入; 切到歷史頁的 handler 會自己畫)
+  else { renderMenu(); renderSpecMapList(); renderKocaMemoryList(); renderEssentialList(); if (currentTab === "history") renderHistory(); } // 出貨紀錄較重: 只在該分頁時才畫 (開機/其他頁略過, 縮短載入; 切到歷史頁的 handler 會自己畫)
 }
 
 function updateResumeBanner() {
@@ -12693,6 +12869,53 @@ function renderEssentialList() {
   list.innerHTML = essentials.map(p => `<div style="padding:3px 0;font-size:0.75rem;"><strong style="color:var(--primary);">${escapeHtml(p.sku)}</strong> · ${escapeHtml(p.name || "")}</div>`).join("");
 }
 
+// 🧠 官網品名記憶清單:把三種「看不見的記憶」攤出來, 每筆可刪。
+//   為什麼需要:這三種都是第一次遇到該品名時由當下同仁回答的, 答完永遠生效、不再詢問,
+//   而且以前完全看不到 —— 答錯的話每張同品名的單都會錯(多出一台主機 / 漏出主機), 沒有人會發現。
+//   只做「看得到 + 刪得掉」, 不做編輯:刪掉重問比直接改安全, 實作也小。
+function renderKocaMemoryList() {
+  const list = document.getElementById("koca-memory-list");
+  const count = document.getElementById("koca-memory-count");
+  if (!list || !count) return;
+  const rows = [];
+  const nameOfSku = (sku) => { const p = library.find(x => x.sku === sku); return (p && p.name) || sku; };
+  for (const k of Object.keys(kocaBundleChoice)) {
+    rows.push({ kind: "choice", key: k,
+      what: kocaBundleChoice[k] ? "整組(會自動帶出連動商品)" : "只出這一項(不帶別的)" });
+  }
+  for (const k of Object.keys(kocaNameMap)) {
+    rows.push({ kind: "name", key: k, what: "→ " + kocaNameMap[k] + " " + nameOfSku(kocaNameMap[k]) });
+  }
+  for (const k of Object.keys(kocaBundleMap)) {
+    rows.push({ kind: "bundle", key: k, what: "→ 套組「" + kocaBundleMap[k] + "」" });
+  }
+  count.textContent = rows.length;
+  if (rows.length === 0) { list.innerHTML = "尚無資料"; return; }
+  const LABEL = { choice: "要不要帶整組", name: "對應商品", bundle: "對應套組" };
+  list.innerHTML = rows.map(r => `
+    <div style="display:flex; gap:8px; align-items:center; padding:6px 2px; border-bottom:1px solid var(--border);">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:0.8rem; word-break:break-all;">${escapeHtml(r.key)}</div>
+        <div style="font-size:0.72rem; color:var(--text-soft);">
+          <span style="background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:0 5px;">${LABEL[r.kind]}</span>
+          ${escapeHtml(r.what)}</div>
+      </div>
+      <button class="btn danger sm" data-koca-mem-del="${escapeHtml(r.kind)}" data-koca-mem-key="${escapeHtml(r.key)}"
+        style="padding:2px 8px; font-size:0.7rem; min-height:auto;">🗑 忘記</button>
+    </div>`).join("");
+}
+document.addEventListener("click", (ev) => {
+  const btn = ev.target && ev.target.closest && ev.target.closest("[data-koca-mem-del]");
+  if (!btn) return;
+  const kind = btn.getAttribute("data-koca-mem-del");
+  const key = btn.getAttribute("data-koca-mem-key");
+  if (!confirm(`要忘記這筆記憶嗎?\n\n「${key}」\n\n下次再遇到這個官網品名時, 系統會重新問一次。`)) return;
+  if (kind === "choice") { delete kocaBundleChoice[key]; saveKocaBundleChoice(); }
+  else if (kind === "name") { delete kocaNameMap[key]; saveKocaNameMap(); }
+  else if (kind === "bundle") { delete kocaBundleMap[key]; saveKocaBundleMap(); }
+  renderKocaMemoryList();
+  showToast("🧠 已忘記, 下次會重新問");
+});
 function renderSpecMapList() {
   const list = document.getElementById("spec-map-list");
   const count = document.getElementById("spec-map-count");
@@ -14815,6 +15038,7 @@ function backupKeys() {
     ERP_ALIGN_KEY,                          // 上次 ERP 對齊時間
     KOCA_NAME_MAP_KEY,                      // 官網品名 → SKU 記憶對應表 (辛苦對過的別弄丟)
     KOCA_BUNDLE_MAP_KEY,                    // 官網品名 → 套組拆法 記憶表 (弄丟 → 套組又只出主機)
+    KOCA_BUNDLE_CHOICE_KEY,                 // 官網品名 → 要不要帶出連動子項 (弄丟 → 每張單又要重問一次)
     DUP_OVERRIDE_KEY,                       // 重複出貨放行紀錄 (稽核用, 不可遺失)
     BUNDLE_RULES_KEY,                       // 連動規則 (自己編的, 弄丟就退回出廠預設)
     PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
@@ -16344,8 +16568,21 @@ function applyStockForEntry(entry, opts) {
   const quiet = !!opts.quiet;
   // ⚠ 標記「已套用」必須等真的寫入成功之後 (見函式結尾)。先標記的話, 一旦 saveStock() 因空間不足失敗,
   //   這筆扣帳就永遠不會再被補扣 → 靜默漏扣。
-  // 出貨自動扣帳 (補寄不扣 / 退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
-  if (settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "replacement" && entry.orderType !== "inbound") {
+  // 出貨自動扣帳 (退貨不扣 / 入倉不扣 / 必要商品=包裝材也不扣)
+  //
+  // 📉 補寄從 v8.6 起**要扣庫存**(Kyle:「只要是出貨都要扣庫存」)。
+  //   補寄的貨是真的離開倉庫的, 以前完全不動帳 → App 庫存持續比實際多。
+  //   實測 2026/06/23–10/13 共補寄出去 372 件商品(Joy Lite 主機就 195 台), 一件都沒扣,
+  //   而同期退貨只有 6 件、進貨 0 筆, 沒有任何東西回頭沖銷。
+  //
+  // ⚠ 只對「生效日之後」的補寄扣 —— 絕不可以追溯。
+  //   理由:舊的補寄紀錄在本機雖然已被標記 _stockAppliedIds(所以不會重扣),
+  //   但那份清單會按時間修剪, 而且別台裝置包的單是靠 reconcileStockFromCloud 補扣的。
+  //   不設生效日的話, 一上線就可能把最近幾天的舊補寄突然扣掉一批, 而沒有人知道為什麼庫存少了。
+  //   過去那 372 件的差額靠盤點處理, 不要讓程式偷偷動它。
+  const _repDeduct = entry.orderType !== "replacement"
+    || Date.parse(entry.completedAt) >= REPLACEMENT_DEDUCT_FROM;
+  if (settings.autoDeductOnShip && entry.orderType !== "return" && entry.orderType !== "inbound" && _repDeduct) {
     let deducted = 0;
     const lowStockSkus = [];
     const threshold = getLowStockThreshold();
@@ -16430,7 +16667,9 @@ function applyShipmentSideEffects(entry) {
   if (entry && stockIsMineToMutate()) applyStockForEntry(entry);
   // Webhook 推送 - picking_outbound JSON 格式 (AI Agent 規範)
   // 補寄訂單 / 退貨確認 / 入倉驗收不推送 (使用者要求只記本機)
-  const skipWebhook = entry && (entry.orderType === "replacement" || entry.orderType === "return" || entry.orderType === "inbound");
+  // 📤 出貨一視同仁:補寄也要推 webhook(v8.7)。退貨/入倉不是出貨, 照舊不推。
+  //   以前連補寄一起排除(註解寫「使用者要求只記本機」), 但那會讓外部系統看到的出貨量少掉補寄那部分。
+  const skipWebhook = entry && (entry.orderType === "return" || entry.orderType === "inbound");
   if (entry && !skipWebhook && (settings.discordWebhook || settings.sheetsWebhook)) {
     const outbound = buildPickingOutboundPayload(entry);
     pushToDiscordRaw({
@@ -16440,7 +16679,7 @@ function applyShipmentSideEffects(entry) {
   } else if (skipWebhook) {
     console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
   }
-  // 推送出貨到 KOCA 庫存 API (預設關閉; 補寄/退貨/入倉不推; 透過 Worker 轉發)
+  // 推送出貨到 KOCA 庫存 API (預設關閉; 退貨/入倉不推; 透過 Worker 轉發)
   pushKocaOutbound(entry);
   // 🌐 回寫官網訂單「已出貨」+ 物流單號 (預設關閉; 只對來源是官網訂單的單生效)
   pushKocaFulfill(entry);
@@ -16731,6 +16970,7 @@ loadStock();
 loadStockTake();
 loadStockTakeHistory();
 loadKocaNameMap();   // 官網品名 → SKU 記憶對應表
+loadKocaBundleChoice();   // 官網品名 → 要不要帶出連動子項 (問過一次就記住)
 loadKocaBundleMap(); // 官網品名 → 套組(規格對應表) 記憶表
 // 一次性修正 (v5.1): 清掉「名字像套組, 卻被記成單一商品」的舊對應。
 //   這種記憶是怎麼來的: 套組品名以前對不到拆法 → 跳出指定視窗 → 現場只能選單一商品 → 只好選主機 → 永遠記住。
