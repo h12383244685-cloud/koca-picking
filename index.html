@@ -284,6 +284,10 @@ header h1 {
 
 .tab-bar {
   display: flex;
+  justify-content: center;   /* 📐 分頁縮窄後置中 (Kyle 2026/10/20)。
+                                以前每個分頁 flex:1 平均分攤整條寬度, 在電腦/平板上會被拉得很開,
+                                五個字各自孤零零地散在一條長橫列上。改成照文字寬度排、整組置中。
+                                手機螢幕窄, 本來就塞滿, 看起來幾乎沒變 —— 寬螢幕才看得出差別。 */
   background: var(--surface);
   margin: 12px 12px 0;
   border-radius: 14px 14px 0 0;
@@ -293,11 +297,17 @@ header h1 {
   padding: 4px 4px 0;
 }
 .tab-bar button {
-  flex: 1;
+  /* 📐 寬螢幕置中、手機維持滿版, 靠的是「可以長大但有上限」:
+     ・電腦/平板(640px):每個最多 92px, 五個加起來撐不滿 → 剩下的空間由 justify-content 置中
+     ・手機(375px):空間本來就不夠 92px, 五個自然長滿整條, 跟改之前一樣好按
+     ⚠ 第一版寫 flex:0 1 auto(照文字寬度), 結果手機上被壓到標籤全黏在一起。 */
+  flex: 1 1 auto;
+  max-width: 92px;
+  min-width: 0;
   background: transparent;
   border: 0;
   border-radius: 10px 10px 0 0;
-  padding: 10px 4px 12px;
+  padding: 10px 6px 12px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-soft);
@@ -1637,11 +1647,11 @@ footer.summary-bar {
     <button class="btn" id="resume-btn">▶ 繼續備貨</button>
   </div>
   <div class="tab-bar">
-    <button data-tab="menu" id="tab-menu" class="active">
+    <button data-tab="menu" id="tab-menu">
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.5 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg></span>
       <span class="tab-label">商品庫</span>
     </button>
-    <button data-tab="a1" id="tab-a1">
+    <button data-tab="a1" id="tab-a1" class="active">
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10v8H3z"/><path d="M13 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg></span>
       <span class="tab-label">開始出貨</span>
     </button>
@@ -1659,8 +1669,8 @@ footer.summary-bar {
     </button>
   </div>
 
-  <!-- Tab 1: 我的商品庫 (純瀏覽模式) -->
-  <div class="panel" id="tab-content-menu">
+  <!-- Tab 1: 我的商品庫 (純瀏覽模式) — 預設不開這頁, 見下面「開始出貨」 -->
+  <div class="panel" id="tab-content-menu" hidden>
     <h2>我的商品庫</h2>
     <p class="hint">這是你所有商品依分類分組顯示。想開始備貨，請切到上方的 <strong>📥 開始出貨</strong> 上傳揀貨單 CSV。</p>
     <div class="menu-toolbar" style="display:flex; gap:8px; align-items:center; margin:8px 0;">
@@ -1674,8 +1684,8 @@ footer.summary-bar {
     </div>
   </div>
 
-  <!-- Tab: 通路匯入 -->
-  <div class="panel" id="tab-content-a1" hidden>
+  <!-- Tab: 通路匯入 — 🏠 預設開這一頁 (Kyle 2026/10/20:同仁打開 App 就是要包貨, 不該先看到商品庫) -->
+  <div class="panel" id="tab-content-a1">
     <h2 id="a1-page-title">從通路後台匯入揀貨單</h2>
     <h2 id="a1-pos-title" hidden>🌐 官網出貨</h2>
 
@@ -3446,7 +3456,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v9.1 · 2026-10-15";
+const APP_VERSION = "v10.0 · 2026-10-20";
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -3770,7 +3780,9 @@ let menuQty = {}; // {sku: qty} - 在 menu 上的暫存數量
 let collapsedCats = {}; // {categoryName: true} - 收合狀態
 let specMap = {}; // {spec: [{sku, qty}]} - A1 規格對應
 let pendingA1 = []; // [{spec, orderQty}] - 待對應的 A1 揀貨資料
-let currentTab = "menu";
+// 🏠 預設分頁 = 開始出貨。⚠ 改這裡的話, 上面 HTML 的三個地方要一起改, 不然畫面和狀態會對不上:
+//   tab-a1 的 class="active" / tab-content-a1 沒有 hidden / tab-content-menu 有 hidden
+let currentTab = "a1";
 let history = []; // [{id, completedAt, platform, items: [...], summary: {totalSku, totalExpected, totalPacked, completionRate}}]
 let cloudHistory = [];      // 雲端共享出貨紀錄 (不存本機, 開出貨紀錄時拉回)
 let _cloudHistFetchedAt = 0; // 上次拉雲端時間 (節流)
@@ -6007,6 +6019,7 @@ function checkBundleRule(triggerIdx, deltaAdded) {
   setTimeout(() => {
     {
       let addedCount = 0;
+      const added = [], skipped = [];
       for (const c of available) {
         let recheckIdx = state.items.findIndex(it => it.sku === c.sku);
         // 手動模式: 子項不在清單就先自動加入, 再計數
@@ -6022,16 +6035,39 @@ function checkBundleRule(triggerIdx, deltaAdded) {
           if (state.roomMode) queueRoomEvent("item_add", { sku: c.sku, name: (libP && libP.name) || c.name || c.sku, category: (libP && libP.category) || "其他", expected: 0, essential: false });
         }
         if (recheckIdx >= 0) {
-          bumpPickItem(recheckIdx, c.totalQty, { suppressBundle: true });
-          addedCount++;
-          // 把連動子項掛到「剛剛那個 trigger 的 undo 動作」上, 之後按撤銷會一起撤 (避免子項殘留多算)
-          if (_lastAction && _lastAction.type === "scan_sku") {
-            (_lastAction.children = _lastAction.children || []).push({ sku: c.sku, delta: c.totalQty });
+          // 🔒【只補還缺的量, 絕不刷過頭】Kyle 2026/10/20 回報「官方刷單會多刷」, 實測重現:
+          //   官網單「主機1 + 收納包1 + 濾芯4」, 同仁照順序刷完三樣 →
+          //   刷到收納包時連動又加一次 → 主機 2/1、濾芯 8/4, 而且**一句話都沒問**
+          //   (連動子項帶 suppressBundle, 剛好跳過多刷攔截)。
+          //   結果:出貨紀錄多記、庫存多扣, 但箱子裡只有一套 → ERP 跟倉庫就對不起來。
+          //
+          //   官網單/CSV 的清單本來就寫明這張要出幾個, 連動的用途是「同仁只刷了收納包」時補上主機,
+          //   不是「再加一套」。所以這裡只補到應出量為止。
+          //   ⚠ 補寄/退貨/入倉(manualMode)是自由計數, 沒有應出量可比 → 維持原本行為照加。
+          const _child = state.items[recheckIdx];
+          let _add = c.totalQty;
+          if (!state.manualMode && (_child.expected || 0) > 0) {
+            _add = Math.min(_add, Math.max(0, _child.expected - (_child.packed || 0)));
+          }
+          if (_add > 0) {
+            bumpPickItem(recheckIdx, _add, { suppressBundle: true });
+            added.push({ name: c.name, qty: _add });
+            addedCount++;
+            // 把連動子項掛到「剛剛那個 trigger 的 undo 動作」上, 之後按撤銷會一起撤 (避免子項殘留多算)
+            if (_lastAction && _lastAction.type === "scan_sku") {
+              (_lastAction.children = _lastAction.children || []).push({ sku: c.sku, delta: _add });
+            }
+          } else {
+            skipped.push(c.name);
           }
         }
       }
+      // 「這次沒加, 因為清單上已經夠了」也要講出來 —— 不講的話同仁會以為連動壞了, 跑去手動補一個。
+      if (skipped.length > 0 && addedCount === 0) {
+        showToast(`📦 ${skipped.join("、")} 已經刷齊了, 這次沒有再加`, 4000);
+      }
       if (addedCount > 0) {
-        const _d = available.map(c => `${c.name}×${c.totalQty}`).join("、");
+        const _d = added.map(c => `${c.name}×${c.qty}`).join("、");
         showToast(`📦 連動已自動加入:${_d}(不需要的話按「撤銷」)`, 5000);
         // 剛加完子項 → 刷新撤銷鈕(重置 5 秒倒數 + 更新文字), 讓「撤銷=trigger+套組」有足夠時間按
         if (_lastAction && _lastAction.type === "scan_sku" && Array.isArray(_lastAction.children) && _lastAction.children.length) {
@@ -7575,12 +7611,45 @@ function _kocaCarrierLabel(o) {
 function parcelCarrierOf(p) {
   if (p && p.carrierLabel) return { label: String(p.carrierLabel), sure: true, why: "出貨當下記下來的" };
   const t = String((p && p.trackingNo) || "").trim().toUpperCase();
+  const boxId = String((p && p.id) || "").trim().toUpperCase();
+  const raw = String((p && p.rawScan) || "").toUpperCase();   // 當初刷進來的「整串」原始內容
+  // 沒存物流單號時退回用箱號判斷 —— 超商單的箱號本來就是刷標籤刷進來的那一段。
+  const code = t || boxId;
   // ⚠ 分不出來時一定要講「為什麼」。只寫「無法判斷」等於把問題丟回給人, 而他還是不知道要去查什麼。
+  if (/^[A-Z]\d{7}$/.test(code) || /^[A-Z]\d{11}$/.test(code)) return { label: "7-11", sure: false, why: "單號是「英文字母 + 7 或 11 碼數字」= 7-11 交貨便" };
+  if (/^16\d{9}$/.test(code)) return { label: "全家", sure: false, why: "單號是「16 開頭 11 碼」= 全家寄件代碼" };
+  if (/^\d{12}$/.test(code)) return { label: "黑貓宅急便", sure: false, why: "單號是 12 碼純數字 = 黑貓" };
+  if (/^50\d{6}$/.test(code)) return { label: "無法判斷", sure: false, why: "存到的是「50 開頭 8 碼」= 綠界廠商編號, 那不是物流單號, 所以看不出走哪一家" };
+  // 📦 箱號看不出來 → 回頭翻「當初刷進來的那整串」。
+  //   全家的 QR 不只一種寫法, 2026/10/16 這張實體標籤是用 || 分隔的:
+  //     A3||17970016352219858V||…||797163947||5221985810244097||261016QCAB9RG2
+  //   我們抽出來當箱號的是最後那段蝦皮訂單編號 261016QCAB9RG2 (這是對的, 查單要用它),
+  //   但「這是全家」的證據藏在前面的 16352219858(= 標籤上印的「訂單編號」)。
+  //   只看箱號的話, 這種單會全部被算成「無法判斷」, 超商數量就少一塊。
+  //   ⚠ 這裡**不能**要求前後不是數字 —— 16352219858 就是夾在 17970016352219858V 中間的,
+  //      加了邊界條件就永遠找不到(第一版寫錯過)。改成直接在整串裡找。
+  //   ⚠ 只在「整串明顯是超商那種塞一堆欄位的 QR」時才這樣猜, 而且一律標成「不確定」:
+  //      在長數字裡撈 11 碼本來就可能撈到巧合, 猜錯只是統計上少一筆, 不會包錯貨。
+  //   ⚠ 長度條件要自己有下限。只寫 raw.length >= boxId.length * 2 的話,
+  //      箱號是空字串時 0*2=0, 任何字串都算「超商 QR」—— 條件等於沒寫。
+  const _looksLikeStoreQr = raw.includes("||") || (raw.length >= 15 && raw.length >= boxId.length * 2);
+  if (raw && _looksLikeStoreQr) {
+    const fami = raw.match(/16\d{9}/);
+    if (fami) return { label: "全家", sure: false, why: `刷進來的整串裡找到「${fami[0]}」= 全家寄件代碼的格式(16 開頭 11 碼, 就是標籤上印的「訂單編號」)。這是從一長串裡撈出來的, 不是確定值` };
+  }
+  if (/^\d{6}[A-Z0-9]{8}$/.test(code)) return { label: "無法判斷", sure: false, why: `「${code}」是蝦皮訂單編號 — 只看得出是蝦皮的單, 看不出走 7-11 / 全家 / 黑貓哪一家` };
+  // 上面沒認出來的, 交給 detectCarriers() 再判一次(蝦皮店到家 TW…、萊爾富、新竹、郵局都在那邊)。
+  // 為什麼要接過去:同一件事寫兩份規則, 改了一邊忘了另一邊, 兩邊的答案就會不一樣 —— 而且沒人會發現。
+  if (code) {
+    // ⚠ 要把 koca 濾掉。detectCarriers 看到 KOCA 開頭會回「官方」, 那是**通路**不是物流商 ——
+    //   官網單的箱號就是 KOCA 單號, 不濾掉的話幾千箱會從
+    //   「沒有物流單號(可能是建單時官網還沒產生)」變成一個看似有答案、實際沒用的「官方」,
+    //   反而把「這箱查不到物流單號」這個該被看見的問題蓋掉。
+    const guess = ((typeof detectCarriers === "function") ? detectCarriers(code) : []).filter(g => g !== "koca");
+    if (guess.length === 1) return { label: CARRIER_LABELS[guess[0]] || guess[0], sure: false, why: `單號「${code}」的格式對到「${CARRIER_LABELS[guess[0]] || guess[0]}」` };
+    if (guess.length > 1) return { label: guess.map(g => CARRIER_LABELS[g] || g).join(" 或 "), sure: false, why: `單號「${code}」的格式有好幾家都符合(${guess.map(g => CARRIER_LABELS[g] || g).join(" / ")}), 分不出是哪一家` };
+  }
   if (!t) return { label: "沒有物流單號", sure: false, why: "這箱沒有存到物流單號 — 可能是建單時官網還沒產生單號, 或這張是手動開的" };
-  if (/^[A-Z]\d{7}$/.test(t) || /^[A-Z]\d{11}$/.test(t)) return { label: "7-11", sure: false, why: "單號是「英文字母 + 7 或 11 碼數字」= 7-11 交貨便" };
-  if (/^16\d{9}$/.test(t)) return { label: "全家", sure: false, why: "單號是「16 開頭 11 碼」= 全家寄件代碼" };
-  if (/^\d{12}$/.test(t)) return { label: "黑貓宅急便", sure: false, why: "單號是 12 碼純數字 = 黑貓" };
-  if (/^50\d{6}$/.test(t)) return { label: "無法判斷", sure: false, why: "存到的是「50 開頭 8 碼」= 綠界廠商編號, 那不是物流單號, 所以看不出走哪一家" };
   return { label: "無法判斷", sure: false, why: `單號「${t}」的格式不在已知的任何一種(7-11 / 全家 / 黑貓)` };
 }
 function _kocaOrderMeta(o, gate) {
@@ -10434,6 +10503,11 @@ function matchesHistorySearch(entry, q) {
   }
   for (const p of (entry.parcels || [])) {
     haystack.push(p.id, p.packedBy, p.trackingNo, p.ecpayNo);   // 箱號之外, 物流單號/綠界代碼也要能查
+    // 🔎 原始掃描字串(整串 QR 內容)也要能查。
+    //   全家的 QR 裡塞了十幾組號碼, 我們只抽出其中一個當箱號(蝦皮訂單編號),
+    //   但標籤上印的「訂單編號 16352219858」「797 163 947」是**全家門市和客服手上唯一的號碼**。
+    //   不放進來的話, 客人拿著全家的單號打來問, 我們這邊會查無此單。
+    haystack.push(p.rawScan);
   }
   if (entry.replacementInfo) {
     const r = entry.replacementInfo;
@@ -10893,7 +10967,16 @@ function _otherChannelHtml(days) {
       const nums = [pc.id];
       if (pc.trackingNo && pc.trackingNo !== pc.id) nums.push(pc.trackingNo);
       if (pc.ecpayNo && pc.ecpayNo !== pc.id && pc.ecpayNo !== pc.trackingNo) nums.push("綠界 " + pc.ecpayNo);
-      const chips = nums.map(n => `<span style="font-family:ui-monospace,monospace; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:0 5px; margin-right:4px; font-size:0.73rem;">${escapeHtml(n)}</span>`).join("");
+      // 🔗 單號做成可點的 —— 認得出物流商的就直接開該家查詢頁(TRACKING_URLS 已經有蝦皮/7-11/全家/黑貓/新竹)。
+      //   蝦皮沒有像官網那樣的狀態 API, 但至少讓同仁點一下就查得到貨在哪, 不用自己複製去貼。
+      //   認不出物流商的(例如萊爾富內部條碼)維持純文字, 點了只會複製單號, 不會開錯網站。
+      const chips = nums.map(n => {
+        const car = (typeof detectCarrier === "function" ? detectCarrier(n) : null);
+        const base = `font-family:ui-monospace,monospace; background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:0 5px; margin-right:4px; font-size:0.73rem;`;
+        if (!car || !TRACKING_URLS[car]) return `<span style="${base}">${escapeHtml(n)}</span>`;
+        return `<a href="${escapeHtml(TRACKING_URLS[car](n))}" target="_blank" rel="noopener"
+          style="${base} color:var(--primary); text-decoration:underline;">${escapeHtml(n)} ↗</a>`;
+      }).join("");
       const ent = Object.entries(pc.items || {}).filter(([s, q]) => (q || 0) > 0);
       const inner = ent.length
         ? ent.map(([s, q]) => `${escapeHtml(nameOf(s))}×${q}`).join("、")
@@ -10930,7 +11013,8 @@ function _otherChannelHtml(days) {
     <summary style="cursor:pointer; font-weight:800; color:var(--text-soft); padding:4px 0;">
       📦 其他通路的包裹 · ${list.length} 單 · ${totalPieces} 件
     </summary>
-    <div class="hint" style="margin:6px 0 8px;">蝦皮 / MOMO / 福貓 / 手建 / 補寄。<strong>這些查不到物流狀態</strong>(狀態是跟官網拉的),這裡只列出包裹、單號和內容,方便你找單。</div>
+    <div class="hint" style="margin:6px 0 8px;">蝦皮 / MOMO / 福貓 / 手建 / 補寄。<strong>這些沒有像官網那樣的狀態回報</strong>(狀態是跟官網拉的),
+      所以不會顯示「運送中 / 已送達」。<br><strong>但單號可以直接點</strong> → 開該物流商的查詢頁(蝦皮 / 7-11 / 全家 / 黑貓 / 新竹)。</div>
     <div style="margin-top:4px;">${inner}</div>
   </details>`;
 }
@@ -11770,6 +11854,26 @@ function extractParcelId(raw) {
   if (!s) return "";
   // 注意: 7-11 QR 不含「交貨便服務代碼」(被 7-11 保護), QR 只有內部 code1/code2/code3
   // 對 7-11 訂單建議手動輸入交貨便服務代碼 (印在出貨單上)
+
+  // 0. 🔒【強制綁定】全家 QR(用 || 分隔的那種): 訂單編號**就是最後一段**。
+  //   Kyle 2026/10/20 指定:「裡面的 QRCODE 資訊有單據, 在最後一段那邊」+「請強制綁定」。
+  //
+  //   為什麼一定要綁死:以前沒有這條, 靠的是下面第 5 條
+  //   「整串裡找符合 6數字+8英數 的那一段」—— 那是**由左往右找第一個**。
+  //   那張標籤 14 段裡剛好只有最後一段符合, 所以答案對 —— 等於碰運氣。
+  //   前面任何一段只要長得像(另一組 14 碼代碼), 就會抓到前面那個, 把真單號跳過去。
+  //
+  //   綁死之後唯一的風險是「最後一段不是訂單編號」。不靜靜吃掉:
+  //   照樣用它當箱號(使用者指定的規則優先), 但設旗標讓 processScan 當場問一句,
+  //   同仁才有機會攔下來 —— 無聲收下一個怪號碼比問一句嚴重得多。
+  if (s.includes("||")) {
+    const _segs = s.split("||").map(x => String(x || "").trim()).filter(x => x !== "");
+    const _lastSeg = (_segs.length ? _segs[_segs.length - 1] : "").toUpperCase();
+    if (_lastSeg) {
+      if (!/^\d{6}[A-Z0-9]{8}$/.test(_lastSeg)) window._lastScanOddLastSeg = _lastSeg;
+      return _lastSeg;
+    }
+  }
   // 1. 蝦皮店到家物流條碼: TW + 12 位數字 + 字母 (例: TW262445297876H) - 最高優先, 避免被「12 位純數字」regex 截掉
   const shopeeLog = s.match(/TW\d{12}[A-Z]/);
   if (shopeeLog) return shopeeLog[0];
@@ -11784,10 +11888,13 @@ function extractParcelId(raw) {
   //   ⚠ 舊紀錄存的是整串, 不過 findShippedByCode() 有包含比對, 新短碼仍對得到舊的整串紀錄。
   const s711 = s.match(/^[A-Z0-9]{3}001([A-Z]\d{7})\d{2}$/);
   if (s711) return s711[1];
-  // 2c. 全家 QR: 【寄件代碼 11 碼(16 開頭)】+ 廠商編號(長度不定, 可含字母) + 尾碼
+  // 2c. 全家 QR 寫法一(串接式): 【寄件代碼 11 碼(16 開頭)】+ 廠商編號(長度不定, 可含字母) + 尾碼
   //   實際樣本:
   //     綠界開的  1635154195550594165BC15 = 16351541955 + 50594165      + BC15
   //     蝦皮開的  16351861469SHP3628452193GC18 = 16351861469 + SHP3628452193 + GC18
+  //   ⚠ 全家還有寫法二(用 || 分隔的長字串), 那種走下面第 5 條「蝦皮訂單編號」抓, 不是這裡。
+  //     A3||17970016352219858V||…||5221985810244097||261016QCAB9RG2
+  //     最後一段就是蝦皮訂單編號, 查單要用它; 「這是全家」的證據在前面的 16352219858(見 parcelCarrierOf)。
   //   以前完全沒有解析全家 QR → 整串 23~28 碼直接當成單號, 畫面上就是一長串亂碼 (Kyle 回報「單顯示錯誤」)。
   //   ⚠ 後面一定要有字母才算數:純數字的長字串是萊爾富/全家的一維物流條碼(0242…/4297…), 不可以被切。
   const sFami = s.match(/^(16\d{9})(?=.*[A-Z])[A-Z0-9]{6,}$/);
@@ -11857,7 +11964,7 @@ function detectCarriers(parcelId) {
   if (/^[A-Z]\d{7}$/.test(s)) return ["seven11"];            // 7-11 交貨便代碼 (從 16 碼條碼抽出來的: G3958905 / G4975445)
   if (/^[A-Z]{2}\d{9,12}TW$/.test(s)) return ["post"];       // 中華郵政 / 國際
   if (/^[PTF]\d{11,13}$/.test(s)) return ["fami"];           // 全家 FamiPort 取貨號
-  if (/^16\d{9}$/.test(s)) return ["fami"];                  // 全家 寄件代碼 11 位 (16351541955 / 16351861469) — 兩張實體標籤確認
+  if (/^16\d{9}$/.test(s)) return ["fami"];                  // 全家 寄件代碼 11 位 (16351541955 / 16351861469 / 16352219858) — 三張實體標籤確認, 標籤上就印著「訂單編號」
   // ⚠⚠ 以下「16 碼純數字」的前綴規則**證據薄弱, 不要再往下加**:
   //   實際查 2026-06~10 的 314 筆 16 碼純數字, 其中 274 筆的前 4 碼是**跟著日期遞增**的流水序號
   //   (6月 4254 → 10月 5179), 而且**橫跨 MOMO / 蝦皮 / 官方 / 酷澎所有通路**
@@ -11976,11 +12083,12 @@ function makeTrackingButtonsHtml(parcelId, opts) {
 // 依當下這單刷到的「主機」判斷該用哪個包材; 刷到不符先詢問 (不強制擋)。
 // host = 主機 SKU (用其數量當「幾組」); single = 一組建議包材; multi = 兩組以上建議包材。
 // requireCompanion = 需與此配件同時出現才套用此規則; withoutCompanion = 沒有此配件時才套用。
+// bulky = 這是「會佔體積的主機」, 兩台以上就塞不進小包材 (濾芯/遙控器這種小東西不算)。
 const PACKAGING_RULES = [
-  { name: "Dusty MINI", host: "KVC-18MV45", single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
-  { name: "Dusty Lite", host: "KVC-40MV46", single: ["5E-5061-EV"], multi: ["CTN-A1-F"] },
-  { name: "Joy Lite(含收納包)", host: "KPJ-40MV47", requireCompanion: "KPJ-40MV47-BAG", single: ["CTN-A1-G"], multi: ["CTN-A1-F"] },
-  { name: "Joy Lite(單主機)", host: "KPJ-40MV47", withoutCompanion: "KPJ-40MV47-BAG", single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
+  { name: "Dusty MINI", host: "KVC-18MV45", bulky: true, single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
+  { name: "Dusty Lite", host: "KVC-40MV46", bulky: true, single: ["5E-5061-EV"], multi: ["CTN-A1-F"] },
+  { name: "Joy Lite(含收納包)", host: "KPJ-40MV47", bulky: true, requireCompanion: "KPJ-40MV47-BAG", single: ["CTN-A1-G"], multi: ["CTN-A1-F"] },
+  { name: "Joy Lite(單主機)", host: "KPJ-40MV47", bulky: true, withoutCompanion: "KPJ-40MV47-BAG", single: ["KOCA-PB"], multi: ["CTN-A1-G", "CTN-A1-F"] },
   // 濾芯 / 遙控器 → CTN-A1-Z (不分組數)
   { name: "Dusty MINI 濾芯", host: "KVC-18MV45-HEPA", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "2個" },
   { name: "Dusty Lite 濾芯", host: "KVC-40MV46-HEPA", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "2個" },
@@ -11998,16 +12106,47 @@ function _pkgName(sku) { const p = library.find(x => x.sku === sku); return p &&
 function expectedPackagingFor(items) {
   const expected = new Set();
   const reasons = [];
+
+  // ── 第一步: 先看這單總共有幾台「會佔體積的主機」 ──────────────────
+  // 為什麼要先數一遍:
+  //   一台 Dusty Lite + 一台 Joy Lite, 兩款各自都只有「1 組」,
+  //   但兩台要裝進同一箱, 破壞袋和 G 箱都塞不下 —— 同仁本來就會改用大箱。
+  //   舊版只看「同一款有沒有買到 2 組」, 所以這種混搭組合每次刷大箱都會跳
+  //   「確定要用 CTN-A1-F 嗎?」, 同仁每天按一堆沒有意義的確認。
+  const matched = [];
+  let bulkyUnits = 0;
   for (const rule of PACKAGING_RULES) {
-    const hq = (items && items[rule.host]) || 0;
-    if (hq <= 0) continue;
+    const hostQty = (items && items[rule.host]) || 0;
+    if (hostQty <= 0) continue;
     if (rule.requireCompanion && !((items[rule.requireCompanion] || 0) > 0)) continue;
     if (rule.withoutCompanion && ((items[rule.withoutCompanion] || 0) > 0)) continue;
-    const pkgs = hq >= 2 ? rule.multi : rule.single;
-    (pkgs || []).forEach(s => expected.add(s));
-    const qh = rule.qtyHint ? ` ${rule.qtyHint}` : "";
-    reasons.push(`${rule.name}${hq >= 2 ? ` ×${hq} 組` : ""} → ${(pkgs || []).map(_pkgName).join(" 或 ")}${qh}`);
+    matched.push({ rule, hostQty });
+    if (rule.bulky) bulkyUnits += hostQty;
   }
+  const isBigParcel = bulkyUnits >= 2;   // 不只一台主機 → 這是大包裹
+
+  // ── 第二步: 每一款各自算出可接受的包材 ────────────────────────
+  for (const { rule, hostQty } of matched) {
+    const useMulti = hostQty >= 2 || (isBigParcel && rule.bulky);
+    let allow;
+    if (!useMulti) {
+      allow = rule.single || [];
+    } else if (hostQty >= 2) {
+      allow = rule.multi || [];              // 同一款就買了 2 組以上 → 一定要大包材
+    } else {
+      // 這款只有 1 台, 是因為「整單有別款主機」才升級成大箱。
+      // 小包材也要留著算合理 —— 同仁可能是分成兩箱寄, 不該被當成刷錯。
+      allow = [...(rule.multi || []), ...(rule.single || [])];
+    }
+    allow = Array.from(new Set(allow));
+    allow.forEach(s => expected.add(s));
+    const qtyText = hostQty >= 2 ? ` ×${hostQty} 組` : "";
+    const qh = rule.qtyHint ? ` ${rule.qtyHint}` : "";
+    reasons.push(`${rule.name}${qtyText} → ${allow.map(_pkgName).join(" 或 ")}${qh}`);
+  }
+
+  if (isBigParcel) reasons.push(`📦 本單共 ${bulkyUnits} 台主機 → 併成一箱時可以用大箱`);
+
   return { expected, reasons };
 }
 // 檢查「剛刷的包材」是否符合本單建議; 回傳 {ok} 或 {ok:false, message}
@@ -12063,6 +12202,7 @@ function processScan(code) {
 
   const original = code;
   window._lastScanWasInternalQr = null;
+  window._lastScanOddLastSeg = null;   // 全家 QR「最後一段長得不像單號」的旗標, 見 extractParcelId 第 0 條
   // ★ 先判斷是不是「已知商品條碼/SKU」: 是的話絕不送進 extractParcelId,
   //   否則含特定數字樣式的 SKU 會被拆成子字串 → 比對不到商品 → 被誤當寄件單號 / 沒反應。
   const _rawForSku = (code || "").trim();
@@ -12092,6 +12232,18 @@ function processScan(code) {
   markUserActivity(); // 任何掃描都算活動
   if (original !== code) console.log("[scan] extracted", code, "from", original.substring(0, 60) + (original.length > 60 ? "..." : ""));
   console.log("[scan]", code);
+  // 🔒 全家 QR 強制取最後一段 —— 但那一段長得不像訂單編號時, 一定要問一句。
+  //   綁死規則的代價就是「規則不適用時會照樣執行」, 所以這裡是它的安全網:
+  //   無聲收下一個怪號碼 → 同仁不知情, 之後查單查不到; 問一句 → 當場就攔下來了。
+  if (window._lastScanOddLastSeg) {
+    const _odd = window._lastScanOddLastSeg;
+    window._lastScanOddLastSeg = null;
+    SOUND.scanError();
+    if (!confirm(`⚠ 這張 QR 的最後一段不像訂單編號\n\n取到的是:${_odd}\n(正常應該像 261016QCAB9RG2 — 6 碼數字 + 8 碼英數)\n\n可能是刷到不一樣的標籤, 或這張 QR 的格式跟以往不同。\n\n【確定】= 照樣用這個當箱號\n【取消】= 不開這箱, 請改刷或手動輸入`)) {
+      renderScanPanel();
+      return;
+    }
+  }
   // 內部 QR 提示: 邀請使用者改用面單上的服務代碼
   if (window._lastScanWasInternalQr) {
     const carrier = window._lastScanWasInternalQr;
@@ -12393,6 +12545,23 @@ function startParcel(id, rawScan) {
   //   事後完全沒辦法回推那箱到底刷到什麼, 也沒辦法重新對回蝦皮訂單。
   //   留著原始值幾十個字元, 但它是出事時唯一的線索。
   if (rawScan && String(rawScan) !== String(id)) state.activeParcel.rawScan = String(rawScan);
+  // 🔁 超商標籤上「不只一個號碼」, 過刷防呆只比對箱號和物流單號 —— 另一個號碼就擋不住。
+  //   實例(2026/10/16 全家標籤):箱號存蝦皮訂單編號 261016QCAB9RG2,
+  //   但標籤上還印著全家訂單編號 16352219858。拿後者回刷, 防呆查不到 → 同一箱可以再出一次。
+  //   ⚠ 做法是「把認得出來的號碼明確存成物流單號」, 不是拿整串 QR 去做包含比對
+  //     —— 那串有 160 個字元, 任何 6 碼都可能剛好出現在裡面, 會變成擋下不該擋的單。
+  const extra = _otherCodeFromScan(rawScan, id);
+  if (extra) state.activeParcel.trackingNo = extra;
+}
+// 從原始掃描字串裡找出「除了箱號以外, 還認得出來的那個號碼」。認不出來就回空字串, 不亂猜。
+function _otherCodeFromScan(rawScan, id) {
+  const raw = String(rawScan || "").toUpperCase();
+  if (!raw || raw === String(id || "").toUpperCase()) return "";
+  // 目前只認全家寄件代碼(16 開頭 11 碼)—— 標籤上印的「訂單編號」, 全家門市和客服都用這個。
+  // 要再加別家時, 一樣要「有實體標籤為憑」才加(見 CLAUDE.md 的「拿一個樣本當規則」)。
+  const fami = raw.match(/16\d{9}/);
+  if (fami && fami[0] !== String(id || "").toUpperCase()) return fami[0];
+  return "";
 }
 
 // 把一箱的內容跟「今天還沒出的訂單」比對。
@@ -12465,7 +12634,14 @@ function finalizeActiveParcel(skipIfEmpty, opts) {
   state.completedParcels.push(ap);
   // 房間模式: 廣播此筆完成
   if (state.roomMode) {
-    queueRoomEvent("parcel_complete", { id: ap.id, items: ap.items, packedBy: ap.packedBy });
+    // ⚠ 這裡只廣播 id/items/packedBy 的話, 共同包貨出去的箱子會**少存一堆追查用的欄位**:
+    //   整串原始條碼(rawScan)、物流單號、綠界代碼、物流商 —— 自己一台包就有, 一起包就沒有。
+    //   全家 QR 尤其明顯: 箱號只是整串裡的一段, 沒有 rawScan 就再也查不到標籤上印的號碼。
+    queueRoomEvent("parcel_complete", {
+      id: ap.id, items: ap.items, packedBy: ap.packedBy,
+      rawScan: ap.rawScan || "", trackingNo: ap.trackingNo || "",
+      ecpayNo: ap.ecpayNo || "", carrierLabel: ap.carrierLabel || "",
+    });
   }
   state.activeParcel = null;
   return true;
@@ -14694,21 +14870,53 @@ document.addEventListener("keydown", (e) => {
   }
   // 只捕捉可印字元 (英數字、符號)
   if (e.key.length === 1) {
-    // 防殘留亂碼: 距離上一個字 >400ms 視為「新的一次刷碼」, 先清掉上次沒送出的殘留再開始
+    // 防殘留亂碼: 距離上一個字太久 = 「新的一次刷碼」, 先清掉上次沒送出的殘留再開始。
+    //
+    // 🔴 2026/10/20 Kyle 回報「全家 QR 第二筆抓不到寄件代碼」, 查出來就是這裡:
+    //   全家 QR 有 **160 個字元**, 刷槍要連續打 1.5 秒以上。
+    //   舊版固定 400ms —— 中間只要卡一次(手機在算別的、清單很長在重畫), 前面打的全部丟掉,
+    //   只剩後半段, 而碎片會原封不動變成箱號, **一句話都不講**。
+    //   當天的證據:箱號 `1TA09` 和 `5255504330000009` 的形狀, 跟 QR 裡的
+    //   `1HZ02`(店號) 和 `5221985810244097` 兩個欄位**完全吻合** —— 就是整串被切斷後的碎片。
+    //
+    // 改法:短碼維持 400ms(避免誤觸的雜訊黏進來); 已經在刷長碼時放寬到 1200ms。
+    //   刷槍一定會送 Enter, 所以放寬不會把前後兩次刷碼黏在一起。
     const _now = Date.now();
-    if (_now - _scanLastKeyAt > 400) _scanBuffer = "";
+    const _gapLimit = _scanBuffer.length >= 20 ? 1200 : 400;
+    if (_now - _scanLastKeyAt > _gapLimit) {
+      // ⚠ 丟掉的如果是一大段, 那就是「刷到一半斷掉」—— 一定要講出來。
+      //   不講的話同仁只會看到一個奇怪的短單號, 以為是正常的。
+      if (_scanBuffer.length >= 20) {
+        const _lost = _scanBuffer.length;
+        setTimeout(() => {
+          try {
+            SOUND.scanError();
+            showToast(`⚠ 這一刷只收到一半就斷了(丟掉 ${_lost} 個字)— 請重刷一次,不要用現在畫面上的號碼`, 8000);
+          } catch (err) {}
+        }, 0);
+      }
+      _scanBuffer = "";
+    }
     _scanLastKeyAt = _now;
     _scanBuffer += e.key;
     // 視覺反饋: 同步顯示在 scan-input
     const inp = document.getElementById("scan-input");
     if (inp) inp.value = _scanBuffer;
-    // 1.5 秒沒新輸入就清掉 buffer (避免誤觸殘留)
+    // 2.5 秒沒新輸入就清掉 buffer (避免誤觸殘留)。
+    // ⚠ 原本 1.5 秒 —— 全家 QR 本身就要打 1.5 秒以上, 刷到一半就可能被這個計時器清掉。
+    //   同樣地, 清掉一大段一定要講出來, 不然整串就這樣無聲消失。
     clearTimeout(_scanBufferTimer);
     _scanBufferTimer = setTimeout(() => {
+      if (_scanBuffer.length >= 20) {
+        try {
+          SOUND.scanError();
+          showToast(`⚠ 這一刷有 ${_scanBuffer.length} 個字沒送出就停了(刷槍可能沒送 Enter)— 請重刷一次`, 8000);
+        } catch (err) {}
+      }
       _scanBuffer = "";
       const i = document.getElementById("scan-input");
       if (i && i.value) i.value = "";
-    }, 1500);
+    }, 2500);
   }
 });
 
