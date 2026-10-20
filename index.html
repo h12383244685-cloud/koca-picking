@@ -1720,6 +1720,17 @@ footer.summary-bar {
       <div id="koca-order-map" hidden></div>
     </div>
 
+    <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
+    <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 蝦皮訂單(刷標籤查這張單要出什麼)</div>
+      <p class="hint" style="margin-bottom:8px;">刷<strong>蝦皮物流標籤</strong>的條碼或 QR,或直接輸入蝦皮訂單編號。<br>系統會去雲端的待出貨池查這張單的商品明細 —— <strong>目前是唯讀查詢</strong>,不會自動建清單。<br>⚠ 要先由蝦皮抓取器把單推進池子才查得到。</p>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="shopee-order-input" placeholder="刷標籤條碼 / 蝦皮訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
+        <button class="btn sm" id="shopee-order-fetch-btn" type="button" style="white-space:nowrap;">查這張單</button>
+      </div>
+      <div id="shopee-order-status" class="hint" style="margin-top:8px;"></div>
+    </div>
+
     <!-- 多人協作入口 -->
     <div class="room-entry">
       <div class="room-entry-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19a4.5 4.5 0 0 1 9 0M11.5 19a4.5 4.5 0 0 1 9 0"/></svg> 共同包貨 (Cloudflare 同步)</div>
@@ -3456,7 +3467,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v10.0 · 2026-10-20";
+const APP_VERSION = "v10.5 · 2026-10-20";
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -6045,7 +6056,16 @@ function checkBundleRule(triggerIdx, deltaAdded) {
           //   不是「再加一套」。所以這裡只補到應出量為止。
           //   ⚠ 補寄/退貨/入倉(manualMode)是自由計數, 沒有應出量可比 → 維持原本行為照加。
           const _child = state.items[recheckIdx];
-          let _add = c.totalQty;
+          // 🔒 第一關:看「已經刷了幾個 trigger」,反推子項總共該有幾個。
+          //   v9.6 只用應出量擋, 手建/蝦皮單沒有應出量(都是 0) → 整個擋不到, 照樣多加。
+          //   實測:手建蝦皮單刷「主機 + 收納包」→ 主機變 2 台, 箱子裡只有 1 台。
+          //   改用 trigger 的累計量算:刷了 N 個收納包, 主機總共就該有 N 個(不是「再加 N 個」)。
+          //   ・只刷收納包 → 主機補到 N  ✅ 連動原本的用途還在
+          //   ・主機和收納包都刷 → 主機已經有了, 不再補  ✅ 不會變兩台
+          const _want = (triggerIt.packed || 0) * (c.qty || 1);
+          let _add = Math.max(0, _want - (_child.packed || 0));
+          _add = Math.min(_add, c.totalQty);          // 這一刷最多只補這一刷該補的份
+          // 🔒 第二關:官網單/CSV 另外再用應出量封頂(兩關取嚴的)
           if (!state.manualMode && (_child.expected || 0) > 0) {
             _add = Math.min(_add, Math.max(0, _child.expected - (_child.packed || 0)));
           }
@@ -6859,15 +6879,26 @@ function _kocaSpecExpand(name, allowSingle) {
   if (Array.isArray(direct) && direct.length >= minCount) return direct;
   const n = normalizeProdName(name);
   if (!n) return null;
+  // ●現貨 / ●預購 是**庫存狀態**, 不是商品本身。規格表的鍵常常帶著它, 蝦皮送來的品名則沒有。
+  //   比對是「規格表的名字要出現在來源品名裡」, 鍵多了 ●預購 就比來源長 → 永遠包不進去。
+  //   實例(Kyle 2026/10/20 提供):規格表「Dusty MINI 1 一般版●預購」vs 蝦皮「Dusty MINI 1 一般版」
+  //   → 對不到, 而這是單主機, 對不到就要人工指定一次, 完全沒必要。
+  //   ⚠ 只在這裡剝掉, **不動 normalizeProdName 本身** —— 那支被 kocaNameMap / kocaBundleMap 當記憶的 key 用,
+  //     改了會讓同仁以前指定過的對應全部失效(而且是無聲失效)。
+  const _noMark = (s) => String(s || "").split("●")[0].trim();
+  const nBare = normalizeProdName(_noMark(name));
   let best = null, bestLen = 0;
   for (const k in specMap) {
     const v = specMap[k];
     if (!Array.isArray(v) || v.length < minCount) continue;
-    const kn = normalizeProdName(String(k).replace(/^\[(品線|商品)\]\s*/, ""));
-    if (kn.length < 6) continue;                     // 太短的鍵不做包含比對, 避免誤中
-    if (kn === n || n.includes(kn)) {                 // 官網品名可能較長(含促銷字), 允許包含
-      if (kn.length > bestLen) { best = v; bestLen = kn.length; }  // 多筆命中取最精確(最長)的
-    }
+    const kRaw = String(k).replace(/^\[(品線|商品)\]\s*/, "");
+    const kn = normalizeProdName(kRaw);
+    const knBare = normalizeProdName(_noMark(kRaw));
+    const hit = (kn.length >= 6 && (kn === n || n.includes(kn)))
+             || (knBare.length >= 6 && (knBare === nBare || nBare.includes(knBare)));
+    if (!hit) continue;                               // 太短的鍵不做包含比對, 避免誤中
+    const len = Math.max(kn.length, knBare.length);
+    if (len > bestLen) { best = v; bestLen = len; }   // 多筆命中取最精確(最長)的
   }
   if (best) return best;
   // ★ 關鍵詞比對 (上面整串包含比對失敗時才跑)。
@@ -7097,6 +7128,226 @@ async function fetchKocaOrder(orderId, opts) {
   } finally {
     _kocaFetching = false;
     if (btn) { btn.disabled = false; btn.textContent = "拉取訂單"; }
+  }
+}
+
+// ===== 🛒 蝦皮訂單池 =====
+// 為什麼要做這個:蝦皮目前幾乎 100% 靠手建, **完全沒有「應該出幾個」可以對**。
+//   近 5 個月實測:蝦皮 5,557 箱裡只有 8 箱有應出量(官方是 6,410 箱裡 4,511 箱有)。
+//   等於倉庫一半的產出, 多刷漏刷驗不出來 —— 官方單查得出 0.79% 多刷率, 蝦皮根本量不到。
+//
+// 架構(見 蝦皮整合規格.md):Mac 端抓取器每 3–5 分鐘把待出貨池 POST 給 Worker,
+//   App 只跟 Worker 要, 不直接連蝦皮(Worker 在雲端沒有蝦皮 session, 倉庫手機也連不到內網 Mac)。
+//
+// ⚠ 這支只負責「查」—— 不碰庫存、不建紀錄、不動清單。查到什麼由呼叫端決定怎麼用。
+async function shopeeLookup(code) {
+  const c = String(code || "").trim();
+  if (!c) return { ok: false, error: "empty", message: "沒有輸入要查的號碼" };
+  if (!settings.syncWorkerUrl || !settings.spideyKey) {
+    return { ok: false, error: "no_config", message: "還沒設定 Worker 網址或 Spidey Key(⚙ 設定 → 雲端同步)" };
+  }
+  const url = String(settings.syncWorkerUrl).replace(/\/+$/, "")
+    + "/api/shopee/order?code=" + encodeURIComponent(c);
+  let r, j;
+  try {
+    r = await fetch(url, { headers: { "X-Spidey-Key": settings.spideyKey } });
+    j = await r.json();
+  } catch (e) {
+    // ⚠ 連不上不可以當成「查無此單」—— 那會讓同仁以為單還沒同步進來, 跑去手建一張重複的
+    return { ok: false, error: "network", message: "連不到 Worker(網路或網址有問題),這不代表沒有這張單" };
+  }
+  if (!j || typeof j !== "object") return { ok: false, error: "bad_response", message: "Worker 回傳看不懂的內容" };
+
+  // 池子的新鮮度一律帶回去。抓取器掛掉時池子會停止更新, 但查到的舊單看起來完全正常 ——
+  // 不講新鮮度的話, 同仁會拿三小時前的狀態當成現在的。
+  const fresh = { lastSync: j.lastSync || null, ageMinutes: (j.ageMinutes == null ? null : j.ageMinutes), stale: !!j.stale };
+
+  if (j.ok === true && j.order) {
+    return {
+      ok: true, order: j.order, ...fresh,
+      blocked: !!j.blocked, blockReason: j.blockReason || "",
+      matchedBy: j.matchedBy || "", matchedOn: j.matchedOn || "",
+    };
+  }
+  if (r.status === 409 || j.error === "ambiguous") {
+    return { ok: false, error: "ambiguous", ...fresh, candidates: j.candidates || [],
+      message: "這個條碼同時對到好幾張單,不敢自己挑一張" };
+  }
+  if (r.status === 404 || j.error === "not_found") {
+    return { ok: false, error: "not_found", ...fresh,
+      message: fresh.stale ? "查不到這張單 —— 而且池子已經很久沒更新了,很可能是同步掛掉,不是真的沒這張單"
+                           : "池子裡還沒有這張單(可能剛成立,還沒同步進來)" };
+  }
+  if (r.status === 401) return { ok: false, error: "unauthorized", message: "Spidey Key 不對或沒有權限" };
+  return { ok: false, error: j.error || ("http_" + r.status), message: j.detail || j.error || ("Worker 回了 " + r.status) };
+}
+
+// 蝦皮的商品明細 → 我們的 SKU 數量表。
+// ⚠ 刻意重用官網單那一套對應(規格對應表 specMap / 品名記憶 kocaNameMap / 品名對 SKU),
+//   不另外寫一份 —— 兩份對應表遲早會不一樣, 而且不會有人發現。
+function shopeeItemsToTotals(order) {
+  const totals = {}, nameOf = {}, unmapped = [];
+  for (const it of (Array.isArray(order && order.items) ? order.items : [])) {
+    const qty = Math.max(0, Number(it && it.qty) || 0);
+    if (qty <= 0) continue;
+    // 蝦皮的「商品名 + 規格名」才是完整品名, 規格對應表也是用這個當 key
+    const full = [it.name, it.spec].filter(Boolean).join(" ").trim() || String(it.name || "");
+    // ★ 套組優先(跟官網單同一個函式)
+    const expand = (typeof _kocaSpecExpand === "function") ? _kocaSpecExpand(full) : null;
+    if (expand && expand.length) {
+      for (const m of expand) {
+        const add = (m.qty || 1) * qty;
+        if (add <= 0) continue;
+        totals[m.sku] = (totals[m.sku] || 0) + add;
+        const p = library.find(x => x.sku === m.sku);
+        nameOf[m.sku] = (p && p.name) || m.sku;
+      }
+      continue;
+    }
+    // ⚠⚠ 名字像套組 / 像「N 入裝」, 但上面對不到拆法 → **絕不可以偷偷當成單品**。
+    //   官網那條路早就有這道防線, 我寫蝦皮時漏了, 實測踩到:
+    //     規格表「濾芯5個 → 濾芯×5」只對到 1 個 SKU, 被套組門檻擋掉
+    //     → 掉下來用品名猜 → 猜成「濾芯×1」→ 少出 4 顆, 畫面還顯示「1/1 完成」。
+    //   蝦皮的 qty 一樣是「買幾組」不是「幾顆」, 所以這裡要跟官網一致:標出來要求指定一次。
+    const _packN = (typeof _packSizeInName === "function") ? _packSizeInName(full) : 0;
+    const _looksBundle = (typeof _looksLikeBundleName === "function") && _looksLikeBundleName(full);
+    if ((_looksBundle || _packN >= 2)
+        && !(typeof kocaBundleMap !== "undefined" && kocaBundleMap[normalizeProdName(full)])
+        && !(typeof kocaNameMap !== "undefined" && kocaNameMap[normalizeProdName(full)])) {
+      unmapped.push({ name: full, qty, specId: (it && it.specId) || "" });
+      continue;
+    }
+    // 單品:先用品名對 library, 再退回規格表的單品對應
+    let prod = (typeof matchSkuByName === "function") ? matchSkuByName(full) : null;
+    if (!prod) {
+      const single = (typeof _kocaSpecExpand === "function") ? _kocaSpecExpand(full, true) : null;
+      if (single && single.length === 1) prod = library.find(x => x.sku === single[0].sku) || null;
+    }
+    if (!prod) {
+      // ⚠ 對不到就要講出來。偷偷猜一個 SKU = 出錯了畫面上還顯示「完成」, 這是這個系統最常出事的模式。
+      unmapped.push({ name: full, qty, specId: (it && it.specId) || "" });
+      continue;
+    }
+    totals[prod.sku] = (totals[prod.sku] || 0) + qty;
+    nameOf[prod.sku] = prod.name || prod.sku;
+  }
+  return { totals, nameOf, unmapped };
+}
+
+// 🛒 刷到不認得的條碼時, 自動去蝦皮池子問這箱該出什麼。
+//   Kyle 2026/10/20:「讓系統自動去抓」「盡量不要出現需要同仁點選的狀況, 越簡單越好」
+//   「就算有錯誤同仁也可以查看感熱紙上的購買資訊」
+//
+//   所以原則是:
+//   ・查到 → 直接把明細顯示出來, **不問任何問題**
+//   ・查不到 / 連不上 → **完全安靜**(蝦皮不是唯一通路, 官方單和手建單走到這裡是正常的)
+//   ・只有「這張單已取消/退款」會跳出來擋 —— 那是會賠錢的, 值得打斷一次
+//   同仁手上永遠有感熱紙可以核對, 所以系統寧可少講話, 也不要製造一堆要點掉的視窗。
+async function _autoShopeeLookup(code, rawScan) {
+  try {
+    if (!settings.syncWorkerUrl || !settings.spideyKey) return;   // 沒設定就當這功能不存在
+    if (/^KOCA/i.test(String(code || ""))) return;                 // 官網單另有流程, 不要白問
+    const ap = state.activeParcel;
+    if (!ap || ap.id !== code) return;
+    let r = await shopeeLookup(code);
+    // 刷進來的整串可能跟抽出來的短碼不同 → 兩個都試(Worker 那端也有包含比對)
+    if (!r.ok && r.error === "not_found" && rawScan && String(rawScan) !== String(code)) {
+      r = await shopeeLookup(String(rawScan));
+    }
+    if (!r.ok) {
+      // ⚠ 安靜, 但要留痕 —— 事後查「為什麼那箱沒帶出明細」時看得到原因
+      console.log("[shopee-auto]", code, "→", r.error, r.message || "");
+      return;
+    }
+    if (!state.activeParcel || state.activeParcel.id !== code) return;   // 同仁已經換箱了, 不要蓋上去
+
+    const o = r.order || {};
+    const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
+    // 存進這箱, 出貨紀錄才留得下來(事後對帳要用)
+    state.activeParcel.shopeeOrder = {
+      orderNo: o.orderNo || "", parcelNo: o.parcelNo || "",
+      channel: o.channel || "", statusLabel: o.statusLabel || "",
+      expected: totals, unmapped: unmapped.map(u => u.name), remark: o.remark || "",
+      stale: !!r.stale, matchedBy: r.matchedBy || "",
+    };
+    saveState();
+
+    if (r.blocked) {
+      // 🚫 唯一會打斷的情況。包一張已取消的單 = 貨和運費都收不回來。
+      SOUND.scanError();
+      if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+      alert(`🚫 這張單不能出\n\n${r.blockReason || "狀態不是待出貨"}\n\n單號:${o.orderNo || code}\n\n請先確認,不要包這箱。`);
+      return;
+    }
+    // 📝 備註和「對不到的品名」掛成常駐橫幅, 不用 toast ——
+    //   toast 跳一下就沒了, 而這兩件事正是出貨前非看不可的。
+    state.shopeeNote = {
+      parcelNo: o.parcelNo || "", remark: o.remark || "",
+      unmapped: unmapped.map(u => u.name), stale: !!r.stale,
+    };
+    saveState();
+    if (typeof renderKocaRemarkBanner === "function") renderKocaRemarkBanner();
+    // 應出明細用 toast 就夠了(橫幅上已經有備註, 明細在清單上也看得到)
+    const lines = Object.entries(totals).map(([sku, q]) => `${nameOf[sku] || sku} ×${q}`);
+    showToast(`🛒 這箱應該出:${lines.join("、") || "(沒有明細)"}`, 10000);
+  } catch (e) {
+    console.log("[shopee-auto] 失敗(不影響刷貨):", e && e.message);
+  }
+}
+
+// 查蝦皮單並把結果顯示出來。刻意**只查不建清單** ——
+// 池子裡還沒有真資料之前, 自動建清單等於拿沒驗證過的東西去改備貨狀態, 風險太大。
+// 等抓取器開始推、確認資料正確之後, 再把「→ 建立出貨清單」接上去。
+async function runShopeeLookup() {
+  const inp = document.getElementById("shopee-order-input");
+  const box = document.getElementById("shopee-order-status");
+  const btn = document.getElementById("shopee-order-fetch-btn");
+  if (!inp || !box) return;
+  const code = String(inp.value || "").trim();
+  if (!code) { box.innerHTML = "<span style='color:var(--danger)'>請先輸入或刷一個號碼</span>"; return; }
+  if (btn) { btn.disabled = true; btn.textContent = "查詢中…"; }
+  box.textContent = "查詢中…";
+  try {
+    // 刷進來的可能是整串超商條碼/QR → 先抽出短碼再查(Worker 那端也有包含比對, 兩邊都試得到)
+    const short = (typeof extractParcelId === "function") ? extractParcelId(code) : code;
+    let r = await shopeeLookup(short);
+    if (!r.ok && r.error === "not_found" && short !== code) r = await shopeeLookup(code);
+
+    const freshLine = (r.ageMinutes == null) ? ""
+      : `<div style="margin-top:6px; font-size:0.75rem; color:${r.stale ? "var(--danger)" : "var(--text-soft)"};">`
+        + `池子更新於 ${r.ageMinutes} 分鐘前${r.stale ? " ⚠ 太久沒更新了,資料可能不是最新的" : ""}</div>`;
+
+    if (!r.ok) {
+      box.innerHTML = `<span style="color:var(--danger); font-weight:600;">❌ ${escapeHtml(r.message || r.error)}</span>`
+        + (r.candidates && r.candidates.length
+            ? `<div style="margin-top:6px;">對到這幾張:<br>${r.candidates.map(c => escapeHtml(c)).join("<br>")}</div>` : "")
+        + freshLine;
+      SOUND.scanError();
+      return;
+    }
+    const o = r.order || {};
+    const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
+    const rows = Object.entries(totals).map(([sku, q]) =>
+      `<div>📦 ${escapeHtml(nameOf[sku] || sku)} <strong>×${q}</strong> <span style="color:var(--text-soft)">(${escapeHtml(sku)})</span></div>`).join("");
+    box.innerHTML =
+      (r.blocked ? `<div style="background:var(--danger-bg); color:var(--danger); font-weight:700; padding:8px; border-radius:6px; margin-bottom:8px;">🚫 這張單不能出:${escapeHtml(r.blockReason || "狀態不是待出貨")}</div>` : "")
+      + `<div style="font-weight:700; color:var(--primary);">✓ 查到這張單</div>`
+      + `<div style="margin-top:4px;">包裹編號:<strong>${escapeHtml(o.parcelNo || "-")}</strong></div>`
+      + `<div>蝦皮訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
+      + (o.logistics && o.logistics.channel ? `<div>物流:${escapeHtml(o.logistics.channel)}${o.logistics.storeInfo ? " · " + escapeHtml(o.logistics.storeInfo) : ""}</div>` : "")
+      + (o.statusLabel ? `<div>狀態:${escapeHtml(o.statusLabel)}</div>` : "")
+      // 讓同仁看得見系統做了什麼判斷 —— contains 代表是從整串條碼裡認出來的, 不是完全相等
+      + (r.matchedBy && r.matchedBy !== "exact"
+          ? `<div style="margin-top:4px; color:var(--text-soft); font-size:0.75rem;">(用「${escapeHtml(r.matchedOn || "")}」對到的,方式:${escapeHtml(r.matchedBy)})</div>` : "")
+      + (rows ? `<div style="margin-top:8px;">${rows}</div>` : `<div style="margin-top:8px; color:var(--danger)">⚠ 這張單沒有商品明細</div>`)
+      + (unmapped.length
+          ? `<div style="margin-top:8px; background:var(--warn-bg); padding:8px; border-radius:6px;">⚠ 這些品名對不到我們的 SKU,<strong>系統不會自己猜</strong>:<br>`
+            + unmapped.map(u => `・${escapeHtml(u.name)} ×${u.qty}`).join("<br>")
+            + `<br><span style="font-size:0.75rem">請到 📋 規格對應 設定一次,之後就會記住。</span></div>` : "")
+      + (o.remark ? `<div style="margin-top:8px; background:var(--warn-bg); padding:8px; border-radius:6px;">📝 買家備註:${escapeHtml(o.remark)}</div>` : "")
+      + freshLine;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "查這張單"; }
   }
 }
 
@@ -12526,6 +12777,10 @@ function processScan(code) {
     startParcel(code, _rawScanned);
     SOUND.parcelStart();
     showToast("📦 開始裝箱 " + code);
+    // 🛒 自動去蝦皮池子問一下這箱該出什麼(Kyle 2026/10/20 指定 A 方案)。
+    //   只在「這串不是我們認得的東西」才問 —— 刷商品、官網單都走不到這裡, 不會多打網路。
+    //   ⚠ 不擋刷貨流程:非同步跑, 查到再顯示; 查不到就當沒這回事(蝦皮不是唯一通路)。
+    _autoShopeeLookup(code, _rawScanned);
   }
   saveState();
   renderScanPanel();
@@ -12535,6 +12790,10 @@ function processScan(code) {
 }
 
 function startParcel(id, rawScan) {
+  // 換箱 = 換一張單。上一箱的蝦皮備註橫幅一定要清掉,
+  // 不然同仁會對著前一張單的「不要折到」在包這一箱。
+  state.shopeeNote = null;
+  if (typeof renderKocaRemarkBanner === "function") { try { renderKocaRemarkBanner(); } catch (e) {} }
   state.activeParcel = {
     id, items: {},
     startedAt: new Date().toISOString(),
@@ -12796,10 +13055,30 @@ function renderKocaRemarkBanner() {
   const el = document.getElementById("koca-remark-banner");
   if (!el) return;
   const rk = state.kocaRemark || "";
-  if (!rk) { el.hidden = true; el.innerHTML = ""; return; }
+  // 🛒 蝦皮那箱的備註 / 對不到的品名也掛在這裡。
+  //   原本只放 toast —— 但本函式上面的註解自己就寫了「備註要一直看得到才有用」,
+  //   蝦皮的備註同樣會寫「這次不要送贈品」「不要折到」這種包貨前必須看到的事,
+  //   用一跳就沒的 toast 等於沒講。用同一個橫幅, 同仁只要學一個地方。
+  const sp = state.shopeeNote || null;
+  const spHtml = (sp && (sp.remark || (sp.unmapped || []).length)) ? `
+    <div style="border:2px solid var(--warn); background:var(--warn-bg); color:var(--text);
+                border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
+      <div style="font-weight:700;">🛒 這箱是蝦皮單${sp.parcelNo ? "(" + escapeHtml(sp.parcelNo) + ")" : ""} — 出貨前先看</div>
+      ${sp.remark ? `<div style="margin-top:4px;">📝 買家備註:${escapeHtml(sp.remark)}</div>` : ""}
+      ${(sp.unmapped || []).length ? `<div style="margin-top:6px; font-weight:700; color:var(--danger);">
+        ❗ 有 ${sp.unmapped.length} 項對不到我們的商品,系統不會自己猜:<br>
+        ${sp.unmapped.map(n => "・" + escapeHtml(n)).join("<br>")}
+        <br>請直接看感熱紙上的購買資訊核對</div>` : ""}
+      ${sp.stale ? `<div style="margin-top:6px; color:var(--danger); font-weight:700;">⚠ 這筆資料來自很久沒更新的池子,可能不是最新的</div>` : ""}
+    </div>` : "";
+  if (!rk) {
+    // 官網沒備註但蝦皮有 → 橫幅照樣要出來
+    if (!spHtml) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false; el.innerHTML = spHtml; return;
+  }
   const excl = _parseExcludedFromRemark(rk);
   el.hidden = false;
-  el.innerHTML = `
+  el.innerHTML = spHtml + `
     <div style="border:2px solid var(--danger); background:var(--danger-bg); color:var(--danger);
                 border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
       <div style="font-weight:700;">📝 這張官網訂單有備註 — 出貨前先看</div>
@@ -13230,6 +13509,17 @@ function bumpPickItem(idx, delta, options) {
 }
 
 // (移除菜單手動模式相關死碼: bumpMenuQty / setMenuQty / startFromMenu)
+
+// ---- Wiring: 蝦皮訂單查詢 ----
+(() => {
+  const btn = document.getElementById("shopee-order-fetch-btn");
+  const inp = document.getElementById("shopee-order-input");
+  if (btn) btn.addEventListener("click", () => runShopeeLookup());
+  // 刷槍刷完會送 Enter → 等同按「查這張單」
+  if (inp) inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); runShopeeLookup(); }
+  });
+})();
 
 // ---- Wiring: Tab switching ----
 document.getElementById("tab-menu").addEventListener("click", () => switchTab("menu"));
