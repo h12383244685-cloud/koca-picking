@@ -3469,7 +3469,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v10.7 · 2026-10-20";
+const APP_VERSION = "v10.8 · 2026-10-21";
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -3735,12 +3735,17 @@ function renderWorkTimer() {
   const ms = workedMs();
   if (settings.workTimer === false || ms <= 0) { el.hidden = true; return; }
   const mins = Math.floor(ms / 60000);
+  // ⏱ 計時器藏在背後 (Kyle 2026/10/21:上方擠了六個東西, 手機上版面會跑掉)。
+  //   ⚠ 只是不顯示, **計時和休息提醒照常運作** —— tickWorkTimer() 跟這支是分開的,
+  //     時間也照樣存進出貨紀錄(每箱的 durationMs), 統計分析頁看得到。
+  //   快到休息時間時才露出來 —— 那是它唯一真正需要佔版面的時刻。
+  const limit = Number(settings.workRestMins) || 60;
+  if (mins < limit * 0.75) { el.hidden = true; return; }
   el.hidden = false;
   const h = Math.floor(mins / 60), m = mins % 60;
   el.textContent = `⏱ ${h}:${String(m).padStart(2, "0")}`;
   // 顏色只是提示強度, 不擋任何操作
-  const limit = Number(settings.workRestMins) || 60;
-  el.style.color = mins >= limit ? "var(--danger)" : (mins >= limit * 0.75 ? "#b8860b" : "");
+  el.style.color = mins >= limit ? "var(--danger)" : "#b8860b";
 }
 // 每分鐘檢查一次: 更新顯示 / 該不該提醒 / 休息夠久就歸零
 function tickWorkTimer() {
@@ -6663,6 +6668,8 @@ function clearOrderModeFlags() {
   // 備註同理: 殘留的話下一張單會掛著別人的「本次不含…」, 比沒有提示更糟。
   state.kocaRemark = "";
   state.kocaRemarkApplied = null;
+  // 通路訂單(蝦皮/MOMO)的備註橫幅同理 —— 不清的話同仁會對著上一張單的「不要折到」包這一箱。
+  state.shopeeNote = null;
 }
 
 // 📋 逐單防呆:把 CSV 拆成「每一張訂單各自該裝什麼」。
@@ -7295,11 +7302,16 @@ async function _autoShopeeLookup(code, rawScan) {
     // 📦 刷標籤開箱時, 如果清單是空的就直接把這張單建起來 —— 同仁刷完標籤就能直接刷貨, 不用再做第二個動作。
     //   ⚠ 清單上已經有東西時**絕不覆蓋**, 也不跳問題:那代表同仁正在做別的單,
     //     打斷他或清掉他的進度都比「少帶出明細」嚴重得多。那種情況只顯示明細就好。
-    if (!r.blocked && !((typeof listHasRealWork === "function") && listHasRealWork())) {
+    if (!r.blocked && !_shopeeBusy()) {
       const built = buildListFromShopeeOrder(o, r);
       if (built.ok) {
-        // 重新開箱: buildList 會動到 state.items, 黃框要保持在這張標籤上
-        if (!state.activeParcel || state.activeParcel.id !== code) startParcel(code, rawScan);
+        _prefillShopeeActiveParcel(o);       // 跟官網一樣:商品直接進黃框
+        // 黃框要掛在同仁剛才刷的那串上(可能是 altCode / 整串超商條碼), 而不是包裹編號
+        if (state.activeParcel && state.activeParcel.id !== code) {
+          state.activeParcel.id = code;
+          if (rawScan && String(rawScan) !== String(code)) state.activeParcel.rawScan = String(rawScan);
+        }
+        saveState();
         if (typeof render === "function") render();
       }
     }
@@ -7334,6 +7346,11 @@ async function _autoShopeeLookup(code, rawScan) {
 function buildListFromShopeeOrder(o, meta) {
   const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
   if (Object.keys(totals).length === 0 && unmapped.length === 0) return { ok: false, why: "這張單沒有商品明細" };
+  // 🔄 先把上一張單的狀態清乾淨 —— 官網那條路就是這樣做的, 我原本漏了。
+  //   漏掉的症狀(Kyle 2026/10/21 真機測到):出完一張之後黃框還掛著上一張的訂單號,
+  //   接著刷下一張會說「這張已經出過了」, 卡在同一單上出不去。
+  //   ⚠ 順序不能顛倒:要先清, 再設定這張單的東西。
+  if (typeof clearOrderModeFlags === "function") clearOrderModeFlags();
 
   const items = [];
   for (const p of library) {
@@ -7366,6 +7383,39 @@ function buildListFromShopeeOrder(o, meta) {
   };
   saveState();
   return { ok: true, items, unmapped, totals, nameOf };
+}
+
+// 現在「動不得」嗎 —— 只看黃框裡有沒有東西。
+//   ⚠ 不可以用 listHasRealWork():那支把**已完成的箱子**也算成忙碌,
+//     所以包完第一箱之後就再也不會自動建單了(Kyle 2026/10/21 真機測到:第二張刷下去商品沒進黃框)。
+//   已完成的箱子早就存起來了, 不會因為建新清單而消失; 真正不能蓋掉的只有「正在裝、還沒結的那一箱」。
+function _shopeeBusy() {
+  return !!(state.activeParcel && Object.keys(state.activeParcel.items || {}).length > 0);
+}
+
+// 把通路訂單的商品直接「已刷」進黃框 —— 跟官網 `_prefillKocaActiveParcel()` 同一個做法。
+//   Kyle 2026/10/21:「刷訂單後會自動跑商品進去, 跟官方一樣」。
+//   為什麼官網敢預填:訂單內容是平台給的事實, 不是系統猜的。同仁接著刷包裝材、手動完成此筆。
+//   ⚠ 兩種東西不預填:
+//     ・包材 —— 自由計數, 本來就要同仁自己刷
+//     ・對不到 SKU 的 —— 那是假 SKU, 預填等於把「沒對應」蓋成「已完成」
+function _prefillShopeeActiveParcel(o) {
+  const parcelId = String((o && o.parcelNo) || "").trim();
+  if (!parcelId) return;
+  startParcel(parcelId);
+  const ap = state.activeParcel;
+  if (!ap) return;
+  if (o.orderNo && String(o.orderNo) !== parcelId) ap.trackingNo = String(o.orderNo);
+  const _cl = (o.logistics && o.logistics.channel) ? String(o.logistics.channel) : "";
+  if (_cl) ap.carrierLabel = _cl;     // 物流商記在包裹上, 統計「幾件走 7-11」才算得出來
+  for (const it of (state.items || [])) {
+    if (it.essential || it.unmapped) continue;
+    const qty = it.expected || 0;
+    if (qty <= 0) continue;
+    it.packed = qty;
+    ap.items[it.sku] = (ap.items[it.sku] || 0) + qty;
+  }
+  state.scanMode = true;              // 展開裝箱面板, 同仁接著刷包裝
 }
 
 // 查通路單並把結果顯示出來(查到就直接建清單)。
@@ -7403,10 +7453,11 @@ async function runShopeeLookup() {
     //   ⚠ 但清單上已經有做到一半的東西時, 一定要先問 —— 直接蓋掉等於把人家包一半的進度清空。
     //     這是少數值得花一次點選的地方。已取消的單也不給建。
     if (!r.blocked) {
-      const busy = (typeof listHasRealWork === "function") && listHasRealWork();
-      if (!busy || confirm(`目前清單還有沒做完的東西。\n\n要改成這張單(${o.parcelNo || o.orderNo || ""})嗎?\n\n【確定】= 換成這張單\n【取消】= 只看明細, 不動清單`)) {
+      if (!_shopeeBusy() || confirm(`黃框裡還有正在裝的東西。\n\n要改成這張單(${o.parcelNo || o.orderNo || ""})嗎?\n\n【確定】= 換成這張單\n【取消】= 只看明細, 不動清單`)) {
         const built = buildListFromShopeeOrder(o, r);
         if (built.ok) {
+          _prefillShopeeActiveParcel(o);     // 跟官網一樣:商品直接進黃框
+          saveState();
           if (typeof render === "function") render();
           if (typeof renderKocaRemarkBanner === "function") renderKocaRemarkBanner();
           SOUND.parcelStart();
@@ -7424,9 +7475,8 @@ async function runShopeeLookup() {
       + `<div>${escapeHtml(_channelLabel(o.channel))}訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
       + (o.logistics && o.logistics.channel ? `<div>物流:${escapeHtml(o.logistics.channel)}${o.logistics.storeInfo ? " · " + escapeHtml(o.logistics.storeInfo) : ""}</div>` : "")
       + (o.statusLabel ? `<div>狀態:${escapeHtml(o.statusLabel)}</div>` : "")
-      // 讓同仁看得見系統做了什麼判斷 —— contains 代表是從整串條碼裡認出來的, 不是完全相等
-      + (r.matchedBy && r.matchedBy !== "exact"
-          ? `<div style="margin-top:4px; color:var(--text-soft); font-size:0.75rem;">(用「${escapeHtml(r.matchedOn || "")}」對到的,方式:${escapeHtml(r.matchedBy)})</div>` : "")
+      // 「用 xxx 對到的, 方式:contains:altCode」這行拿掉 (Kyle 2026/10/21:看不懂又佔版面)。
+      // 判斷依據還是留著 —— 存在 parcel.shopeeOrder.matchedBy, 事後查得到, 只是不擺在同仁眼前。
       + (rows ? `<div style="margin-top:8px;">${rows}</div>` : `<div style="margin-top:8px; color:var(--danger)">⚠ 這張單沒有商品明細</div>`)
       + (unmapped.length
           ? `<div style="margin-top:8px; background:var(--warn-bg); padding:8px; border-radius:6px;">⚠ 這些品名對不到我們的 SKU,<strong>系統不會自己猜</strong>:<br>`
