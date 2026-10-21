@@ -1708,8 +1708,10 @@ footer.summary-bar {
 
     <!-- 官網訂單直接拉單 (KOCA 官網 API) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🌐 官網訂單(輸入單號直接建單)</div>
-      <p class="hint" style="margin-bottom:8px;">輸入或掃描 <strong>KOCA 開頭</strong>的官網訂單編號,系統會自動抓訂單內容建立出貨清單(通路自動設為「官方」)。<br><strong>未付款的訂單會被擋下</strong>,貨到付款(COD)除外。</p>
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🌐 官網訂單</div>
+      <!-- 說明文字刪掉 (Kyle 2026/10/20:太冗長)。
+           擋未付款、COD 例外這些行為都還在, 而且是**發生當下**才跳出來講 ——
+           每天用的人不會讀靜態說明, 只有出事那一刻的訊息才看得到。 -->
       <div style="display:flex; gap:8px;">
         <input type="text" id="koca-order-input" placeholder="KOCA…… 訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
         <button class="btn sm" id="koca-order-fetch-btn" type="button" style="white-space:nowrap;">拉取訂單</button>
@@ -1722,10 +1724,10 @@ footer.summary-bar {
 
     <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 蝦皮訂單(刷標籤查這張單要出什麼)</div>
-      <p class="hint" style="margin-bottom:8px;">刷<strong>蝦皮物流標籤</strong>的條碼或 QR,或直接輸入蝦皮訂單編號。<br>系統會去雲端的待出貨池查這張單的商品明細 —— <strong>目前是唯讀查詢</strong>,不會自動建清單。<br>⚠ 要先由蝦皮抓取器把單推進池子才查得到。</p>
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 通路訂單</div>
+      <!-- 說明文字刪掉 (同上)。查到會自己標出是蝦皮/MOMO/酷澎, 查不到也會講原因, 不需要先寫一段。 -->
       <div style="display:flex; gap:8px;">
-        <input type="text" id="shopee-order-input" placeholder="刷標籤條碼 / 蝦皮訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
+        <input type="text" id="shopee-order-input" placeholder="刷標籤條碼 / 訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
         <button class="btn sm" id="shopee-order-fetch-btn" type="button" style="white-space:nowrap;">查這張單</button>
       </div>
       <div id="shopee-order-status" class="hint" style="margin-top:8px;"></div>
@@ -3467,7 +3469,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v10.5 · 2026-10-20";
+const APP_VERSION = "v10.7 · 2026-10-20";
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -7234,7 +7236,18 @@ function shopeeItemsToTotals(order) {
   return { totals, nameOf, unmapped };
 }
 
-// 🛒 刷到不認得的條碼時, 自動去蝦皮池子問這箱該出什麼。
+// 待出貨池是多通路共用的(蝦皮 / MOMO / 酷澎都推同一支端點, 用 channel 分辨)。
+// 認不出來時寧可寫「通路」兩個字, 也不要猜成蝦皮 —— 標錯通路會害同仁去錯的後台查單。
+function _channelLabel(ch) {
+  const c = String(ch || "").trim().toLowerCase();
+  if (!c) return "通路";
+  if (c.includes("shopee") || c.includes("蝦皮")) return "蝦皮";
+  if (c.includes("momo")) return "MOMO";
+  if (c.includes("coupang") || c.includes("酷澎")) return "酷澎";
+  return String(ch).trim();
+}
+
+// 🛒 刷到不認得的條碼時, 自動去池子問這箱該出什麼(蝦皮 / MOMO / 酷澎共用)。
 //   Kyle 2026/10/20:「讓系統自動去抓」「盡量不要出現需要同仁點選的狀況, 越簡單越好」
 //   「就算有錯誤同仁也可以查看感熱紙上的購買資訊」
 //
@@ -7279,11 +7292,25 @@ async function _autoShopeeLookup(code, rawScan) {
       alert(`🚫 這張單不能出\n\n${r.blockReason || "狀態不是待出貨"}\n\n單號:${o.orderNo || code}\n\n請先確認,不要包這箱。`);
       return;
     }
+    // 📦 刷標籤開箱時, 如果清單是空的就直接把這張單建起來 —— 同仁刷完標籤就能直接刷貨, 不用再做第二個動作。
+    //   ⚠ 清單上已經有東西時**絕不覆蓋**, 也不跳問題:那代表同仁正在做別的單,
+    //     打斷他或清掉他的進度都比「少帶出明細」嚴重得多。那種情況只顯示明細就好。
+    if (!r.blocked && !((typeof listHasRealWork === "function") && listHasRealWork())) {
+      const built = buildListFromShopeeOrder(o, r);
+      if (built.ok) {
+        // 重新開箱: buildList 會動到 state.items, 黃框要保持在這張標籤上
+        if (!state.activeParcel || state.activeParcel.id !== code) startParcel(code, rawScan);
+        if (typeof render === "function") render();
+      }
+    }
     // 📝 備註和「對不到的品名」掛成常駐橫幅, 不用 toast ——
     //   toast 跳一下就沒了, 而這兩件事正是出貨前非看不可的。
     state.shopeeNote = {
       parcelNo: o.parcelNo || "", remark: o.remark || "",
       unmapped: unmapped.map(u => u.name), stale: !!r.stale,
+      // 池子是多通路共用的(小卡 2026/10/20 確認 MOMO 也走同一條路) → 橫幅要照實講是哪一家,
+      // 寫死「蝦皮」的話, MOMO 的單會被標成蝦皮, 同仁查單時會找錯後台。
+      channel: o.channel || "",
     };
     saveState();
     if (typeof renderKocaRemarkBanner === "function") renderKocaRemarkBanner();
@@ -7295,7 +7322,53 @@ async function _autoShopeeLookup(code, rawScan) {
   }
 }
 
-// 查蝦皮單並把結果顯示出來。刻意**只查不建清單** ——
+// 📦 用通路訂單(蝦皮 / MOMO / 酷澎)直接建出貨清單。
+//   Kyle 2026/10/20:「只要有訂單編號, 系統就應該可以直接建單, 就像官網一樣」「不然唯讀也沒什麼用」
+//
+//   刻意照官網那條路的規矩做, 不另立一套:
+//   ・應出量照訂單帶, **packed 一律從 0 開始** —— 同仁還是要一件一件刷過, 這才是雙重確認的意義
+//   ・對不到 SKU 的品項**照樣進清單並標紅**(假 SKU `__KOCA_UNMAPPED_`), 絕不默默少一項
+//     (那個前綴是既有的, 扣庫存和統計都已經會跳過它 —— 另外取名反而會漏掉那些保護)
+//   ・包材自動帶進來(自由計數)
+//   ・已取消 / 退款的單直接拒絕建, 不給機會包錯
+function buildListFromShopeeOrder(o, meta) {
+  const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
+  if (Object.keys(totals).length === 0 && unmapped.length === 0) return { ok: false, why: "這張單沒有商品明細" };
+
+  const items = [];
+  for (const p of library) {
+    if (totals[p.sku] > 0) items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0 });
+  }
+  for (const sku in totals) {
+    if (!library.find(p => p.sku === sku)) items.push({ sku, name: nameOf[sku] || "", expected: totals[sku], packed: 0 });
+  }
+  // ⚠ 對不到的也要佔一列 —— 清單上看得到「有東西沒對應」, 同仁才會去看感熱紙。
+  //   少一列 = 畫面顯示「全部完成」, 但那項根本沒出。
+  unmapped.forEach((u, i) => items.push({
+    sku: `__KOCA_UNMAPPED_${i}`, name: u.name, category: "其他",
+    expected: u.qty, packed: 0, unmapped: true,
+  }));
+  for (const p of library) {
+    if (p.essential && !items.find(it => it.sku === p.sku)) {
+      items.push({ sku: p.sku, name: p.name, category: p.category, expected: 0, packed: 0, essential: true });
+    }
+  }
+  state.items = items;
+  state.loadedDate = new Date().toISOString().slice(0, 10);
+  state.platform = _channelLabel(o.channel);     // 出貨紀錄的通路要記對, 不可以全部變成蝦皮
+  state.manualMode = false;
+  state.orderPlan = null;
+  state.kocaOrderId = "";                         // 這不是官網單, 不要混進官網批次
+  state.shopeeNote = {
+    parcelNo: o.parcelNo || "", remark: o.remark || "",
+    unmapped: unmapped.map(u => u.name), stale: !!(meta && meta.stale),
+    channel: o.channel || "",
+  };
+  saveState();
+  return { ok: true, items, unmapped, totals, nameOf };
+}
+
+// 查通路單並把結果顯示出來(查到就直接建清單)。
 // 池子裡還沒有真資料之前, 自動建清單等於拿沒驗證過的東西去改備貨狀態, 風險太大。
 // 等抓取器開始推、確認資料正確之後, 再把「→ 建立出貨清單」接上去。
 async function runShopeeLookup() {
@@ -7326,14 +7399,29 @@ async function runShopeeLookup() {
       return;
     }
     const o = r.order || {};
+    // 📦 查到就直接建清單(Kyle:「不然唯讀也沒什麼用」)。
+    //   ⚠ 但清單上已經有做到一半的東西時, 一定要先問 —— 直接蓋掉等於把人家包一半的進度清空。
+    //     這是少數值得花一次點選的地方。已取消的單也不給建。
+    if (!r.blocked) {
+      const busy = (typeof listHasRealWork === "function") && listHasRealWork();
+      if (!busy || confirm(`目前清單還有沒做完的東西。\n\n要改成這張單(${o.parcelNo || o.orderNo || ""})嗎?\n\n【確定】= 換成這張單\n【取消】= 只看明細, 不動清單`)) {
+        const built = buildListFromShopeeOrder(o, r);
+        if (built.ok) {
+          if (typeof render === "function") render();
+          if (typeof renderKocaRemarkBanner === "function") renderKocaRemarkBanner();
+          SOUND.parcelStart();
+        }
+      }
+    }
     const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
     const rows = Object.entries(totals).map(([sku, q]) =>
       `<div>📦 ${escapeHtml(nameOf[sku] || sku)} <strong>×${q}</strong> <span style="color:var(--text-soft)">(${escapeHtml(sku)})</span></div>`).join("");
     box.innerHTML =
       (r.blocked ? `<div style="background:var(--danger-bg); color:var(--danger); font-weight:700; padding:8px; border-radius:6px; margin-bottom:8px;">🚫 這張單不能出:${escapeHtml(r.blockReason || "狀態不是待出貨")}</div>` : "")
-      + `<div style="font-weight:700; color:var(--primary);">✓ 查到這張單</div>`
+      // 通路由資料決定, 不寫死 —— 池子是蝦皮 / MOMO / 酷澎共用的
+      + `<div style="font-weight:700; color:var(--primary);">✓ 查到這張單 — ${escapeHtml(_channelLabel(o.channel))}</div>`
       + `<div style="margin-top:4px;">包裹編號:<strong>${escapeHtml(o.parcelNo || "-")}</strong></div>`
-      + `<div>蝦皮訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
+      + `<div>${escapeHtml(_channelLabel(o.channel))}訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
       + (o.logistics && o.logistics.channel ? `<div>物流:${escapeHtml(o.logistics.channel)}${o.logistics.storeInfo ? " · " + escapeHtml(o.logistics.storeInfo) : ""}</div>` : "")
       + (o.statusLabel ? `<div>狀態:${escapeHtml(o.statusLabel)}</div>` : "")
       // 讓同仁看得見系統做了什麼判斷 —— contains 代表是從整串條碼裡認出來的, 不是完全相等
@@ -13063,7 +13151,7 @@ function renderKocaRemarkBanner() {
   const spHtml = (sp && (sp.remark || (sp.unmapped || []).length)) ? `
     <div style="border:2px solid var(--warn); background:var(--warn-bg); color:var(--text);
                 border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
-      <div style="font-weight:700;">🛒 這箱是蝦皮單${sp.parcelNo ? "(" + escapeHtml(sp.parcelNo) + ")" : ""} — 出貨前先看</div>
+      <div style="font-weight:700;">🛒 這箱是${escapeHtml(_channelLabel(sp.channel))}單${sp.parcelNo ? "(" + escapeHtml(sp.parcelNo) + ")" : ""} — 出貨前先看</div>
       ${sp.remark ? `<div style="margin-top:4px;">📝 買家備註:${escapeHtml(sp.remark)}</div>` : ""}
       ${(sp.unmapped || []).length ? `<div style="margin-top:6px; font-weight:700; color:var(--danger);">
         ❗ 有 ${sp.unmapped.length} 項對不到我們的商品,系統不會自己猜:<br>
