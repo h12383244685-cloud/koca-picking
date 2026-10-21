@@ -1724,8 +1724,12 @@ footer.summary-bar {
 
     <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 通路訂單</div>
+      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 蝦皮訂單</div>
       <!-- 說明文字刪掉 (同上)。查到會自己標出是蝦皮/MOMO/酷澎, 查不到也會講原因, 不需要先寫一段。 -->
+      <!-- ⚠ 標題寫「蝦皮訂單」是 Kyle 2026/10/21 指定的 (實際上九成以上是蝦皮單, 同仁看得懂最重要)。
+           但這個框**本來就吃 MOMO / 酷澎** —— 池子是共用的, 刷進來照樣查得到,
+           查到之後的結果區會自己標出真正的通路(「✓ 查到這張單 — MOMO」), 出貨紀錄也記對的通路。
+           所以這裡只是標題, 不要因為它寫「蝦皮」就去把其他通路擋掉。 -->
       <div style="display:flex; gap:8px;">
         <input type="text" id="shopee-order-input" placeholder="刷標籤條碼 / 訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
         <button class="btn sm" id="shopee-order-fetch-btn" type="button" style="white-space:nowrap;">查這張單</button>
@@ -3469,7 +3473,22 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v10.9 · 2026-10-21";
+const APP_VERSION = "v11.3 · 2026-10-21";
+
+// ════════════════════════════════════════════════════════════════
+// 🚪 共同包貨(房間模式)總開關 —— Kyle 2026/10/21:「目前比較少會用到, 想直接取消掉」
+// ════════════════════════════════════════════════════════════════
+// 依據:雲端紀錄近 90 天 38 筆出貨, 包貨名字只有兩個(杰倫 38 / BBA 4), 幾乎沒在共同包。
+//
+// 為什麼是「關掉」而不是「刪掉」:
+//   房間模式牽到 WebSocket、同步計時器、清單合併、廣播、收尾流程、Worker 的 RoomDO,
+//   散在 20 幾個地方。出貨紀錄是不可遺失等級的資料, 為了少幾百行程式碼去動收尾流程,
+//   風險遠大於好處。關掉之後那些程式碼永遠不會被執行, 等於不存在。
+//
+// 要開回來:把這行改成 true 就好, 其他什麼都不用動。
+//
+// ⚠ 舊出貨紀錄裡「房間包的箱子」照常查得到 —— 歷史資料一個字都沒動。
+const ROOM_FEATURE_ENABLED = false;
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -4558,6 +4577,7 @@ function pushRoomListReset() {
 // 自動開房 (共同包貨免手動點「開新房間」): 有清單 + 已設 Worker URL & 暱稱 + 不在房間 → 自動建房。
 // 沒設 Worker URL / 暱稱就不自動 (使用者仍可手動「開新房間」)。同仁一樣用「加入房間」輸 4 碼進來。
 function maybeAutoCreateRoom(reason) {
+  if (!ROOM_FEATURE_ENABLED) return;                            // 🚪 共同包貨已停用
   if (state.roomMode) return;                                   // 已在房間就不重複開
   if (settings.autoRoom === false) return;                      // 使用者可在設定關掉
   if (!settings.syncWorkerUrl || !settings.myName) return;      // 沒設定就不自動
@@ -4573,6 +4593,7 @@ function roomHeaders(extra) { return { ...(extra || {}), "X-Spidey-Key": setting
 function roomKeyQS() { return "?key=" + encodeURIComponent(settings.spideyKey || ""); }
 
 async function createRoom() {
+  if (!ROOM_FEATURE_ENABLED) { showToast("共同包貨目前已停用"); return null; }
   if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return null; }
   if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return null; }
   if (!settings.spideyKey) { showToast("⚠ 共同包貨需要先到 ⚙ 設定填 Spidey Key"); return null; }
@@ -4642,6 +4663,7 @@ async function createRoom() {
 }
 
 async function joinRoom(code) {
+  if (!ROOM_FEATURE_ENABLED) { showToast("共同包貨目前已停用"); return false; }
   if (!settings.syncWorkerUrl) { showToast("⚠ 請先到設定填 Worker URL"); return false; }
   if (!settings.myName) { showToast("⚠ 請先到設定填暱稱"); return false; }
   if (!settings.spideyKey) { showToast("⚠ 共同包貨需要先到 ⚙ 設定填 Spidey Key"); return false; }
@@ -5641,7 +5663,17 @@ function appendHistory() {
     appVersion: APP_VERSION,   // 🏷 哪一版包的。沒有這個就沒人知道同仁手機更新了沒 ——
                                //   而舊版裝置照樣會製造已經修掉的錯帳(訂單消失 / ERP 重複打勾 / 回寫遺失…),
                                //   出事後也查不出是哪台、哪版造成的。每日對帳機器人會回報版本分布。
-    platform: currentPlatform || "unknown",
+    platform: _entryPlatform(),
+    // 一次出貨混了兩個通路時, 把完整清單留著 (只有混到才有這個欄位)
+    platforms: (() => {
+      const t = {};
+      if (!state.kocaOrderId) {
+        const add = (p) => { const k = _channelPlatformKey(p && p.shopeeOrder && p.shopeeOrder.channel); if (k) t[k] = 1; };
+        (state.completedParcels || []).forEach(add); add(state.activeParcel);
+      }
+      const ks = Object.keys(t);
+      return ks.length > 1 ? ks : undefined;
+    })(),
     kocaOrderId: state.kocaOrderId || null,   // 來源官網訂單編號 (出貨後回寫官網用)
     items,
     parcels: (state.completedParcels || []).map(p => ({ ...p })),
@@ -6670,6 +6702,11 @@ function clearOrderModeFlags() {
   state.kocaRemarkApplied = null;
   // 通路訂單(蝦皮/MOMO)的備註橫幅同理 —— 不清的話同仁會對著上一張單的「不要折到」包這一箱。
   state.shopeeNote = null;
+  // ★ 通路也要清。這個欄位現在真的會被寫進出貨紀錄(_entryPlatform),
+  //   不清的話上一張蝦皮單的通路會殘留到下一張 CSV / 手建單 → 出貨紀錄記到錯的通路,
+  //   而且是「數字悄悄不對」那一種:畫面上看起來完全正常。
+  //   ⚠ buildListFromShopeeOrder() 在呼叫本函式「之後」才設新的 platform, 順序不能顛倒。
+  state.platform = null;
 }
 
 // 📋 逐單防呆:把 CSV 拆成「每一張訂單各自該裝什麼」。
@@ -7045,6 +7082,26 @@ function kocaErrMessage(data) {
   return `❌ 失敗:${escapeHtml(e)}`;
 }
 
+// 🧹 出貨收尾時清掉「官網訂單」和「通路訂單」兩個查詢框 + 它們下面的查詢結果。
+//   Kyle 2026/10/21:「訂單完成後, 裡面的訂單資訊要清除掉, 這跟第一次弄官方訂單一樣,
+//   過刷資料會卡在裡面」。實際畫面上看到輸入框是 `832001G816338041BP-A` ——
+//   **舊的號碼沒清掉, 新刷的直接接在後面**, 變成一個誰都查不到的怪字串。
+//
+//   兩個問題一起解:
+//   ① 上一張單的明細(訂單編號、商品、狀態)留在畫面上 → 同仁會對著**已經出完**的那張單包下一箱
+//   ② 輸入框有殘值 → 下一次刷進去是「接上去」不是「取代」
+//
+//   ⚠ 這個函式只動畫面, 不動任何資料 —— 查詢結果本來就只是顯示用,
+//     真正要留的東西(通路、訂單編號、對帳資料)已經存進 parcel.shopeeOrder 了。
+function clearOrderLookupPanels() {
+  for (const id of ["koca-order-input", "shopee-order-input"]) {
+    const el = document.getElementById(id); if (el) el.value = "";
+  }
+  for (const id of ["koca-order-status", "shopee-order-status"]) {
+    const el = document.getElementById(id); if (el) el.innerHTML = "";
+  }
+}
+
 function setKocaOrderStatus(html, tone) {
   const el = document.getElementById("koca-order-status");
   if (!el) return;
@@ -7254,6 +7311,50 @@ function _channelLabel(ch) {
   return String(ch).trim();
 }
 
+// 同一個 channel 的「代碼版」。出貨紀錄的 entry.platform 存的是 PLATFORMS 的 key(a1 / momo / coupang),
+// 不是中文標籤 —— 存錯型別的話通路欄位會變成空的, 統計、ERP 客戶名、篩選全部對不到。
+// ⚠ 認不出來一律回 null(= 不知道), 絕不猜成 a1。標錯通路會害同仁去錯的後台查單,
+//   而且出貨紀錄是對帳依據, 把 MOMO 記成蝦皮比記成「未指定」嚴重得多。
+function _channelPlatformKey(ch) {
+  const c = String(ch || "").trim().toLowerCase();
+  if (!c) return null;
+  if (c.includes("shopee") || c.includes("蝦皮")) return "a1";
+  if (c.includes("momo")) return "momo";
+  if (c.includes("coupang") || c.includes("酷澎")) return "coupang";
+  return null;
+}
+
+// 🏷 這張出貨紀錄該記成哪個通路。
+//   背景(2026/10/21 Kyle 回報):蝦皮自動建的單在出貨紀錄上沒有通路標籤。
+//   原因是 buildListFromShopeeOrder() 設了 state.platform, 但存檔那邊讀的是 currentPlatform ——
+//   **一個沒有任何人讀的欄位**。寫了等於沒寫, 而且完全不會報錯。
+//
+//   真相來源的順序(由可靠到不可靠):
+//   ① 每一箱自己記的 shopeeOrder.channel —— 這是查池子當下存下來的, 最準
+//   ② state.platform —— 建單時記的(清單建好但還沒完成任何一箱時用)
+//   ③ currentPlatform —— CSV 下拉選單, 手建/CSV 單靠這個
+function _entryPlatform() {
+  // 官網單的通路由官網流程決定, 不可以被「順手查了一下池子」的結果蓋掉。
+  if (state.kocaOrderId) return currentPlatform || "koca";
+  const tally = {};
+  const _count = (p) => {
+    const k = _channelPlatformKey(p && p.shopeeOrder && p.shopeeOrder.channel);
+    if (k) tally[k] = (tally[k] || 0) + 1;
+  };
+  (state.completedParcels || []).forEach(_count);
+  _count(state.activeParcel);          // 還沒結案的那箱也算進去
+  const keys = Object.keys(tally);
+  if (keys.length === 1) return keys[0];
+  if (keys.length > 1) {
+    // 一次出貨裡混了兩個通路(蝦皮 + MOMO)。entry.platform 只有一格,
+    // 取最多的那個, 但**不可以把另一個弄不見** —— 完整清單存進 entry.platforms,
+    // 每一箱各自的通路本來就留在 parcels[].shopeeOrder.channel, 事後查得到。
+    keys.sort((a, b) => tally[b] - tally[a]);
+    return keys[0];
+  }
+  return state.platform || currentPlatform || "unknown";
+}
+
 // 🛒 刷到不認得的條碼時, 自動去池子問這箱該出什麼(蝦皮 / MOMO / 酷澎共用)。
 //   Kyle 2026/10/20:「讓系統自動去抓」「盡量不要出現需要同仁點選的狀況, 越簡單越好」
 //   「就算有錯誤同仁也可以查看感熱紙上的購買資訊」
@@ -7347,6 +7448,13 @@ async function _autoShopeeLookup(code, rawScan) {
 function buildListFromShopeeOrder(o, meta) {
   const { totals, nameOf, unmapped } = shopeeItemsToTotals(o);
   if (Object.keys(totals).length === 0 && unmapped.length === 0) return { ok: false, why: "這張單沒有商品明細" };
+  // 🏠 共同包貨:同仁那台**不可以**自己換清單 —— 清單是開房那台的,
+  //   換掉等於把全房的進度洗掉。pushRoomListReset() 本身有擋非房主,
+  //   但那時候 state.items 已經被改過了, 擋太晚。所以在動任何東西之前先退出去。
+  //   (明細照樣會顯示給同仁看, 只是不建清單。)
+  if (state.roomMode && !state.isRoomHost) {
+    return { ok: false, why: "共同包貨中:清單由開房的那台控制, 這台只顯示明細" };
+  }
   // 🔄 先把上一張單的狀態清乾淨 —— 官網那條路就是這樣做的, 我原本漏了。
   //   漏掉的症狀(Kyle 2026/10/21 真機測到):出完一張之後黃框還掛著上一張的訂單號,
   //   接著刷下一張會說「這張已經出過了」, 卡在同一單上出不去。
@@ -7373,7 +7481,9 @@ function buildListFromShopeeOrder(o, meta) {
   }
   state.items = items;
   state.loadedDate = new Date().toISOString().slice(0, 10);
-  state.platform = _channelLabel(o.channel);     // 出貨紀錄的通路要記對, 不可以全部變成蝦皮
+  // ⚠ 存**代碼**(a1/momo/coupang), 不是中文標籤 —— entry.platform 要的是 PLATFORMS 的 key。
+  //   2026/10/21 之前這裡存中文, 而且存檔那邊根本沒讀這個欄位 → 蝦皮單的通路全部是空的。
+  state.platform = _channelPlatformKey(o.channel);
   state.manualMode = false;
   state.orderPlan = null;
   state.kocaOrderId = "";                         // 這不是官網單, 不要混進官網批次
@@ -7383,6 +7493,16 @@ function buildListFromShopeeOrder(o, meta) {
     channel: o.channel || "",
   };
   saveState();
+  // 🏠 共同包貨:清單換掉了一定要同步給房間。
+  //   不推的話伺服器上還留著**上一張單**的清單, 下一次同步時 mergeRoomState
+  //   會把舊清單裡有、新清單裡沒有的品項「加回來」(見 `state.items.push({...serverIt})` 那段),
+  //   連同上一張單已刷的數量一起 → 新單變成新舊混在一起, **數量全錯而且完全沒有提示**。
+  //   官網單那條路是直接 leaveRoom() 避開這件事, 通路單不能那樣做(要讓全房一起包這張),
+  //   所以走跟「換下一位客人」一樣的 reset_list。
+  if (state.roomMode && state.isRoomHost && typeof pushRoomListReset === "function") {
+    pushRoomListReset();
+    if (typeof syncRoom === "function") syncRoom();   // 盡快讓伺服器套用, 縮短空窗
+  }
   return { ok: true, items, unmapped, totals, nameOf };
 }
 
@@ -7429,12 +7549,13 @@ function _prefillShopeeActiveParcel(o) {
 // 查通路單並把結果顯示出來(查到就直接建清單)。
 // 池子裡還沒有真資料之前, 自動建清單等於拿沒驗證過的東西去改備貨狀態, 風險太大。
 // 等抓取器開始推、確認資料正確之後, 再把「→ 建立出貨清單」接上去。
-async function runShopeeLookup() {
+// presetCode: 刷槍送 Enter 時, 欄位已經先被清空了(避免下一刷接在後面), 所以把號碼直接傳進來。
+async function runShopeeLookup(presetCode) {
   const inp = document.getElementById("shopee-order-input");
   const box = document.getElementById("shopee-order-status");
   const btn = document.getElementById("shopee-order-fetch-btn");
   if (!inp || !box) return;
-  const code = String(inp.value || "").trim();
+  const code = String(presetCode != null ? presetCode : (inp.value || "")).trim();
   if (!code) { box.innerHTML = "<span style='color:var(--danger)'>請先輸入或刷一個號碼</span>"; return; }
   if (btn) { btn.disabled = true; btn.textContent = "查詢中…"; }
   box.textContent = "查詢中…";
@@ -7449,7 +7570,10 @@ async function runShopeeLookup() {
         + `池子更新於 ${r.ageMinutes} 分鐘前${r.stale ? " ⚠ 太久沒更新了,資料可能不是最新的" : ""}</div>`;
 
     if (!r.ok) {
+      // ⚠ 把刷到的號碼一起顯示 —— 欄位已經清空了, 查不到時同仁要看得見「我剛剛刷到的是什麼」,
+      //   否則刷到怪字串(例如兩段接在一起)會完全無從判斷。
       box.innerHTML = `<span style="color:var(--danger); font-weight:600;">❌ ${escapeHtml(r.message || r.error)}</span>`
+        + `<div style="margin-top:4px; font-size:0.75rem; color:var(--text-soft);">剛剛刷到:<code>${escapeHtml(code)}</code></div>`
         + (r.candidates && r.candidates.length
             ? `<div style="margin-top:6px;">對到這幾張:<br>${r.candidates.map(c => escapeHtml(c)).join("<br>")}</div>` : "")
         + freshLine;
@@ -7496,6 +7620,10 @@ async function runShopeeLookup() {
             + `<br><span style="font-size:0.75rem">請到 📋 規格對應 設定一次,之後就會記住。</span></div>` : "")
       + (o.remark ? `<div style="margin-top:8px; background:var(--warn-bg); padding:8px; border-radius:6px;">📝 買家備註:${escapeHtml(o.remark)}</div>` : "")
       + freshLine;
+    // ★ 查到之後一定要放掉焦點 —— 否則同仁接著刷的商品/包材條碼會全被這個框吃掉, 不會進撿貨清單。
+    //   官網訂單那個框早就這樣做了(見 koca-order-input 的 go()), 這裡漏掉了。
+    inp.value = "";
+    inp.blur();
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "查這張單"; }
   }
@@ -8274,6 +8402,7 @@ async function completeKocaBatch() {
     try { localStorage.removeItem(STATE_BACKUP_KEY); } catch (e) {}
     currentPlatform = "";
     const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
+    clearOrderLookupPanels();
     reportModal.hidden = true;
     render();
     SOUND.shipDone();
@@ -8373,6 +8502,7 @@ async function completeKocaBatch() {
   currentPlatform = "";
   const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
   const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+  clearOrderLookupPanels();
   reportModal.hidden = true;
   render();
   SOUND.shipDone();
@@ -11899,7 +12029,7 @@ function renderHistory() {
       const _typeLabel = e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
       detail += `<div style="font-size: 0.72rem; color: var(--text-soft); margin-bottom: 8px; line-height: 1.8;">
         🕒 完成時間 <strong style="color: var(--text);">${_fullTime}</strong><br>
-        👤 完成者 <strong style="color: var(--text);">${escapeHtml(e.completedBy || "(未命名)")}</strong> · 通路 <strong style="color: var(--text);">${escapeHtml(PLATFORM_LABELS[e.platform] || e.platform || "—")}</strong> · 類型 <strong style="color: var(--text);">${_typeLabel}</strong>${e.appendLevel && e.appendLevel > 1 ? ` · 追加第 ${e.appendLevel} 次` : ''}
+        👤 完成者 <strong style="color: var(--text);">${escapeHtml(e.completedBy || "(未命名)")}</strong> · 通路 <strong style="color: var(--text);">${escapeHtml(PLATFORM_LABELS[e.platform] || e.platform || "—")}</strong>${(Array.isArray(e.platforms) && e.platforms.length > 1) ? `<span style="color:var(--danger);"> ⚠ 這次混了 ${escapeHtml(e.platforms.map(k => (PLATFORMS[k] && PLATFORMS[k].label) || k).join(" + "))}</span>` : ''} · 類型 <strong style="color: var(--text);">${_typeLabel}</strong>${e.appendLevel && e.appendLevel > 1 ? ` · 追加第 ${e.appendLevel} 次` : ''}
       </div>`;
       // 商品跟著單號一起列: 每張寄件單號下面直接顯示它裝了哪些商品 (多客人時才看得出是誰的)
       const parcels = e.parcels || [];
@@ -13050,6 +13180,9 @@ function finalizeActiveParcel(skipIfEmpty, opts) {
       id: ap.id, items: ap.items, packedBy: ap.packedBy,
       rawScan: ap.rawScan || "", trackingNo: ap.trackingNo || "",
       ecpayNo: ap.ecpayNo || "", carrierLabel: ap.carrierLabel || "",
+      // 🛒 通路訂單的對帳資料也要一起送。沒有它的話, 共同包貨出去的蝦皮/MOMO 箱子
+      //   在出貨紀錄上會變成「沒有通路」—— 自己一台包有, 一起包就沒有, 兩邊單獨看都正常。
+      shopeeOrder: ap.shopeeOrder || null,
     });
   }
   state.activeParcel = null;
@@ -13666,8 +13799,16 @@ function bumpPickItem(idx, delta, options) {
   const inp = document.getElementById("shopee-order-input");
   if (btn) btn.addEventListener("click", () => runShopeeLookup());
   // 刷槍刷完會送 Enter → 等同按「查這張單」
+  // ⚠ 一定要「先取值再清空」。不清的話下一刷會**接在舊號碼後面** ——
+  //   Kyle 2026/10/21 的畫面就是 `832001G816338041BP-A`, 兩段黏在一起, 查什麼都查不到。
+  //   跟盤點輸入框(stocktake-input)是同一個做法。
   if (inp) inp.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); runShopeeLookup(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const v = String(inp.value || "").trim();
+      inp.value = "";
+      runShopeeLookup(v);
+    }
   });
 })();
 
@@ -15543,7 +15684,9 @@ function applyRoleLock() {
   byId("a1-pos-title", !h);   // 換成簡單的「🌐 官網出貨」
   byId("a1-csv-box", h);      // 📥 CSV 上傳 + 通路下拉整塊
   byId("a1-adv-sections", h); // 其他建單方式(手動/補寄/退貨/入倉) + 貼上CSV + 規格對應 + 必要商品
-  document.querySelectorAll(".room-entry").forEach(el => { el.hidden = h; });
+  // ⚠ 共同包貨停用時一律藏著 —— 這行在開機流程裡跑在停用處理的「後面」,
+  //   不看總開關的話會把剛藏好的那塊又打開(實測到的:徽章藏了、這塊沒藏)。
+  document.querySelectorAll(".room-entry").forEach(el => { el.hidden = h || !ROOM_FEATURE_ENABLED; });
   // 大按鈕 (POS 觸控): 工讀生強制手套模式; 切回管理員還原成他自己的設定
   applyGloveMode(h ? true : !!settings.gloveMode);
   // 工讀生模式會強制關 testMode → 順手刷新「🧪 測試模式」警示條, 免得殘留顯示誤導 (實際已關卻還亮著)
@@ -17071,6 +17214,7 @@ function actuallyCompleteShipping(opts) {
     currentPlatform = "";
     const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
     const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
+    clearOrderLookupPanels();
     reportModal.hidden = true;
     render();
     SOUND.shipDone();
@@ -17117,6 +17261,9 @@ function actuallyCompleteShipping(opts) {
     const _ps = document.getElementById("platform-select"); if (_ps) _ps.value = "";
     const _ph = document.getElementById("platform-hint"); if (_ph) _ph.textContent = "請先選擇通路, 再上傳對應的 CSV。";
   }
+  // ⚠ 這行刻意放在 if 外面:「換下一位客人」也要清。
+  //   清單都換了, 上面還掛著前一張單的訂單編號和商品明細, 比沒有更危險。
+  clearOrderLookupPanels();
   reportModal.hidden = true;
   render();
   SOUND.shipDone();
@@ -17597,6 +17744,56 @@ if (state.items.length === 0) {
     console.log("[state] restored from backup", backup.items.length, "items, savedAt:", backup.savedAt);
   }
 }
+// ════════════════════════════════════════════════════════════════
+// 🚪 共同包貨已停用 (ROOM_FEATURE_ENABLED = false) → 收掉入口 + 清掉殘留的房間狀態
+// ════════════════════════════════════════════════════════════════
+// ⚠ 最重要的一件事:**清單絕對不可以跟著不見**。
+//   更新上來的那一刻, 同仁手機可能正在房間裡包到一半。
+//   這裡只拿掉「房間」這個身分, state.items / activeParcel / completedParcels 一個都不動 ——
+//   他照樣可以把手上這張單包完、按出貨完成、留下紀錄。
+//   (出貨紀錄是不可遺失等級的資料, 停用一個功能不該有任何資料代價。)
+if (!ROOM_FEATURE_ENABLED) {
+  // 1) 畫面:建單頁那整塊 + 右上角房間徽章 + 設定裡的「自動開房」
+  const _roomEntry = document.querySelector(".room-entry");
+  if (_roomEntry) _roomEntry.hidden = true;
+  const _rb = document.getElementById("room-badge");
+  if (_rb) _rb.hidden = true;
+  const _arRow = document.getElementById("auto-room-input");
+  if (_arRow && _arRow.closest("label")) {
+    _arRow.closest("label").hidden = true;
+    const _hint = _arRow.closest("label").nextElementSibling;
+    if (_hint && _hint.classList.contains("hint")) _hint.hidden = true;
+  }
+  // 2) 自動開房永遠關著 (就算舊設定存的是 true)
+  settings.autoRoom = false;
+
+  // 3) 殘留的房間身分 → 清掉, 但**只清身分**
+  if (state.roomMode) {
+    const _keptItems = (state.items || []).length;
+    const _keptBoxes = (state.completedParcels || []).length;
+    state.roomMode = false;
+    state.roomCode = null;
+    state.isRoomHost = false;
+    state.roomMembers = {};
+    state.roomActiveParcels = {};
+    state._pendingListReset = false;
+    state._lastSeenRoomVer = 0;
+    state._lastListVersion = 0;
+    pendingEvents = [];            // 送不出去的房間事件丟掉 (房間已經不存在了)
+    savePendingEvents();
+    saveState();
+    console.log("[room] 功能已停用, 清掉房間身分;清單保留", _keptItems, "項 /", _keptBoxes, "箱");
+    // 這件事一定要講 —— 同仁原本以為跟同事在同一份清單上, 現在變成自己一台。
+    setTimeout(() => alert(
+      "ℹ️ 共同包貨功能已停用\n\n" +
+      "你目前的清單和已完成的箱子都還在(" + _keptItems + " 項 / " + _keptBoxes + " 箱),\n" +
+      "可以照常包完、按「出貨完成」。\n\n" +
+      "⚠ 但現在是「自己一台」在包 —— 同事那台的數量不會再同步過來。\n" +
+      "如果這張單是兩個人一起包的,請先跟同事對一下誰包了什麼。"
+    ), 900);
+  }
+}
+
 loadLibrary();
 loadBundleRules();   // 連動規則 (⚙ 設定可編輯; 沒存過就帶出廠預設)
 loadMenuQty();
