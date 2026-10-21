@@ -1689,8 +1689,13 @@ footer.summary-bar {
     <h2 id="a1-page-title">從通路後台匯入揀貨單</h2>
     <h2 id="a1-pos-title" hidden>🌐 官網出貨</h2>
 
-    <div id="a1-csv-box" style="background: var(--primary-light); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:8px;">📥 上傳揀貨單 CSV(主要出貨流程)</div>
+    <!-- 📥 CSV 匯入:Kyle 2026/10/21「目前不太會用到」→ 收合成一行。
+         ⚠ 不可以刪掉。蝦皮走的是賣家中心內部 API, 不是正式合作的 API ——
+         哪天蝦皮改版或擋掉(2026/10/21 已經發生過一次), CSV 是唯一還能出貨的路。
+         收起來但留著 = 平常不礙眼, 出事時點一下就在。 -->
+    <details id="a1-csv-box" style="margin-bottom:10px;">
+      <summary style="cursor:pointer; font-weight:600; font-size:0.85rem; color:var(--text-soft); padding:8px 2px;">📥 上傳揀貨單 CSV(備用:蝦皮抓不到單時用)</summary>
+      <div style="background: var(--primary-light); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-top:6px;">
       <label style="display:block; font-size:0.8125rem; color:var(--text-soft); margin-bottom:4px;">選擇通路</label>
       <select id="platform-select" style="width:100%; padding:12px; font-size:0.9375rem; font-weight:600; border:1px solid var(--border); border-radius:8px; background:white; margin-bottom:10px;">
       <option value="">— 請先選擇通路 —</option>
@@ -1704,7 +1709,8 @@ footer.summary-bar {
 
       <p class="hint" id="platform-hint" style="margin-bottom:8px;">把從蝦皮後台匯出的揀貨單 CSV 上傳。第一次匯入時需要設定「規格 → SKU」對應，之後系統會自動辨識。</p>
       <input type="file" id="a1-csv-file" accept=".csv,.txt" style="margin: 4px 0 0;">
-    </div>
+      </div>
+    </details>
 
     <!-- 官網訂單直接拉單 (KOCA 官網 API) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
@@ -1721,6 +1727,11 @@ footer.summary-bar {
       <div id="koca-order-list" hidden></div>
       <div id="koca-order-map" hidden></div>
     </div>
+
+    <!-- 🚫 池子裡「不能出」的單 —— 在同仁開始包之前就先講 (Kyle 2026/10/21)。
+         「不如訂單池先做確認, 像官方這樣, 盡量讓同仁越少碰到麻煩問題」
+         以前只有刷到那一秒才攔 → 問題一定是在**同仁手上拿著箱子**時才爆開。 -->
+    <div id="shopee-blocked-banner" hidden style="background:var(--danger-bg); border:1px solid var(--danger); border-radius:12px; padding:12px 14px; margin-bottom:14px;"></div>
 
     <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
@@ -1784,7 +1795,10 @@ footer.summary-bar {
       </div>
     </details>
 
-    <details>
+    <!-- Kyle 2026/10/21:藏起來(不太會用到)。
+         程式留著 —— a1-paste-area / a1-parse-paste-btn 的事件監聽照常綁,
+         哪天要用把 hidden 拿掉就好。刪掉的話連「CSV 讀不進來時貼內容救」這條路都沒了。 -->
+    <details id="a1-paste-box" hidden>
       <summary>或直接貼上 CSV 內容</summary>
       <textarea id="a1-paste-area" placeholder="把整份 CSV 貼到這裡..."></textarea>
       <button class="btn full sm" id="a1-parse-paste-btn" style="margin-top:6px;">解析貼上的內容</button>
@@ -3473,7 +3487,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v11.3 · 2026-10-21";
+const APP_VERSION = "v11.6 · 2026-10-21";
 
 // ════════════════════════════════════════════════════════════════
 // 🚪 共同包貨(房間模式)總開關 —— Kyle 2026/10/21:「目前比較少會用到, 想直接取消掉」
@@ -7126,10 +7140,11 @@ async function fetchKocaOrder(orderId, opts) {
   try {
     // B: 拉單前同步把雲端出貨紀錄拉最新, 否則跨裝置防呆 (kocaShippedMap) 會漏別台出過的單
     const _cloudReady = fetchCloudHistory(true).catch(() => {});
+    // 🔑 金鑰走標頭, 不放網址 —— 網址會進瀏覽器歷史 / devtools / proxy log,
+    //   而這把金鑰讀得到全部出貨紀錄、也刪得掉。Worker 兩種都收, 所以直接改標頭就好。
     const url = settings.syncWorkerUrl.replace(/\/$/, "")
-      + "/api/koca-order?orderId=" + encodeURIComponent(orderId)
-      + "&key=" + encodeURIComponent(settings.spideyKey || "");
-    const res = await fetch(url, { cache: "no-store" });
+      + "/api/koca-order?orderId=" + encodeURIComponent(orderId);
+    const res = await fetch(url, { cache: "no-store", headers: { "X-Spidey-Key": settings.spideyKey || "" } });
     const data = await res.json().catch(() => null);
 
     if (!data) {
@@ -7549,6 +7564,43 @@ function _prefillShopeeActiveParcel(o) {
 // 查通路單並把結果顯示出來(查到就直接建清單)。
 // 池子裡還沒有真資料之前, 自動建清單等於拿沒驗證過的東西去改備貨狀態, 風險太大。
 // 等抓取器開始推、確認資料正確之後, 再把「→ 建立出貨清單」接上去。
+// 🚫 池子健檢:同仁「開始包之前」就先把不能出的單講出來。
+//   Kyle 2026/10/21:「不如訂單池先做確認, 像官方這樣, 盡量讓同仁越少碰到麻煩問題」
+//   —— 刷到才攔的話, 問題一定是在他手上已經拿著箱子、標籤已經貼上去的時候才爆開。
+//   先講 = 他可以在挑標籤的階段就把那幾張抽掉, 完全不會碰到。
+//
+//   設計原則(跟這個專案其他自動行為一致):
+//   ・沒事就**完全不出現**, 不佔版面也不用點掉
+//   ・有事就**留在畫面上**, 不是 toast 閃一下(閃一下等於沒講)
+//   ・查不到 / 連不上 / 沒設定 → **安靜**, 絕不擋住同仁做事
+let _poolAlertAt = 0;
+async function refreshShopeePoolAlert(force) {
+  const box = document.getElementById("shopee-blocked-banner");
+  if (!box) return;
+  if (!settings.syncWorkerUrl || !settings.spideyKey) { box.hidden = true; return; }
+  if (!force && Date.now() - _poolAlertAt < 60000) return;      // 一分鐘內不重複問
+  _poolAlertAt = Date.now();
+  let d = null;
+  try {
+    const res = await fetch(settings.syncWorkerUrl.replace(/\/$/, "") + "/api/shopee/status",
+      { headers: { "X-Spidey-Key": settings.spideyKey } });
+    d = await res.json().catch(() => null);
+  } catch (e) { /* 連不上就當沒這回事 */ }
+  // ⚠ 失敗一律安靜收掉 —— 網路不好不可以變成「畫面上掛著一條紅字但沒人知道什麼意思」
+  if (!d || !d.ok || !Array.isArray(d.blocked) || d.blocked.length === 0) { box.hidden = true; box.innerHTML = ""; return; }
+  const rows = d.blocked.map(b =>
+    `<div style="margin-top:4px;">・<strong>${escapeHtml(b.orderNo || b.parcelNo || "(無編號)")}</strong>`
+    + ` — ${escapeHtml(b.statusLabel || b.reason || "狀態不是待出貨")}</div>`).join("");
+  const more = (d.blockedTotal > d.blocked.length)
+    ? `<div style="margin-top:4px;">…還有 ${d.blockedTotal - d.blocked.length} 張</div>` : "";
+  box.innerHTML =
+    `<div style="font-weight:700; color:var(--danger); font-size:0.95rem;">🚫 這 ${d.blockedTotal} 張不要包</div>`
+    + `<div style="font-size:0.8125rem; margin-top:4px;">蝦皮那邊已經取消／退款了。請先把這幾張的標籤從待出貨那疊抽掉。</div>`
+    + rows + more
+    + `<div class="hint" style="margin-top:6px;">就算不小心刷到, 系統還是會再攔一次。</div>`;
+  box.hidden = false;
+}
+
 // presetCode: 刷槍送 Enter 時, 欄位已經先被清空了(避免下一刷接在後面), 所以把號碼直接傳進來。
 async function runShopeeLookup(presetCode) {
   const inp = document.getElementById("shopee-order-input");
@@ -7886,9 +7938,9 @@ async function fetchKocaPendingOrders() {
   try {
     // B: 同步把雲端出貨紀錄拉最新, 讓列表能正確標出「別台已出過」的單
     const _cloudReady = fetchCloudHistory(true).catch(() => {});
-    const url = settings.syncWorkerUrl.replace(/\/$/, "")
-      + "/api/koca-orders?limit=100&key=" + encodeURIComponent(settings.spideyKey || "");
-    const res = await fetch(url, { cache: "no-store" });
+    // 🔑 金鑰走標頭, 不放網址 (同 fetchKocaOrder)
+    const url = settings.syncWorkerUrl.replace(/\/$/, "") + "/api/koca-orders?limit=100";
+    const res = await fetch(url, { cache: "no-store", headers: { "X-Spidey-Key": settings.spideyKey || "" } });
     const data = await res.json().catch(() => null);
     if (!data || !data.ok) {
       setKocaOrderStatus(kocaErrMessage(data), "err");
@@ -11135,10 +11187,10 @@ async function fetchKocaStatus(orderId, opts) {
   const cached = _logiCache[orderId];
   if (!opts.force && cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < LOGI_STATUS_TTL_MS) return { ok: true, ...cached, cached: true };
   try {
+    // 🔑 金鑰走標頭, 不放網址 (同 fetchKocaOrder)
     const url = settings.syncWorkerUrl.replace(/\/$/, "")
-      + "/api/koca-order?orderId=" + encodeURIComponent(orderId)
-      + "&key=" + encodeURIComponent(settings.spideyKey || "");
-    const res = await fetch(url, { cache: "no-store" });
+      + "/api/koca-order?orderId=" + encodeURIComponent(orderId);
+    const res = await fetch(url, { cache: "no-store", headers: { "X-Spidey-Key": settings.spideyKey || "" } });
     const data = await res.json().catch(() => null);
     if (!data || !data.ok) return { ok: false, error: (data && data.error) || "fetch_failed", orderId };
     const rec = {
@@ -13846,6 +13898,8 @@ function switchTab(t) {
   }
   // 手機鏡像: 切到商品庫/倉庫清冊時, 拉電腦主檔最新 (主機自己不拉)
   if (t === "menu" || t === "inventory") fetchMasterMirror(true);
+  // 🚫 切到「開始出貨」就順手看一下池子裡有沒有不能出的單 (節流 1 分鐘, 失敗安靜)
+  if (t === "a1" && typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert();
 }
 
 // (Excel paste 功能已移除, 改為倉庫清冊)
