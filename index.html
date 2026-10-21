@@ -3469,7 +3469,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v10.8 · 2026-10-21";
+const APP_VERSION = "v10.9 · 2026-10-21";
 // 📉 補寄開始扣庫存的生效時間 (台灣時間 2026/10/14 00:00)。
 //   這個日期之前的補寄紀錄一律不扣 —— 不可追溯, 理由見 applyStockForEntry() 的註解。
 const REPLACEMENT_DEDUCT_FROM = Date.parse("2026-10-13T16:00:00Z");
@@ -7323,6 +7323,7 @@ async function _autoShopeeLookup(code, rawScan) {
       // 池子是多通路共用的(小卡 2026/10/20 確認 MOMO 也走同一條路) → 橫幅要照實講是哪一家,
       // 寫死「蝦皮」的話, MOMO 的單會被標成蝦皮, 同仁查單時會找錯後台。
       channel: o.channel || "",
+      orderNo: o.orderNo || "",   // 橫幅顯示這個, 不顯示包裹編號(見上方說明)
     };
     saveState();
     if (typeof renderKocaRemarkBanner === "function") renderKocaRemarkBanner();
@@ -7408,6 +7409,13 @@ function _prefillShopeeActiveParcel(o) {
   if (o.orderNo && String(o.orderNo) !== parcelId) ap.trackingNo = String(o.orderNo);
   const _cl = (o.logistics && o.logistics.channel) ? String(o.logistics.channel) : "";
   if (_cl) ap.carrierLabel = _cl;     // 物流商記在包裹上, 統計「幾件走 7-11」才算得出來
+  // 📌 把這張單的原始資料釘在箱子上 —— 出貨紀錄裡留得下來, 事後對帳才查得回去。
+  //   ⚠ 包裹編號(TW…)不給同仁看, 但**一定要存** —— 那是跟蝦皮對帳時唯一的共同 key。
+  //   原本只有「刷標籤自動建單」那條路有存, 手動輸入那條沒有 → 同一件事兩條路結果不一樣。
+  ap.shopeeOrder = {
+    parcelNo: o.parcelNo || "", orderNo: o.orderNo || "", channel: o.channel || "",
+    statusLabel: o.statusLabel || "", remark: o.remark || "",
+  };
   for (const it of (state.items || [])) {
     if (it.essential || it.unmapped) continue;
     const qty = it.expected || 0;
@@ -7453,7 +7461,7 @@ async function runShopeeLookup() {
     //   ⚠ 但清單上已經有做到一半的東西時, 一定要先問 —— 直接蓋掉等於把人家包一半的進度清空。
     //     這是少數值得花一次點選的地方。已取消的單也不給建。
     if (!r.blocked) {
-      if (!_shopeeBusy() || confirm(`黃框裡還有正在裝的東西。\n\n要改成這張單(${o.parcelNo || o.orderNo || ""})嗎?\n\n【確定】= 換成這張單\n【取消】= 只看明細, 不動清單`)) {
+      if (!_shopeeBusy() || confirm(`黃框裡還有正在裝的東西。\n\n要改成這張單(${o.orderNo || o.parcelNo || ""})嗎?\n\n【確定】= 換成這張單\n【取消】= 只看明細, 不動清單`)) {
         const built = buildListFromShopeeOrder(o, r);
         if (built.ok) {
           _prefillShopeeActiveParcel(o);     // 跟官網一樣:商品直接進黃框
@@ -7471,8 +7479,12 @@ async function runShopeeLookup() {
       (r.blocked ? `<div style="background:var(--danger-bg); color:var(--danger); font-weight:700; padding:8px; border-radius:6px; margin-bottom:8px;">🚫 這張單不能出:${escapeHtml(r.blockReason || "狀態不是待出貨")}</div>` : "")
       // 通路由資料決定, 不寫死 —— 池子是蝦皮 / MOMO / 酷澎共用的
       + `<div style="font-weight:700; color:var(--primary);">✓ 查到這張單 — ${escapeHtml(_channelLabel(o.channel))}</div>`
-      + `<div style="margin-top:4px;">包裹編號:<strong>${escapeHtml(o.parcelNo || "-")}</strong></div>`
-      + `<div>${escapeHtml(_channelLabel(o.channel))}訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
+      // ⚠ 包裹編號(TW…)刻意不顯示 (Kyle 2026/10/21)。
+      //   那是蝦皮**內部 API 層**的物流追蹤號 —— 賣家後台看不到, 正常要官方 API 合作才拿得到。
+      //   擺在同仁畫面上, 一來沒人核對得了(對不到蝦皮後台也對不到標籤), 二來不必要地張揚資料來源。
+      //   它還是照常用來查單、照常存進 parcel.shopeeOrder, 只是不給同仁看。
+      //   同仁要查單用「訂單編號」就夠了 —— 那個蝦皮後台查得到。
+      + `<div style="margin-top:4px;">訂單編號:<strong>${escapeHtml(o.orderNo || "-")}</strong></div>`
       + (o.logistics && o.logistics.channel ? `<div>物流:${escapeHtml(o.logistics.channel)}${o.logistics.storeInfo ? " · " + escapeHtml(o.logistics.storeInfo) : ""}</div>` : "")
       + (o.statusLabel ? `<div>狀態:${escapeHtml(o.statusLabel)}</div>` : "")
       // 「用 xxx 對到的, 方式:contains:altCode」這行拿掉 (Kyle 2026/10/21:看不懂又佔版面)。
@@ -13201,7 +13213,7 @@ function renderKocaRemarkBanner() {
   const spHtml = (sp && (sp.remark || (sp.unmapped || []).length)) ? `
     <div style="border:2px solid var(--warn); background:var(--warn-bg); color:var(--text);
                 border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
-      <div style="font-weight:700;">🛒 這箱是${escapeHtml(_channelLabel(sp.channel))}單${sp.parcelNo ? "(" + escapeHtml(sp.parcelNo) + ")" : ""} — 出貨前先看</div>
+      <div style="font-weight:700;">🛒 這箱是${escapeHtml(_channelLabel(sp.channel))}單${sp.orderNo ? "(" + escapeHtml(sp.orderNo) + ")" : ""} — 出貨前先看</div>
       ${sp.remark ? `<div style="margin-top:4px;">📝 買家備註:${escapeHtml(sp.remark)}</div>` : ""}
       ${(sp.unmapped || []).length ? `<div style="margin-top:6px; font-weight:700; color:var(--danger);">
         ❗ 有 ${sp.unmapped.length} 項對不到我們的商品,系統不會自己猜:<br>
