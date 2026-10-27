@@ -1735,7 +1735,12 @@ footer.summary-bar {
 
     <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-      <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">🛒 蝦皮訂單</div>
+      <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+        <span style="font-weight:700; color:var(--primary); font-size:0.95rem;">🛒 蝦皮訂單</span>
+        <!-- 📡 訂單池狀態 —— 同仁要看得到「池子是不是活的」, 不能刷下去查不到才知道。
+             沒設 Worker 就整個不顯示(單機模式不該出現看不懂的字)。 -->
+        <span id="shopee-pool-status" class="hint" style="font-size:0.72rem;" hidden></span>
+      </div>
       <!-- 說明文字刪掉 (同上)。查到會自己標出是蝦皮/MOMO/酷澎, 查不到也會講原因, 不需要先寫一段。 -->
       <!-- ⚠ 標題寫「蝦皮訂單」是 Kyle 2026/10/21 指定的 (實際上九成以上是蝦皮單, 同仁看得懂最重要)。
            但這個框**本來就吃 MOMO / 酷澎** —— 池子是共用的, 刷進來照樣查得到,
@@ -1994,6 +1999,11 @@ footer.summary-bar {
 <div id="picking-view" hidden>
   <!-- 官方批次多單「本批訂單」列 (收合式; 只有官方刷單批次會顯示) -->
   <div id="koca-batch-strip" class="koca-batch-strip" hidden></div>
+  <!-- 🛒 通路單(蝦皮/MOMO/酷澎/手建)已完成列 —— 比照官方那條的位置放最上面。
+       Kyle 2026/10/22:「蝦皮訂單完成能夠跟官方刷單一樣嗎, 能看到剛剛過刷的紀錄, 完成訂單也在上方」
+       官方是「先拉一批、逐張切換」, 通路單是「刷一張包一張」—— 形狀不同,
+       所以這裡顯示的是**已經完成的那幾筆**(最新的在最前面), 不是待辦清單。 -->
+  <div id="channel-batch-strip" class="koca-batch-strip" hidden></div>
   <!-- 當前訂單: 放在 picking-view 最上面, 釘在標題列正下方, 一進畫面就在最頂、捲動不跑 -->
   <!-- 📝 官網訂單備註(缺件補寄等) —— 掛在當前訂單上方, 包完這張之前一直看得到 -->
   <div id="koca-remark-banner" hidden></div>
@@ -2670,6 +2680,9 @@ footer.summary-bar {
         <button class="btn full outline" id="storage-cleanup-btn" style="margin-top: 8px;">🧹 清掉雲端已保存的舊出貨紀錄</button>
         <button class="btn full danger" id="storage-purge-btn" style="margin-top: 8px;">🗑 清空本機全部出貨紀錄(雲端保留)</button>
         <button class="btn full outline" id="dup-override-log-btn" style="margin-top: 8px;">⛔ 查看「重複出貨放行」紀錄</button>
+        <!-- 📓 App 狀態紀錄 (Kyle 2026/10/27, 為 1500 單尖峰做的):
+             平常一天 15 箱, 出事會被人注意到; 一天 750 箱時沒有人會發現。 -->
+        <button class="btn full outline" id="app-log-btn" style="margin-top: 8px;">📓 App 狀態紀錄(錯誤 / 事件)</button>
         <p class="hint" style="font-size: 0.7rem; margin-top: 8px;">
           🧹 <strong>清掉舊的</strong>:只刪已確認存在雲端、且超過 14 天的。<br>
           🗑 <strong>全部清空</strong>:本機一次清乾淨(還沒推上雲端的仍會保留)。<br>
@@ -3487,7 +3500,68 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v11.6 · 2026-10-21";
+const APP_VERSION = "v12.7 · 2026-10-27";
+
+// ════════════════════════════════════════════════════════════════
+// 📓 App 狀態紀錄(事件/錯誤日誌)
+// ════════════════════════════════════════════════════════════════
+// Kyle 2026/10/27:「明後兩天訂單總數預估 1500 多單, 請幫我做 APP 狀態紀錄, 錯誤訊息需要留意」
+//
+// 為什麼需要:這個 App 最危險的從來不是當機, 是**數字悄悄不對**。
+//   而現在很多失敗只留在 console.warn 或跳一下就消失的 toast ——
+//   平常一天 15 箱, 出事會被人注意到;一天 750 箱時, 沒有人會發現。
+//
+// 設計:
+//   ・只記錄, **不改變任何行為**(加這個不會讓任何流程變慢或卡住)
+//   ・環狀緩衝, 最多 400 筆, 滿了丟最舊的 —— 永遠不會把儲存空間吃爆
+//   ・寫入失敗一律吞掉:**日誌本身絕不可以害到出貨**
+//   ・分 error / warn / info 三級, 查的時候可以只看錯誤
+const APP_LOG_KEY = "picking_app_log_v1";
+const APP_LOG_MAX = 400;
+let _appLog = null;          // 延遲載入, 開機不多讀一次 localStorage
+function _loadAppLog() {
+  if (_appLog) return _appLog;
+  try { _appLog = JSON.parse(localStorage.getItem(APP_LOG_KEY) || "[]"); } catch (e) { _appLog = []; }
+  if (!Array.isArray(_appLog)) _appLog = [];
+  return _appLog;
+}
+let _appLogSaveTimer = null;
+function logEvent(level, tag, msg, extra) {
+  try {
+    const arr = _loadAppLog();
+    arr.unshift({
+      t: new Date().toISOString(),
+      lv: level || "info", tag: String(tag || ""), msg: String(msg || "").slice(0, 300),
+      ex: (extra === undefined || extra === null) ? undefined : String(
+        typeof extra === "string" ? extra : JSON.stringify(extra)).slice(0, 300),
+      // ⚠ 用 typeof 檢查:這支會被開機就註冊的 window.error 監聽呼叫,
+      //   而 settings 宣告在更後面 —— 載入途中炸掉時直接存取會踩到 TDZ,
+      //   然後這筆**最關鍵的開機錯誤就記不下來**(白畫面那種就是這樣沒留下任何線索)。
+      by: (typeof settings !== "undefined" && settings && settings.myName) || "",
+      v: (typeof APP_VERSION !== "undefined") ? APP_VERSION : "",
+    });
+    if (arr.length > APP_LOG_MAX) arr.length = APP_LOG_MAX;
+    // 節流寫入:刷貨尖峰時一秒可能好幾筆, 每筆都 stringify 400 筆會拖慢掃描
+    if (!_appLogSaveTimer) {
+      _appLogSaveTimer = setTimeout(() => {
+        _appLogSaveTimer = null;
+        try { localStorage.setItem(APP_LOG_KEY, JSON.stringify(_appLog)); } catch (e) { /* 空間滿 → 放棄寫日誌, 絕不影響出貨 */ }
+      }, 1500);
+    }
+    if (level === "error") console.error("[log]", tag, msg, extra || "");
+    else if (level === "warn") console.warn("[log]", tag, msg, extra || "");
+  } catch (e) { /* 日誌永遠不可以丟例外出去 */ }
+}
+// 🔴 沒被接住的 JS 例外 —— 以前只進 console, 手機上根本看不到。
+//   「壞一筆毀整頁」那類問題(例如某筆紀錄形狀不對)就是這樣靜靜發生的。
+window.addEventListener("error", (e) => {
+  logEvent("error", "js", (e && e.message) || "未知錯誤",
+    e && e.filename ? (String(e.filename).split("/").pop() + ":" + e.lineno) : undefined);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e && e.reason;
+  logEvent("error", "promise", (r && (r.message || r)) || "未處理的 promise 失敗");
+});
 
 // ════════════════════════════════════════════════════════════════
 // 🚪 共同包貨(房間模式)總開關 —— Kyle 2026/10/21:「目前比較少會用到, 想直接取消掉」
@@ -3957,7 +4031,7 @@ async function doDailyBackupIfNeeded(force, silent) {
     const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString(), type: reason } };
     let count = 0;
     for (const k of backupKeys()) {
-      const v = localStorage.getItem(k);
+      const v = _backupValueFor(k);   // 🔐 憑證不進備份(這包會被丟到 Discord)
       if (v !== null) { dump[k] = v; count++; }
     }
     const json = JSON.stringify(dump, null, 2);
@@ -4283,7 +4357,11 @@ async function pushKocaOutbound(entry) {
 const PENDING_FULFILL_KEY = "picking_pending_koca_fulfill_v1";
 let pendingFulfill = [];          // [{id, kocaOrderId, trackingNo, carrierLabel, at, tries, lastError, fatal}]
 let _flushingFulfill = false;
-const PENDING_FULFILL_MAX = 500;
+// ⚠ 2026/10/27 小卡尖峰審查:千單那天 500 會不夠 ——
+//   超過上限時下面是 slice(-MAX), 也就是**丟掉最舊的那幾張**,
+//   而佇列裡每一張都是「官網還不知道已經出貨」的單 → 丟掉 = 那張永遠停在未出貨。
+//   提到 2000(一天 1500 單也裝得下)。每筆約 200 bytes, 2000 筆也才 ~400KB。
+const PENDING_FULFILL_MAX = 2000;
 function savePendingFulfill() {
   try {
     if (pendingFulfill.length) localStorage.setItem(PENDING_FULFILL_KEY, JSON.stringify(pendingFulfill));
@@ -5333,7 +5411,7 @@ async function purgeLocalHistory() {
   if (confirm("要先下載一份本機備份檔嗎?\n\n【建議】按「確定」下載(手機會存到「檔案」App)\n【略過】按「取消」直接繼續 —— 雲端已經核對過了, 不會掉資料")) {
     try {
       const dump = { _meta: { app: "出貨雙重確認", type: "purge-before-backup", version: APP_VERSION, exportedAt: new Date().toISOString(), count: before } };
-      for (const k of backupKeys()) { const v = localStorage.getItem(k); if (v !== null) dump[k] = v; }
+      for (const k of backupKeys()) { const v = _backupValueFor(k); if (v !== null) dump[k] = v; }   // 🔐 憑證不進備份
       const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -5662,6 +5740,9 @@ function appendHistory() {
     expected: it.expected, packed: it.packed,
     essential: !!it.essential,
     missing: !!it.missing,   // 手動標記的缺貨商品
+    // 🔴 「對不到我們商品」的旗標也要存。只靠 __KOCA_UNMAPPED_ 前綴認得出來,
+    //   但那是**約定**不是資料 —— 中介函式砍欄位 = 砍掉後面所有畫面的可能性。
+    unmapped: !!it.unmapped,
   }));
   const totalExpected = items.reduce((s, it) => s + it.expected, 0);
   const totalPacked = items.reduce((s, it) => s + it.packed, 0);
@@ -5695,6 +5776,10 @@ function appendHistory() {
     continuationOf: state.continuationOf || null,
     priorKocaPushed: state.priorKocaPushed || null, // 追加合併時, 原單已推 KOCA 的數量 (只推增量用)
     orderType: state.inboundInfo ? ORDER_TYPE.INBOUND : (state.returnInfo ? ORDER_TYPE.RETURN : (state.replacementInfo ? ORDER_TYPE.REPLACEMENT : (state.manualMode ? ORDER_TYPE.MANUAL : ORDER_TYPE.NORMAL))),
+    // ⚠ 放行重複出貨的稽核紀錄 —— 跟著出貨憑證一起存、一起上雲端。
+    //   只留在那台手機的 localStorage 等於「出事時唯一的證據在最容易弄丟的地方」。
+    dupOverrides: Array.isArray(state.dupOverrides) && state.dupOverrides.length
+      ? state.dupOverrides.map(x => ({ ...x })) : undefined,
     replacementInfo: state.replacementInfo ? { ...state.replacementInfo } : null,
     returnInfo: state.returnInfo ? { ...state.returnInfo } : null,
     inboundInfo: state.inboundInfo ? { ...state.inboundInfo } : null,
@@ -5711,7 +5796,13 @@ function appendHistory() {
   if (!_lastHistorySaveOk) {
     history.shift(); // 存檔失敗 → 還原, 不留半套資料 (避免重試時重複)
     console.warn("[history] save FAILED, entry rolled back", entry.id);
+    // 🔴 這是最嚴重的一種:出貨憑證沒存下來。一定要留在日誌裡。
+    logEvent("error", "存檔失敗", `出貨紀錄存不進手機(可能空間滿了), 這批 ${items.length} 項已退回清單`,
+      { id: entry.id, 箱數: (entry.parcels || []).length });
   } else {
+    // 📓 每筆出貨都記一行 —— 1500 單的時候, 這是「到底出了幾筆」唯一能回溯的流水
+    logEvent("info", "出貨完成", `${(entry.parcels || []).length} 箱 · ${items.filter(i => i.packed > 0 && !i.essential).length} 項商品 · ${(PLATFORMS[entry.platform] || {}).label || entry.platform}`,
+      { id: entry.id, 箱號: (entry.parcels || []).map(p => p.id).slice(0, 5) });
     console.log("[history] saved entry", entry.id, "items:", items.length);
     checkStorageUsage(); // 紀錄變多後主動預警空間 (內部節流 1 分鐘一次)
   }
@@ -6716,6 +6807,8 @@ function clearOrderModeFlags() {
   state.kocaRemarkApplied = null;
   // 通路訂單(蝦皮/MOMO)的備註橫幅同理 —— 不清的話同仁會對著上一張單的「不要折到」包這一箱。
   state.shopeeNote = null;
+  // 「這是通路單」的旗標也要清 —— 殘留的話下一張 CSV / 手建單會沿用通路單的刷貨規則。
+  state.channelOrder = false;
   // ★ 通路也要清。這個欄位現在真的會被寫進出貨紀錄(_entryPlatform),
   //   不清的話上一張蝦皮單的通路會殘留到下一張 CSV / 手建單 → 出貨紀錄記到錯的通路,
   //   而且是「數字悄悄不對」那一種:畫面上看起來完全正常。
@@ -7476,22 +7569,94 @@ function buildListFromShopeeOrder(o, meta) {
   //   ⚠ 順序不能顛倒:要先清, 再設定這張單的東西。
   if (typeof clearOrderModeFlags === "function") clearOrderModeFlags();
 
+  // 🧱 地板:這次出貨**已經完成的箱子**裡有什麼。
+  //   不從這裡起算的話, 連續包第二張單時整個清單被覆蓋 → 前面那幾箱的商品從清單上消失,
+  //   但箱子還在 completedParcels 裡 → 出貨紀錄少記商品、庫存少扣,而且完全沒有提示。
+  //   (2026/10/22 Kyle 問「商品數量會不會重疊」時實測到的 —— 不是重疊, 是**少算**。)
+  //   ⚠ 本專案「重算時忽略既成事實」那條地雷:重算一定要從地板起算,
+  //     而且箱子裡有、清單上沒有的 SKU 要補回清單。
+  const _floor = {};
+  for (const p of (state.completedParcels || [])) {
+    for (const s in (p.items || {})) _floor[s] = (_floor[s] || 0) + (Number(p.items[s]) || 0);
+  }
+  // 地板裡那些 SKU 的名字, 從現有清單撈回來(尤其是對不到的假 SKU, 名字只存在清單上)
+  const _floorName = {}, _floorUnmapped = {};
+  for (const it of (state.items || [])) {
+    if (_floor[it.sku] == null) continue;
+    _floorName[it.sku] = it.name || "";
+    if (it.unmapped) _floorUnmapped[it.sku] = true;
+  }
+  const _want = (sku) => (Number(totals[sku]) || 0) + (Number(_floor[sku]) || 0);
+
   const items = [];
+  const _seen = {};
   for (const p of library) {
-    if (totals[p.sku] > 0) items.push({ sku: p.sku, name: p.name, category: p.category, expected: totals[p.sku], packed: 0 });
+    // 📦 包材一律交給下面那個迴圈處理 —— 它是「自由計數」, 應出永遠 0。
+    //   不跳過的話, 地板會讓它變成有應出量的一般商品:包了兩箱各刷一個紙箱 →
+    //   應出 1 / 已裝 2 → 畫面跳「⚠ 多裝」, 但同仁其實完全沒做錯。
+    //   (喊狼來了的警告:誤報久了, 真的多刷時也會被按過去。)
+    if (p.essential) continue;
+    const w = _want(p.sku);
+    if (w > 0) { items.push({ sku: p.sku, name: p.name, category: p.category, expected: w, packed: _floor[p.sku] || 0 }); _seen[p.sku] = 1; }
   }
   for (const sku in totals) {
-    if (!library.find(p => p.sku === sku)) items.push({ sku, name: nameOf[sku] || "", expected: totals[sku], packed: 0 });
+    if (_seen[sku]) continue;
+    if (!library.find(p => p.sku === sku)) { items.push({ sku, name: nameOf[sku] || "", expected: _want(sku), packed: _floor[sku] || 0 }); _seen[sku] = 1; }
+  }
+  // 地板裡有、但這張單沒有、商品庫也沒有的(例如前一張單對不到的假 SKU)→ 一定要補回來
+  for (const sku in _floor) {
+    if (_seen[sku]) continue;
+    if (library.some(p => p.sku === sku && p.essential)) continue;   // 包材走下面那個迴圈
+    items.push({ sku, name: _floorName[sku] || sku, category: "其他",
+      expected: _floor[sku], packed: _floor[sku], unmapped: !!_floorUnmapped[sku] });
+    _seen[sku] = 1;
+  }
+  // 🔴 前面那幾張單「對不到的品項」一定要留著。
+  //   它們代表「這次出貨有東西我們認不出來, 請看感熱紙」。沒被刷過的(已裝 0)不在地板裡,
+  //   重建清單時會**整列消失** —— 同仁再也不會知道有這件事, 那項就這樣沒出。
+  //   (2026/10/22 實測:包完第 3 張有一項對不到, 回頭過刷第 1 張之後那一列就不見了。)
+  //   ⚠ 同一個品名要**合併成一列**, 不可以每張單都新增一列。
+  //     實測(2026/10/27 尖峰壓測):50 張單都有同一個對不到的商品 → 清單長出 50 列一模一樣的紅字,
+  //     出貨完成時健康檢查會跳 50 個「還差 1 件未裝」。1500 單時整張清單直接不能看。
+  //     合併成「某某商品 ×50」才是同仁看得懂、也查得出來的東西。
+  const _unByName = {};   // 正規化品名 → items 裡的索引
+  for (const it of (state.items || [])) {
+    if (!it.unmapped || _seen[it.sku]) continue;
+    const key = normalizeProdName(it.name || it.sku);
+    if (_unByName[key] !== undefined) {
+      // 之前就有同名的(舊版留下的多列)→ 併進去, 不要再多一列
+      const tgt = items[_unByName[key]];
+      tgt.expected = (tgt.expected || 0) + (it.expected || 0);
+      tgt.packed = (tgt.packed || 0) + (it.packed || 0);
+      _seen[it.sku] = 1;
+      continue;
+    }
+    items.push({ ...it });
+    _unByName[key] = items.length - 1;
+    _seen[it.sku] = 1;
   }
   // ⚠ 對不到的也要佔一列 —— 清單上看得到「有東西沒對應」, 同仁才會去看感熱紙。
   //   少一列 = 畫面顯示「全部完成」, 但那項根本沒出。
-  unmapped.forEach((u, i) => items.push({
-    sku: `__KOCA_UNMAPPED_${i}`, name: u.name, category: "其他",
-    expected: u.qty, packed: 0, unmapped: true,
-  }));
+  //   ⚠ 編號要接在既有的後面, 不可以從 0 重來 —— 會跟前一張單的假 SKU 撞號, 數量混在一起。
+  let _unIdx = 0;
+  while (_seen[`__KOCA_UNMAPPED_${_unIdx}`]) _unIdx++;
+  unmapped.forEach((u) => {
+    // 這張單的「對不到」如果跟前面某張單是同一個品名 → 併進那一列(見上面的說明)
+    const key = normalizeProdName(u.name || "");
+    if (_unByName[key] !== undefined) {
+      const tgt = items[_unByName[key]];
+      tgt.expected = (tgt.expected || 0) + (u.qty || 0);
+      return;
+    }
+    const sku = `__KOCA_UNMAPPED_${_unIdx++}`;
+    items.push({ sku, name: u.name, category: "其他", expected: u.qty, packed: 0, unmapped: true });
+    _seen[sku] = 1;
+    _unByName[key] = items.length - 1;
+    while (_seen[`__KOCA_UNMAPPED_${_unIdx}`]) _unIdx++;
+  });
   for (const p of library) {
     if (p.essential && !items.find(it => it.sku === p.sku)) {
-      items.push({ sku: p.sku, name: p.name, category: p.category, expected: 0, packed: 0, essential: true });
+      items.push({ sku: p.sku, name: p.name, category: p.category, expected: 0, packed: _floor[p.sku] || 0, essential: true });
     }
   }
   state.items = items;
@@ -7502,10 +7667,17 @@ function buildListFromShopeeOrder(o, meta) {
   state.manualMode = false;
   state.orderPlan = null;
   state.kocaOrderId = "";                         // 這不是官網單, 不要混進官網批次
+  // 🏷 標記「這是通路單(蝦皮/MOMO/酷澎)」。
+  //   用途:刷貨的放行判斷原本只認 kocaOrderId / manualMode / roomMode,
+  //   通路單三個都不是 → 刷到訂單上沒有的商品會被**直接拒收**(嗶一聲 +「不在今日備貨清單」)。
+  //   但通路單最需要自由刷:品名對不到的時候, 同仁手上有感熱紙, 本來就該照著刷實體商品。
+  //   ⚠ clearOrderModeFlags() 會清掉它, 而本函式在呼叫 clearOrderModeFlags()「之後」才設, 順序不能顛倒。
+  state.channelOrder = true;
   state.shopeeNote = {
     parcelNo: o.parcelNo || "", remark: o.remark || "",
     unmapped: unmapped.map(u => u.name), stale: !!(meta && meta.stale),
     channel: o.channel || "",
+    orderNo: o.orderNo || "",   // 橫幅標題要顯示訂單編號 —— 漏掉的話手動查單那條路只會寫「這箱是蝦皮單」
   };
   saveState();
   // 🏠 共同包貨:清單換掉了一定要同步給房間。
@@ -7536,9 +7708,26 @@ function _shopeeBusy() {
 //     ・包材 —— 自由計數, 本來就要同仁自己刷
 //     ・對不到 SKU 的 —— 那是假 SKU, 預填等於把「沒對應」蓋成「已完成」
 function _prefillShopeeActiveParcel(o) {
-  const parcelId = String((o && o.parcelNo) || "").trim();
+  // 🏷 箱號用「訂單編號」, 不用包裹編號(TW…)。
+  //   Kyle 2026/10/22 回報:ERP 鍵單助手上「單號1」顯示 TW267819700767V。
+  //   那串是蝦皮**內部 API 層**的物流追蹤號 —— 賣家後台查不到, 同仁和客服都對不上,
+  //   v10.9 已經把它從查單結果和備註橫幅拿掉, 但**箱號本身**還是存它, 所以 ERP 卡片又冒出來。
+  //   官網單的規矩是 p.id = 官網訂單編號、物流號另外存 trackingNo —— 通路單照同一套。
+  //   ⚠ 包裹編號沒有丟掉, 存在 ap.shopeeOrder.parcelNo(對帳用), 只是不當箱號、不給同仁看。
+  const parcelId = String((o && (o.orderNo || o.parcelNo)) || "").trim();
   if (!parcelId) return;
+  // 📝 startParcel() 會把備註橫幅清掉 —— 那是對的(換箱本來就要清上一張單的備註),
+  //   但**這一張單的備註是剛剛才設好的**, 清掉就再也不會回來。
+  //   症狀:刷標籤那條路看得到買家備註, 手動輸入單號查單那條路看不到 ——
+  //   兩條路做的事不一樣多, 而且兩邊單獨看都正常。
+  //   (刷標籤那條路剛好在 prefill 之後才設 note, 所以沒事; 手動那條設在前面, 就被洗掉了。)
+  //   ⚠ 只還原「確定屬於這張單」的備註, 不是無條件把舊的撿回來。
+  const _noteBefore = state.shopeeNote;
   startParcel(parcelId);
+  if (_noteBefore && String(_noteBefore.parcelNo || "") === String(o.parcelNo || "")) {
+    state.shopeeNote = _noteBefore;
+    if (typeof renderKocaRemarkBanner === "function") { try { renderKocaRemarkBanner(); } catch (e) {} }
+  }
   const ap = state.activeParcel;
   if (!ap) return;
   if (o.orderNo && String(o.orderNo) !== parcelId) ap.trackingNo = String(o.orderNo);
@@ -7551,12 +7740,16 @@ function _prefillShopeeActiveParcel(o) {
     parcelNo: o.parcelNo || "", orderNo: o.orderNo || "", channel: o.channel || "",
     statusLabel: o.statusLabel || "", remark: o.remark || "",
   };
+  // ⚠ 只補「這張單新增的那一份」, 不是把 expected 整個塞進這一箱。
+  //   expected 現在是「已完成箱子的量(地板) + 這張單要出的量」,
+  //   直接 `ap.items[sku] = expected` 會把前面幾箱已經出掉的量**再裝進這一箱**
+  //   → 那才是 Kyle 擔心的「數量重疊」。差額才是這箱該裝的。
   for (const it of (state.items || [])) {
     if (it.essential || it.unmapped) continue;
-    const qty = it.expected || 0;
-    if (qty <= 0) continue;
-    it.packed = qty;
-    ap.items[it.sku] = (ap.items[it.sku] || 0) + qty;
+    const add = Math.max(0, (it.expected || 0) - (it.packed || 0));
+    if (add <= 0) continue;
+    it.packed = (it.packed || 0) + add;
+    ap.items[it.sku] = (ap.items[it.sku] || 0) + add;
   }
   state.scanMode = true;              // 展開裝箱面板, 同仁接著刷包裝
 }
@@ -7573,11 +7766,37 @@ function _prefillShopeeActiveParcel(o) {
 //   ・沒事就**完全不出現**, 不佔版面也不用點掉
 //   ・有事就**留在畫面上**, 不是 toast 閃一下(閃一下等於沒講)
 //   ・查不到 / 連不上 / 沒設定 → **安靜**, 絕不擋住同仁做事
+// 📡 訂單池狀態列 —— Kyle 2026/10/27:「手機方是否有明確標示出蝦皮訂單池呢」
+//   以前只有「出問題時」才顯示紅色橫幅, 平常同仁**完全看不到池子是不是活的** ——
+//   要刷下去查不到才知道, 而「查不到」在設計上是安靜的(官網單/手建單走到那裡也查不到)。
+//   所以這裡常駐講三件事:幾張、多久前更新、現在能不能信。
+//   ⚠ 沒設 Worker → 整個不顯示(單機模式不該冒出看不懂的字)。
+function _renderShopeePoolStatus(d) {
+  const el = document.getElementById("shopee-pool-status");
+  if (!el) return;
+  if (!settings.syncWorkerUrl || !settings.spideyKey) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!d || !d.ok) {
+    el.innerHTML = `<span style="color:var(--warn,#b26b00);">📡 暫時連不到訂單池 —— 刷不出單屬正常, 照感熱紙包</span>`;
+    return;
+  }
+  const age = (typeof d.ageMinutes === "number") ? d.ageMinutes : null;
+  const cnt = (typeof d.count === "number") ? d.count : "?";
+  const blocked = Number(d.blockedTotal) || 0;
+  // 15 分鐘:抓取端每 2 分鐘推一次, 連續 7 次沒到就不正常了
+  const stale = (age === null) || age > 15;
+  const ageTxt = age === null ? "從未同步" : (age <= 1 ? "剛剛更新" : age + " 分鐘前更新");
+  el.innerHTML = stale
+    ? `<span style="color:var(--danger); font-weight:700;">📡 訂單池 ${ageTxt} —— 可能不是最新的</span>`
+    : `<span style="color:var(--text-soft);">📡 訂單池 ${cnt} 張 · ${ageTxt}</span>`
+      + (blocked ? ` <span style="color:var(--danger); font-weight:700;">· ${blocked} 張不要包</span>` : "");
+}
+
 let _poolAlertAt = 0;
 async function refreshShopeePoolAlert(force) {
   const box = document.getElementById("shopee-blocked-banner");
   if (!box) return;
-  if (!settings.syncWorkerUrl || !settings.spideyKey) { box.hidden = true; return; }
+  if (!settings.syncWorkerUrl || !settings.spideyKey) { box.hidden = true; _renderShopeePoolStatus(null); return; }
   if (!force && Date.now() - _poolAlertAt < 60000) return;      // 一分鐘內不重複問
   _poolAlertAt = Date.now();
   let d = null;
@@ -7586,6 +7805,7 @@ async function refreshShopeePoolAlert(force) {
       { headers: { "X-Spidey-Key": settings.spideyKey } });
     d = await res.json().catch(() => null);
   } catch (e) { /* 連不上就當沒這回事 */ }
+  _renderShopeePoolStatus(d);
   // ⚠ 失敗一律安靜收掉 —— 網路不好不可以變成「畫面上掛著一條紅字但沒人知道什麼意思」
   if (!d || !d.ok || !Array.isArray(d.blocked) || d.blocked.length === 0) { box.hidden = true; box.innerHTML = ""; return; }
   const rows = d.blocked.map(b =>
@@ -8495,6 +8715,7 @@ async function completeKocaBatch() {
   const savedState = state;
   const savedDate = state.loadedDate;
   let settled = 0; const failedIds = []; const emptyIds = [];
+  const _batchSideEffects = [];   // 🚦 收集起來, 迴圈跑完再限流送出(見下方)
   currentPlatform = "koca";
   for (const id of ids) {
     const snap = batch.suspended[id];
@@ -8511,7 +8732,9 @@ async function completeKocaBatch() {
     };
     const entry = appendHistory(); // 存一筆紀錄 (失敗會 rollback + _lastHistorySaveOk=false)
     if (entry && _lastHistorySaveOk) {
-      applyShipmentSideEffects(entry); // 扣庫存 / 回寫官網 / 推雲端 (只讀 entry, 不讀 state)
+      // ⚠ 這裡**不立刻**做對外推送 —— 數百張一起結算會瞬間打出上千個請求(見下方限流)。
+      //   先收集, 迴圈跑完再用併發上限 5 慢慢送。扣庫存是本機的, 照常立刻做。
+      _batchSideEffects.push(entry);
       settled++;
       delete batch.suspended[id];      // 這張已安全落帳 → 從批次移除, 避免重按時重複落帳
     } else if (!entry && _lastHistorySaveOk) {
@@ -8528,6 +8751,20 @@ async function completeKocaBatch() {
   }
   state = savedState;
   batch.orderList = ids.filter(id => failedIds.includes(id));
+
+  // 🚦 對外推送限流:同時最多 5 張單。
+  //   不限流的話 300 張 = 1500 個請求同時打出去 → 官網 / Discord 開始回 429,
+  //   而**丟掉的那些沒有人會發現**(射後不理, 失敗只進 console)。
+  //   ⚠ 放在存檔迴圈**之後**:存檔是資料命脈, 絕不可以因為等網路而被卡住。
+  //   回寫官網和雲端紀錄本來就有佇列+重送, 慢一點送完全安全。
+  if (_batchSideEffects.length) {
+    const _n = _batchSideEffects.length;
+    if (_n > 20) showToast(`📤 ${_n} 張的對外推送排隊中(限流中, 請別關 App)…`, 8000);
+    logEvent("info", "批次結算", `${_n} 張官網單, 對外推送限流 5 併發`);
+    _mapLimit(_batchSideEffects, 5, (e) => applyShipmentSideEffects(e, { collect: true }))
+      .then(() => { if (_n > 20) showToast(`✓ ${_n} 張的對外推送都送完了`, 5000); })
+      .catch((err) => logEvent("error", "批次推送失敗", String((err && err.message) || err)));
+  }
 
   if (failedIds.length > 0) {
     // 還有沒結成功的 → 載回第一張繼續, 絕不清空 (資料安全命脈)
@@ -8610,6 +8847,71 @@ function renderKocaBatchStrip() {
   html += `<button type="button" class="btn full" id="koca-batch-complete-btn" style="margin-top:8px; background:var(--success);">✓ 完成總訂單 · 結算 ${list.length} 張</button>`;
   el.innerHTML = html;
 }
+// 🛒 通路單「已完成」列 —— 比照官方的 renderKocaBatchStrip(), 放在畫面最上面。
+//   Kyle 2026/10/22:「能看到剛剛過刷的紀錄, 完成訂單也在上方」
+//
+//   ⚠ 跟官方那條**形狀不同, 不要硬套**:
+//     官方 = 先拉一批訂單 → 逐張切換 → 最後「完成總訂單」一次結算(所以它列的是**待辦**)
+//     通路 = 刷一張包一張, 當場就完成(所以這裡列的是**已完成**, 最新的在最前面)
+//   硬做成待辦清單的話, 得先知道「今天要出哪幾張」—— 那是蝦皮後台的事, 我們沒有那份名單。
+//
+//   官方批次進行中時不顯示, 避免同一個畫面上兩條列各講各的。
+function renderChannelBatchStrip() {
+  const el = document.getElementById("channel-batch-strip");
+  if (!el) return;
+  const parcels = (state.completedParcels || []);
+  if (parcels.length === 0 || (typeof kocaBatchActive === "function" && kocaBatchActive())) {
+    el.hidden = true; el.innerHTML = ""; return;
+  }
+  const collapsed = !!state._chStripCollapsed;
+  // 最新完成的放最前面 —— 「剛剛過刷的那筆」是同仁最想確認的
+  const newest = parcels.slice().reverse();
+  const _nameOf = (sku) => {
+    const it = (state.items || []).find(x => x.sku === sku);
+    return (it && it.name) || sku;
+  };
+  const _fmt = (p) => {
+    const t = p.completedAt ? new Date(p.completedAt) : null;
+    const tm = t ? t.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+    const items = Object.entries(p.items || {}).map(([s, q]) => `${_nameOf(s)}×${q}`).join("、");
+    const ch = (p.shopeeOrder && p.shopeeOrder.channel) ? _channelLabel(p.shopeeOrder.channel) : "";
+    return { tm, items, ch };
+  };
+  const top = newest[0];
+  const f = _fmt(top);
+  let html = `<button type="button" class="kbatch-head" data-chstrip-toggle>
+      <span class="kbatch-title">✅ 已完成 ${parcels.length} 筆</span>
+      <span class="kbatch-sub">最新 ${escapeHtml(f.tm)}</span>
+      <span class="kbatch-caret">${collapsed ? "▸" : "▾"}</span>
+    </button>`;
+  // 剛剛那筆一律攤開顯示(就算整列收合)—— 這是「我剛剛刷的對不對」唯一要看的東西
+  html += `<div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin-top:6px;">
+      <div style="font-weight:700; font-size:0.82rem;">✓ 剛完成 ${escapeHtml(String(top.id || ""))}${f.ch ? ` <span style="color:var(--text-soft); font-weight:500;">· ${escapeHtml(f.ch)}</span>` : ""}</div>
+      <div style="font-size:0.75rem; color:var(--text-soft); margin-top:2px;">${escapeHtml(f.items) || "(無商品)"}</div>
+    </div>`;
+  if (!collapsed && newest.length > 1) {
+    html += `<div class="kbatch-body">` + newest.slice(1).map(p => {
+      const g = _fmt(p);
+      return `<div class="kbatch-chip done" style="cursor:default;">
+          <span class="kbatch-chip-icon">✅</span>
+          <span class="kbatch-chip-name">${escapeHtml(String(p.id || ""))} <span style="color:var(--text-soft);">${escapeHtml(g.tm)}</span></span>
+        </div>`;
+    }).join("") + `</div>`;
+  }
+  el.hidden = false;
+  el.innerHTML = html;
+}
+(function wireChannelStrip(){
+  const el = document.getElementById("channel-batch-strip");
+  if (!el) return;
+  el.addEventListener("click", (e) => {
+    if (e.target.closest("[data-chstrip-toggle]")) {
+      state._chStripCollapsed = !state._chStripCollapsed;
+      saveState(); renderChannelBatchStrip();
+    }
+  });
+})();
+
 (function wireKocaBatchStrip(){
   const el = document.getElementById("koca-batch-strip");
   if (!el) return;
@@ -11091,6 +11393,11 @@ function matchesHistorySearch(entry, q) {
     //   但標籤上印的「訂單編號 16352219858」「797 163 947」是**全家門市和客服手上唯一的號碼**。
     //   不放進來的話, 客人拿著全家的單號打來問, 我們這邊會查無此單。
     haystack.push(p.rawScan);
+    // 🔎 通路單的訂單編號 + 包裹編號(TW…)也要能查。
+    //   v11.8 起箱號存「訂單編號」、包裹編號只留在 shopeeOrder 裡不給同仁看 ——
+    //   但「不顯示」不等於「不能查」。跟蝦皮對帳時 TW… 是唯一的共同 key,
+    //   不放進來就會變成「資料有存、但查不到」(本專案「只有一條查詢路徑」那條地雷)。
+    if (p.shopeeOrder) haystack.push(p.shopeeOrder.orderNo, p.shopeeOrder.parcelNo);
   }
   if (entry.replacementInfo) {
     const r = entry.replacementInfo;
@@ -11648,6 +11955,8 @@ function enqueuePendingCloudHistory(entry) {
   if (pendingCloudHistory.length > PENDING_CLOUD_HISTORY_MAX) {
     // ★ 不 shift! 佇列裡全是「還沒上雲」的, 丟最舊那筆 = 別台防呆對它永久失效。改成全數保留 + 大聲提示。
     console.error("[cloud-history] 待補送佇列超過上限(離線太久?), 全數保留, 請盡快連網:", pendingCloudHistory.length);
+    logEvent("error", "雲端補送塞車", `已經有 ${pendingCloudHistory.length} 筆出貨紀錄還沒上雲端(離線太久?)`,
+      { 上限: PENDING_CLOUD_HISTORY_MAX });
     if (typeof showToast === "function" && Date.now() - _cloudQueueToastAt > 20000) {
       _cloudQueueToastAt = Date.now();
       showToast("⚠ 大量出貨紀錄還沒上雲(離線太久?),請盡快連網,別台才擋得掉重複出貨");
@@ -12321,13 +12630,38 @@ document.getElementById("history-search").addEventListener("keydown", (e) => {
 // ⚠ 不是死路 —— 真的要重出(例如客人沒收到要補寄)仍然做得到, 只是要刻意。
 // 放行一律留紀錄 (誰、什麼時候、哪張單), 事後對帳查得到。
 const DUP_OVERRIDE_KEY = "picking_dup_override_log_v1";
+// ⚠ 放行重複出貨 = 很貴的決定(多一份貨 + 多一次運費), 所以一定要留得下稽核紀錄。
+//   小卡 2026/10/22 指出「只存本機、寫失敗還是放行」—— 查證成立, 但他建議的
+//   「寫不進 Worker 就禁止放行」我沒有照做:倉庫網路斷掉時那會變成**死路**,
+//   同仁連該重出的單也出不了(本專案規矩:失敗路徑一律要有出路)。
+//
+//   改成跟出貨紀錄走同一條已經驗證過的路:
+//   ① 本機存一份(原本就有)
+//   ② **掛到這次出貨的紀錄上** → 隨出貨紀錄一起上雲端, 有佇列有重送
+//   ③ 本機寫失敗要**講出來**, 不可以吞掉
 function _logDupOverride(rec) {
+  let localOk = true;
   try {
     const arr = JSON.parse(localStorage.getItem(DUP_OVERRIDE_KEY) || "[]");
     arr.unshift(rec);
     localStorage.setItem(DUP_OVERRIDE_KEY, JSON.stringify(arr.slice(0, 200)));
-  } catch (e) {}
+  } catch (e) {
+    localOk = false;
+    console.error("[dup-override] 本機稽核紀錄寫入失敗", e);
+  }
+  // 📌 掛在這次出貨上 —— appendHistory() 會把它存進出貨紀錄, 再隨紀錄推上雲端。
+  //   這樣「誰、什麼時候、放行了哪一張」就跟著那筆出貨一起留存, 不會只活在那台手機裡。
+  try {
+    if (!Array.isArray(state.dupOverrides)) state.dupOverrides = [];
+    state.dupOverrides.push(rec);
+    saveState();
+  } catch (e) { console.error("[dup-override] 掛到出貨紀錄失敗", e); }
   console.warn("[dup-override] 有人放行了重複出貨:", rec);
+  logEvent("error", "放行重複出貨", `${rec.code}(上次 ${String(rec.prevAt || "").slice(0, 16)} 由 ${rec.prevBy || "?"} 出)`,
+    { 本次操作人: rec.by, 比對到: rec.matchType, 情境: rec.context });
+  if (!localOk) {
+    setTimeout(() => alert("⚠ 這次「放行重複出貨」的稽核紀錄沒有存進本機(可能儲存空間滿了)。\n\n它還是會跟著這批出貨紀錄上雲端,\n但請儘快到 ⚙ 清理空間, 否則下一次可能連出貨紀錄都存不下。"), 500);
+  }
 }
 // 回 true = 使用者刻意放行; false = 擋下
 function confirmDuplicateShipment(code, shipped, contextLabel) {
@@ -12341,9 +12675,19 @@ function confirmDuplicateShipment(code, shipped, contextLabel) {
   const tail = String(code).slice(-4).toUpperCase();
   try { SOUND.scanError(); } catch (_) {}
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  // 🔒 對到多筆舊出貨 → 把每一筆都列出來, 讓人自己判斷是哪一筆(以前這種情況直接放行)
+  const _amb = (shipped.ambiguous && shipped.ambiguous.length > 1)
+    ? `\n⚠ 這個條碼跟 ${shipped.ambiguous.length} 筆舊出貨都對得上:\n`
+      + shipped.ambiguous.slice(0, 5).map(h => {
+          const x = h.entry, xd = new Date(x.completedAt);
+          return `   ・${xd.getFullYear()}/${p(xd.getMonth() + 1)}/${p(xd.getDate())} ${p(xd.getHours())}:${p(xd.getMinutes())}`
+            + ` ${x.completedBy || "(未命名)"} — ${(x.parcels || []).map(q => q.id).join("、") || "(無箱號)"}`;
+        }).join("\n")
+      + `\n   → 系統無法確定是哪一筆, **請先查清楚再決定**\n`
+    : "";
   const ans = prompt(
     `⛔⛔ 這張單號已經出過了 ⛔⛔\n\n` +
-    `單號:${code}\n` +
+    `單號:${code}\n` + _amb +
     `上次出貨:${when}\n` +
     `出貨人員:${e.completedBy || "(未命名)"}\n` +
     `類型:${_histTypeLabel(e)}(比對到${shipped.matchType})\n` +
@@ -12379,7 +12723,10 @@ function findShippedByCode(code) {
     const _skipOrderNo = (e.orderType === "return" || e.orderType === "replacement" || e.orderType === "inbound");
     if (!_skipOrderNo && e.kocaOrderId && String(e.kocaOrderId).toUpperCase() === c) return { entry: e, matchType: "官網單號" };
     const p = (e.parcels || []).find(pp => String(pp.id || "").toUpperCase() === c
-      || (pp.trackingNo && String(pp.trackingNo).toUpperCase() === c)); // 物流單號(黑貓/超商)也算: 刷標籤條碼一樣要擋得住過刷
+      || (pp.trackingNo && String(pp.trackingNo).toUpperCase() === c) // 物流單號(黑貓/超商)也算: 刷標籤條碼一樣要擋得住過刷
+      // 🔒 通路單的包裹編號(TW…)也要擋。v11.8 起它不再是箱號, 只存在 shopeeOrder 裡 ——
+      //   不比對的話, 同一箱用 TW… 回刷就查不到「已經出過了」, 過刷防呆破一個洞。
+      || (pp.shopeeOrder && String(pp.shopeeOrder.parcelNo || "").toUpperCase() === c));
     if (p) return { entry: e, matchType: "寄件單號" };
   }
   // 🔎 超商條碼/QR 把真正的代碼包在裡面(7-11 的 7X1001G395890506、全家 QR 的 寄件代碼+廠商編號+BC15),
@@ -12400,9 +12747,17 @@ function findShippedByCode(code) {
       }
       if (on) { hits.push({ entry: e, matchType: on + "(從條碼認出)" }); break; }
     }
-    if (hits.length > 1) return null;   // 對到多張就不敢判斷
+    if (hits.length > 1) break;   // 對到兩張就夠了, 不必再掃
   }
-  return hits.length === 1 ? hits[0] : null;
+  if (hits.length === 1) return hits[0];
+  // 🔒 對到多張 → **擋下來讓人判斷**, 不可以靜靜放過(小卡 2026/10/22 審查指出, 查證成立)。
+  //   舊寫法回 null = 「沒查到」, 等於完全不警告 —— 但「這個條碼跟兩筆以前的出貨都對得上」
+  //   本來就極可能是重複出貨, 不確定的時候放行是最糟的選擇(fail-open)。
+  //   ⚠ 不是死路:警告視窗照樣可以按確定放行, 只是要人看過。
+  if (hits.length > 1) {
+    return { entry: hits[0].entry, matchType: "對到 " + hits.length + " 筆舊出貨(無法確定是哪一筆)", ambiguous: hits };
+  }
+  return null;
 }
 function _histTypeLabel(e) {
   return e.orderType === "replacement" ? "補寄" : (e.orderType === "return" ? "退貨" : (e.orderType === "inbound" ? "進貨" : (e.orderType === "manual" ? "手建" : "一般出貨")));
@@ -12909,22 +13264,36 @@ function processScan(code) {
       // 官網單放行原因 (Kyle): 客人可能需要多補商品(加購/補件), 不強制限制只能刷訂單上的東西。
       //   多刷的會以「額外商品」列在清單上(無應出量、自由計數), 出貨紀錄/扣庫存/ERP鍵單照常計入。
       // 房間模式必須先送 item_add 同步商品本身, 否則伺服器找不到此商品, 後續 scan_sku 件數會被丟棄
-      if (state.manualMode || state.roomMode || state.kocaOrderId || kocaBatchActive()) {
+      // 🛒 通路單(蝦皮/MOMO)也要放行 —— Kyle 2026/10/27:
+      //   「蝦皮訂單也會被強制導入, 只要沒有偵測到, 就只會回覆今日沒有要包裹什麼產品,
+      //     我希望是可以自由刷物品條碼的, 不要這麼死板。」
+      //   通路單比官網單更需要自由刷:蝦皮的規格名稱是行銷在打的, 對不到的時候清單上只有一列紅字,
+      //   同仁手上明明有感熱紙, 卻連實體商品都刷不進去 —— 那等於整張單卡死。
+      if (state.manualMode || state.roomMode || state.kocaOrderId || kocaBatchActive() || state.channelOrder) {
         // 🔒 官網單的內容是固定的 → 刷到「這張單上根本沒有的商品」幾乎都是刷錯(拿錯貨 / 刷到隔壁單的貨)。
         //   而且一旦按下「完成此筆」, 這件就鎖進箱子裡, 連「−」都會被擋 → 照樣寫進出貨紀錄、照樣扣庫存 (Kyle 回報)。
         //   以前「多刷清單上已有的商品」會問一次, 這個更危險的卻只跳一行 toast —— 保護力剛好反過來。
         //   手建 / 補寄 / 退貨 / 入倉 本來就是自由計數, 不在此限; 包材(essential)也不擋。
-        const _offOrder = (state.kocaOrderId || kocaBatchActive())
+        const _offOrder = (state.kocaOrderId || kocaBatchActive() || state.channelOrder)
           && !state.manualMode && !state.replacementInfo && !state.returnInfo && !state.inboundInfo
           && !matchedProd.essential;
         if (_offOrder) {
           SOUND.scanError();
           if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+          // 🛒 通路單的語境不一樣:官網單內容是固定的, 刷到單上沒有的幾乎都是刷錯;
+          //   通路單則很可能只是「品名對不到」(清單上那列紅字就是它), 照著感熱紙刷實體商品是正常操作。
+          //   所以問法要講清楚是哪一種, 不要用官網那句嚇人。
+          const _unOnList = (state.items || []).filter(x => x.unmapped && (x.packed || 0) < (x.expected || 0));
+          const _chHint = _unOnList.length
+            ? `\n這張單有 ${_unOnList.length} 項「對不到我們商品」的:\n` + _unOnList.slice(0, 3).map(x => `   ・${x.name} ×${x.expected}`).join("\n")
+              + `\n如果你刷的就是它, 請按【確定】刷進來, 並記得之後到 📋 規格對應 指定一次。\n` : "";
           if (!confirm(
-            `⚠ 這張官網單上沒有這個商品\n\n` +
-            `${matchedProd.sku} ${matchedProd.name || ""}\n\n` +
+            (state.channelOrder && !state.kocaOrderId
+              ? `⚠ 這張${_channelLabel((state.shopeeNote || {}).channel)}單上沒有這個商品\n`
+              : `⚠ 這張官網單上沒有這個商品\n`) + `\n` +
+            `${matchedProd.sku} ${matchedProd.name || ""}\n` + _chHint + `\n` +
             `【取消】= 刷錯了, 不要加 (建議先確認是不是拿錯貨 / 刷到別張單的貨)\n` +
-            `【確定】= 客人加購 / 補件, 加進這張單`)) {
+            `【確定】= 客人加購 / 補件 / 對不到的那一項, 加進這張單`)) {
             showToast(`已略過 ${matchedProd.sku}(沒有加進這張單)`);
             renderPicking();
             return;
@@ -12946,6 +13315,9 @@ function processScan(code) {
         bumpPickItem(newIdx, _mul);
         _scanMultiplier = 1; renderMultiplierBadge();
         showToast(`📝 自動加入 ${matchedProd.sku} ×${_mul}`);
+        // 📓 「訂單上沒有、但被加進去」的東西一定要留痕 —— 這是最可能出錯貨的一種操作
+        logEvent("warn", "加入單外商品", `${matchedProd.sku} ×${_mul}`,
+          { 箱號: (state.activeParcel || {}).id || "", 單: state.kocaOrderId || ((state.shopeeNote || {}).orderNo) || "" });
         return;
       }
       SOUND.scanError();
@@ -12978,6 +13350,16 @@ function processScan(code) {
     if (!finalizeActiveParcel(false)) return;   // 逐單比對被取消 → 別謊報「已完成」
     SOUND.parcelFinish();
     showToast("✓ 訂單 " + code + " 已完成");
+    // 🔴 這條是「早退」路徑 —— 它跳過了函式最後面的 saveState() / renderScanPanel() / renderPicking(),
+    //   所以少做了兩件事(Kyle 2026/10/22 回報「商品欄會卡住」, 查到這裡):
+    //   ① 畫面沒重繪 → 黃框(當前訂單)**完成之後還掛在畫面上**, 同仁以為這箱還沒收;
+    //      而且下面的「已完成 N 筆」也不會變。
+    //   ② 沒有存檔 → finalizeActiveParcel() 自己不呼叫 saveState(),
+    //      所以這箱的完成只活在記憶體裡。手機瀏覽器在這個空檔被系統回收, 這箱就得重做。
+    //   ⚠ 日常最常走的就是這一條(「再刷一次結案」), 而不是下面那個同名分支。
+    saveState();
+    renderScanPanel();
+    renderPicking();
     return;
   }
   if (looksLikeSku(code)) {
@@ -13121,11 +13503,27 @@ function processScan(code) {
   _scanMultiplier = 1; renderMultiplierBadge();
 }
 
+// 🧹 清掉「🛒 蝦皮訂單」卡片的查詢結果(只動這張卡片, 不碰官網那張)。
+//   那張卡片只有在「按查這張單」時才會被寫入 —— 完成此筆、換下一張都不會動到它,
+//   所以它會一直停在很久以前查過的那張單上。
+//   Kyle 2026/10/22 回報:「單子確認完畢後再過刷一次, 上方的商品欄還是會卡住」。
+//   實測重現:撿貨清單已經換成 B 單的商品, 上方卡片還顯示 A 單的商品 ——
+//   **同一個畫面上兩個不同的答案**, 同仁照上面那張核對就會包錯。
+function clearShopeeLookupResult() {
+  const inp = document.getElementById("shopee-order-input");
+  const box = document.getElementById("shopee-order-status");
+  if (inp) inp.value = "";
+  if (box) box.innerHTML = "";
+}
+
 function startParcel(id, rawScan) {
   // 換箱 = 換一張單。上一箱的蝦皮備註橫幅一定要清掉,
   // 不然同仁會對著前一張單的「不要折到」在包這一箱。
   state.shopeeNote = null;
   if (typeof renderKocaRemarkBanner === "function") { try { renderKocaRemarkBanner(); } catch (e) {} }
+  // 查詢結果同理 —— 它跟備註橫幅是「同一張單的兩種呈現」, 一起清才不會各講各的。
+  // ⚠ 手動查單那條路是「先 prefill(這裡清掉) → 最後才寫結果」, 所以不會把剛查到的洗掉。
+  clearShopeeLookupResult();
   state.activeParcel = {
     id, items: {},
     startedAt: new Date().toISOString(),
@@ -13238,6 +13636,17 @@ function finalizeActiveParcel(skipIfEmpty, opts) {
     });
   }
   state.activeParcel = null;
+  // 🧹 這箱收掉了 → 上方「蝦皮訂單」卡片上那張單的明細已經是過去式, 不清的話會一直掛著。
+  clearShopeeLookupResult();
+  // 📝 備註橫幅同理。它寫的是「出貨前先看」—— 這箱都出完了還掛著, 字面上就是錯的,
+  //   而且下一箱開始前的那段空檔, 同仁會對著上一張單的「不要折到」在準備下一箱。
+  //   (startParcel 本來就會清, 但那是「下一箱開始的時候」才清, 中間這段空窗沒人管。)
+  state.shopeeNote = null;
+  if (typeof renderKocaRemarkBanner === "function") { try { renderKocaRemarkBanner(); } catch (e) {} }
+  // ✅ 完成列要**當下**就更新。只靠外層的 render() 會慢一拍 ——
+  //   實測:包完 A 上面什麼都沒有, 要等刷了 B 才冒出 A, 永遠落後一筆。
+  //   同仁正是在「剛按完成」那一秒要確認剛剛那箱對不對, 慢一拍等於沒用。
+  if (typeof renderChannelBatchStrip === "function") { try { renderChannelBatchStrip(); } catch (e) {} }
   return true;
 }
 
@@ -13284,6 +13693,7 @@ function renderScanPanel() {
   document.getElementById("completed-parcels-count").textContent = state.completedParcels.length;
   renderActiveParcel();
   renderCompletedParcelsList();
+  if (typeof renderChannelBatchStrip === "function") renderChannelBatchStrip();
 }
 
 // 依寄件單號判「配送方式」分組 (給已完成訂單明細分類用)
@@ -13613,7 +14023,7 @@ function render() {
   const homeBtn = document.getElementById("home-btn");
   if (homeBtn) homeBtn.hidden = !(hasList && !homeOverride);
   updateResumeBanner();
-  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); renderKocaBatchStrip(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
+  if (hasList && !homeOverride) { renderPicking(); renderScanPanel(); renderTimeEstimate(); renderRoomTicker(); renderInboundPicker(); renderKocaBatchStrip(); renderChannelBatchStrip(); const _fb = document.getElementById("filter-bar"); if (_fb) _fb.hidden = !!(state.inboundInfo || state.returnInfo); }
   else if (inMapping && !homeOverride) renderA1Mapping();
   else { renderMenu(); renderSpecMapList(); renderKocaMemoryList(); renderEssentialList(); if (currentTab === "history") renderHistory(); } // 出貨紀錄較重: 只在該分頁時才畫 (開機/其他頁略過, 縮短載入; 切到歷史頁的 handler 會自己畫)
 }
@@ -15523,6 +15933,8 @@ document.addEventListener("keydown", (e) => {
       //   不講的話同仁只會看到一個奇怪的短單號, 以為是正常的。
       if (_scanBuffer.length >= 20) {
         const _lost = _scanBuffer.length;
+        // 📓 刷到一半斷掉 —— 這是「碎片被當成箱號」的來源, 一定要留痕才查得回去
+        logEvent("warn", "刷碼斷掉", `丟掉 ${_lost} 個字(刷到一半就斷了)`, _scanBuffer.slice(0, 60));
         setTimeout(() => {
           try {
             SOUND.scanError();
@@ -15708,6 +16120,27 @@ function _forceHelperSafeSettings() {
   if (changed) saveSettings();
 }
 
+// 🧪 測試模式自動失效(小卡 2026/10/22 審查指出, 查證成立)。
+//   測試模式開著時「出貨完成」**不留紀錄、不扣庫存、不回寫官網**。
+//   它會一直存在設定裡 —— 昨天測試忘了關, 今天整天的真出貨就全部沒有紀錄,
+//   而出貨紀錄是買賣雙方的憑證。紅色警示條擋不住「看久了就當背景」。
+//   → 30 分鐘自動關掉, 並且**明確講出來**(不是靜靜關掉, 那樣他會以為還在測試)。
+const TEST_MODE_TTL_MS = 30 * 60 * 1000;
+function _expireTestMode(silent) {
+  if (!settings.testMode) return false;
+  const at = Number(settings.testModeAt) || 0;
+  if (!at) { settings.testModeAt = Date.now(); saveSettings(); return false; }   // 舊版沒有時間戳 → 現在開始算
+  if (Date.now() - at < TEST_MODE_TTL_MS) return false;
+  settings.testMode = false; settings.testModeAt = 0; saveSettings();
+  if (typeof renderTestModeBanner === "function") renderTestModeBanner();
+  const _tm = document.getElementById("test-mode-input"); if (_tm) _tm.checked = false;
+  if (!silent) {
+    setTimeout(() => alert("🧪 測試模式已自動關閉(開啟超過 30 分鐘)\n\n從現在起出貨會正常留紀錄、扣庫存。\n\n如果剛才那段時間有「真的」出貨,那幾筆沒有留下紀錄,請人工補。"), 300);
+  }
+  console.warn("[testMode] 超過 30 分鐘, 自動關閉");
+  return true;
+}
+
 function applyRoleLock() {
   const h = isHelper();
   _forceHelperSafeSettings();
@@ -15857,8 +16290,10 @@ document.getElementById("test-mode-input").addEventListener("change", (e) => {
       return;
     }
     settings.testMode = true;
+    settings.testModeAt = Date.now();     // ⏱ 開始計時, 30 分鐘自動失效(見 _expireTestMode)
   } else {
     settings.testMode = false;
+    settings.testModeAt = 0;
   }
   saveSettings();
   renderTestModeBanner();
@@ -15874,6 +16309,27 @@ document.getElementById("test-mode-banner").addEventListener("click", () => {
 // ⚠ 這裡故意寫成「取值函式」而不是 const 陣列。
 //   下面有幾個 KEY 常數宣告在檔案更後面, 若在這裡直接展開成陣列, 載入時會踩到 TDZ
 //   (Cannot access 'XXX_KEY' before initialization) → 整個 App 白畫面。實際發生過, 不要改回去。
+// 🔐 備份裡絕對不可以有憑證(小卡 2026/10/22 審查指出, 查證成立)。
+//   每日自動備份會把**整包 JSON 丟到 Discord 頻道** —— 那等於把主金鑰貼在群組裡,
+//   看得到那個頻道的人就能讀、也能刪全部出貨紀錄。手動匯出的檔案也常常被轉來轉去。
+//   ⚠ 只拿掉憑證, 其他偏好設定照常備份 —— 不然還原回來整台要重設一遍, 大家就不備份了。
+const BACKUP_SECRET_FIELDS = ["spideyKey", "discordWebhook", "sheetsWebhook", "adminPin"];
+function _backupValueFor(k) {
+  const v = localStorage.getItem(k);
+  if (v === null || k !== SETTINGS_KEY) return v;
+  try {
+    const s = JSON.parse(v);
+    let n = 0;
+    for (const f of BACKUP_SECRET_FIELDS) if (s[f]) { s[f] = ""; n++; }
+    s._secretsStripped = n;   // 還原時要講出來「金鑰要重新填」, 不然會變成一台設定好卻連不上的機器
+    return JSON.stringify(s);
+  } catch (e) {
+    // 設定檔本身壞掉 → 寧可整項不備份, 也不要原樣倒出去(原樣 = 金鑰照樣外洩)
+    console.warn("[backup] settings 解析失敗, 這一項不備份");
+    return null;
+  }
+}
+
 function backupKeys() {
   return [
     STATE_KEY, STATE_BACKUP_KEY, LIB_KEY, LIB_INIT_KEY, LIB_DELETED_KEY,
@@ -15885,6 +16341,7 @@ function backupKeys() {
     KOCA_BUNDLE_MAP_KEY,                    // 官網品名 → 套組拆法 記憶表 (弄丟 → 套組又只出主機)
     KOCA_BUNDLE_CHOICE_KEY,                 // 官網品名 → 要不要帶出連動子項 (弄丟 → 每張單又要重問一次)
     DUP_OVERRIDE_KEY,                       // 重複出貨放行紀錄 (稽核用, 不可遺失)
+    APP_LOG_KEY,                            // 📓 App 狀態紀錄 (出事後唯一能回溯「那天發生什麼」的東西)
     BUNDLE_RULES_KEY,                       // 連動規則 (自己編的, 弄丟就退回出廠預設)
     PENDING_CLOUD_HISTORY_KEY,              // 還沒推成功的出貨紀錄補送佇列 (連上網路前別弄丟)
     PENDING_FULFILL_KEY,                    // 還沒回寫官網「已出貨」的訂單 (弄丟 = 官網永遠停在未出貨, 沒人會發現)
@@ -16018,11 +16475,51 @@ document.getElementById("dup-override-log-btn").addEventListener("click", () => 
     `\n\n這些是「系統擋下、但有人手動輸入後4碼放行」的。\n每一筆都值得確認是不是刻意的。`);
 });
 
+// 📓 App 狀態紀錄:先給「現在健不健康」的摘要, 再列最近的錯誤/事件。
+//   ⚠ 摘要排在最前面 —— 大量出貨時沒有人會慢慢讀 400 行日誌,
+//     他只想知道「有沒有東西壞掉、要不要處理」。
+document.getElementById("app-log-btn").addEventListener("click", () => {
+  const arr = _loadAppLog();
+  const since = Date.now() - 24 * 3600 * 1000;
+  const recent = arr.filter(r => Date.parse(r.t) >= since);
+  const nErr = recent.filter(r => r.lv === "error").length;
+  const nWarn = recent.filter(r => r.lv === "warn").length;
+  const nShip = recent.filter(r => r.tag === "出貨完成").length;
+  // 現在狀態(即時算, 不是從日誌來的)
+  const pend = (typeof pendingCloudHistory !== "undefined" ? pendingCloudHistory.length : 0);
+  const pendF = (typeof pendingFulfill !== "undefined" ? pendingFulfill.length : 0);
+  let used = 0; try { for (let i = 0; i < localStorage.length; i++) used += (localStorage.getItem(localStorage.key(i)) || "").length; } catch (e) {}
+  const head =
+    `📓 App 狀態紀錄\n` +
+    `────────────────────\n` +
+    `版本 ${APP_VERSION}\n` +
+    `裝置 ${settings.myName || "(未命名)"}${settings.testMode ? "  🧪 測試模式開著!" : ""}\n\n` +
+    `【最近 24 小時】\n` +
+    `  出貨完成 ${nShip} 批\n` +
+    `  🔴 錯誤 ${nErr} 筆\n` +
+    `  🟡 警告 ${nWarn} 筆\n\n` +
+    `【現在的狀態】\n` +
+    `  待上雲端的出貨紀錄 ${pend} 筆${pend ? "  ← 還沒傳上去, 別關 App" : ""}\n` +
+    `  待回寫官網 ${pendF} 筆\n` +
+    `  本機已用 ${(used / 1024 / 1024).toFixed(2)} MB(約 5MB 上限)\n` +
+    `  出貨紀錄 ${history.length} 筆\n`;
+  if (!recent.length) { alert(head + `\n最近 24 小時沒有任何錯誤或警告。✓`); return; }
+  const fmt = t => { const d = new Date(t); const p = n => String(n).padStart(2, "0");
+    return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const ic = lv => lv === "error" ? "🔴" : (lv === "warn" ? "🟡" : "・");
+  // 錯誤和警告排在前面, 一般事件放後面
+  const bad = recent.filter(r => r.lv !== "info").slice(0, 25);
+  const lines = (bad.length ? bad : recent.slice(0, 25)).map(r =>
+    `${ic(r.lv)} ${fmt(r.t)} [${r.tag}] ${r.msg}${r.ex ? "\n     " + r.ex : ""}`);
+  alert(head + `\n【${bad.length ? "錯誤與警告" : "最近事件"}(最多 25 筆)】\n\n` + lines.join("\n") +
+    `\n\n(完整紀錄最多留 400 筆, 匯出備份時會一起帶走)`);
+});
+
 document.getElementById("backup-export-btn").addEventListener("click", () => {
   const dump = { _meta: { app: "出貨雙重確認", version: "1.0", exportedAt: new Date().toISOString() } };
   let count = 0;
   for (const k of backupKeys()) {
-    const v = localStorage.getItem(k);
+    const v = _backupValueFor(k);   // 🔐 憑證不進備份(檔案常常被轉來轉去)
     if (v !== null) { dump[k] = v; count++; }
   }
   const json = JSON.stringify(dump, null, 2);
@@ -16754,11 +17251,17 @@ function runHealthCheck() {
   const underItems = state.items.filter(it => !it.essential && it.expected > 0 && it.packed < it.expected);
   if (underItems.length > 0) {
     underItems.forEach(it => {
+      // 對不到的那種假 SKU(__KOCA_UNMAPPED_n)拿出來給同仁看等於沒講 —— 標題一律用品名。
+      const _label = it.unmapped ? (it.name || "(對不到的品項)") : it.sku;
       issues.push({
         level: "warning",
-        icon: "⚠",
-        title: `${it.sku} 還差 ${it.expected - it.packed} 件未裝`,
-        detail: `已裝 ${it.packed} / 應出 ${it.expected} (${it.name || ""})`,
+        icon: it.unmapped ? "🔴" : "⚠",
+        title: it.unmapped
+          ? `對不到我們商品:${_label} 還有 ${it.expected - it.packed} 件沒出`
+          : `${_label} 還差 ${it.expected - it.packed} 件未裝`,
+        detail: it.unmapped
+          ? `系統認不出這個品名, 請照感熱紙確認是什麼商品(之後到 📋 規格對應 指定一次就會記住)`
+          : `已裝 ${it.packed} / 應出 ${it.expected} (${it.name || ""})`,
       });
     });
   }
@@ -17259,6 +17762,9 @@ function actuallyCompleteShipping(opts) {
   if (_nowC - _lastCompleteAt < 1500) { console.warn("[complete] 忽略 1.5 秒內的重複完成"); return false; }
   _lastCompleteAt = _nowC;
   // 🧪 測試模式: 完成流程照跑(清單清空、播完成音), 但【不存任何紀錄 / 不扣庫存 / 不回寫官網 / 不推雲端】
+  // ⏱ 先檢查有沒有過期 —— 這是「真出貨卻零紀錄」的最後一道關卡, 一定要在這裡擋,
+  //   不能只靠開機時檢查(App 一整天不重開, 開機檢查等於沒檢查)。
+  _expireTestMode();
   if (settings.testMode) {
     const _wasInRoom = state.roomMode, _rc = state.roomCode;
     if (_wasInRoom) { leaveRoom(true); closeRoomOnServer(_rc); }
@@ -17509,7 +18015,12 @@ function applyStockForEntry(entry, opts) {
   saveStockApplied();
 }
 
-function applyShipmentSideEffects(entry) {
+// opts.collect = true → 回傳一個 promise(所有對外推送都做完才 resolve),給批次結算限流用。
+//   不帶的話行為完全照舊(射後不理), 單張出貨不受影響。
+//   ⚠ 2026/10/27 小卡尖峰審查第 3 點:數百張一次結算會瞬間發出大量請求。
+//     查證成立, 而且比他寫的更嚴重 —— 每張單是 **5 個**請求(Discord/Sheets/KOCA庫存/官網回寫/雲端紀錄),
+//     300 張 = 1500 個同時打出去。官網和 Discord 都會開始丟 429, 而丟掉的那些**沒有人會發現**。
+function applyShipmentSideEffects(entry, opts) {
   // 🖥 庫存: 只有「負責變動庫存的那台」才動 (主機 or 單機模式)。
   //   鏡像裝置不動本機庫存 —— 它扣了也傳不上去, 還會被主檔覆蓋 → 反而製造假數字。
   //   它包的單會經雲端紀錄, 由主機用 reconcileStockFromCloud 補扣。
@@ -17519,21 +18030,25 @@ function applyShipmentSideEffects(entry) {
   // 📤 出貨一視同仁:補寄也要推 webhook(v8.7)。退貨/入倉不是出貨, 照舊不推。
   //   以前連補寄一起排除(註解寫「使用者要求只記本機」), 但那會讓外部系統看到的出貨量少掉補寄那部分。
   const skipWebhook = entry && (entry.orderType === "return" || entry.orderType === "inbound");
+  const _jobs = [];
+  const _run = (p) => { if (p && typeof p.then === "function") _jobs.push(p.catch(() => {})); };
   if (entry && !skipWebhook && (settings.discordWebhook || settings.sheetsWebhook)) {
     const outbound = buildPickingOutboundPayload(entry);
-    pushToDiscordRaw({
+    _run(pushToDiscordRaw({
       content: "```json\n" + JSON.stringify(outbound, null, 2) + "\n```",
-    });
-    pushToSheets(outbound);
+    }));
+    _run(pushToSheets(outbound));
   } else if (skipWebhook) {
     console.log(`[discord/sheets] ${entry.orderType} 跳過推送`);
   }
   // 推送出貨到 KOCA 庫存 API (預設關閉; 退貨/入倉不推; 透過 Worker 轉發)
-  pushKocaOutbound(entry);
+  _run(pushKocaOutbound(entry));
   // 🌐 回寫官網訂單「已出貨」+ 物流單號 (預設關閉; 只對來源是官網訂單的單生效)
-  pushKocaFulfill(entry);
+  _run(pushKocaFulfill(entry));
   // 雲端共享出貨紀錄: 全類型都推一筆上雲, 讓所有人在出貨紀錄看到同一份
-  pushHistoryToCloud(entry);
+  _run(pushHistoryToCloud(entry));
+  // ⚠ 只有「要限流」的呼叫端才等 —— 單張出貨維持原本的射後不理, 不會讓同仁多等。
+  if (opts && opts.collect) return Promise.allSettled(_jobs);
 }
 document.getElementById("complete-shipping-btn").addEventListener("click", () => {
   // 官方批次多單: 這顆改走「完成總訂單」(逐張各自結算), 不單獨結目前這張, 避免拆散批次
@@ -17781,6 +18296,7 @@ loadSettings();
 applyTheme(settings.theme || "koca");
 applyFontSize(settings.fontSize || "medium");
 applyGloveMode(!!settings.gloveMode);
+_expireTestMode(true);  // ⏱ 開機先看測試模式有沒有過期(昨天忘了關 → 今天真出貨零紀錄)
 renderTestModeBanner(); // 🧪 開機若測試模式開著, 顯示常駐警示條
 loadState();
 // 自動還原: 若主資料空但備份有, 還原 + 提示
