@@ -3500,7 +3500,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v12.7 · 2026-10-27";
+const APP_VERSION = "v12.9 · 2026-10-30";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -3649,6 +3649,11 @@ const PRODUCT_LINE_RULES = [
 // Koca 主賣商品預設庫 (首次開啟自動載入)
 const DEFAULT_LIBRARY = [
   { sku: "5E-5061-EV",       name: "五益包裝50*61破壞袋50入",            category: "包裝", essential: true },
+  // ⚠ 這個 SKU 以前被「一次性遷移」改名併進 KOCA-PB(見 loadLibrary 的 lib_rename_5e5063_kocapb_v1),
+  //   所以商品庫裡已經沒有它 → 刷那個條碼會變成「認不出來」, 被當成寄件單號。
+  //   2026/10/30 KOCA-PB 缺貨, Kyle 指定改用這兩款破壞袋代替 → 必須把它加回來才刷得進去。
+  //   遷移那段有一次性旗標, 不會再把它改掉; 兩個 SKU 並存是刻意的(實體就是兩種不同的袋子)。
+  { sku: "5E-5063-EV",       name: "五益包裝50*63破壞袋",                category: "包裝", essential: true },
   { sku: "KOCA-PB",          name: "KOCA-PB破壞袋 38x52cm",              category: "包裝", essential: true },
   { sku: "CTN-A1-F",         name: "紙箱龍F箱",                          category: "包裝", essential: true },
   { sku: "CTN-A1-G",         name: "紙箱龍G箱-0101A331 12.1x7.1x3.1",   category: "包裝", essential: true },
@@ -7740,6 +7745,12 @@ function _prefillShopeeActiveParcel(o) {
     parcelNo: o.parcelNo || "", orderNo: o.orderNo || "", channel: o.channel || "",
     statusLabel: o.statusLabel || "", remark: o.remark || "",
   };
+  // 📌 記住「哪些是系統自動帶進來的」。
+  //   Kyle 2026/10/30 回報:同仁照習慣又刷了一次實體商品 → 變成已裝 2 / 應出 1,
+  //   畫面上那項跳成紅色「多裝」、另一項被歸到「已完成」看起來像消失了,
+  //   而且**出貨紀錄真的會寫 2 個, 庫存多扣**。
+  //   有這個標記才分得出「同仁在確認系統帶的東西」和「真的多放了一個」。
+  ap.prefilled = ap.prefilled || {};
   // ⚠ 只補「這張單新增的那一份」, 不是把 expected 整個塞進這一箱。
   //   expected 現在是「已完成箱子的量(地板) + 這張單要出的量」,
   //   直接 `ap.items[sku] = expected` 會把前面幾箱已經出掉的量**再裝進這一箱**
@@ -7750,6 +7761,7 @@ function _prefillShopeeActiveParcel(o) {
     if (add <= 0) continue;
     it.packed = (it.packed || 0) + add;
     ap.items[it.sku] = (ap.items[it.sku] || 0) + add;
+    ap.prefilled[it.sku] = (ap.prefilled[it.sku] || 0) + add;
   }
   state.scanMode = true;              // 展開裝箱面板, 同仁接著刷包裝
 }
@@ -8382,6 +8394,9 @@ function _prefillKocaActiveParcel(o) {
     if (qty <= 0) continue;
     it.packed = qty;                                                                    // 清單標記為已裝
     state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + qty;   // 放進黃框
+    // 📌 標記「這是系統帶的」—— 同仁再刷一次實體商品時算確認, 不重複計數(同通路單)
+    state.activeParcel.prefilled = state.activeParcel.prefilled || {};
+    state.activeParcel.prefilled[it.sku] = (state.activeParcel.prefilled[it.sku] || 0) + qty;
   }
   state.scanMode = true; // 展開裝箱掃描面板, 方便同仁接著刷包裝
 }
@@ -13033,10 +13048,24 @@ const PACKAGING_RULES = [
   { name: "藍牙遙控器", host: "RC-BT", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "1個" },
   { name: "紅外線遙控器", host: "RC-IR", single: ["CTN-A1-Z"], multi: ["CTN-A1-Z"], qtyHint: "1個" },
 ];
+// 🔁 缺貨替代包材 —— 刷到這些一律放行, **不擋也不問**。
+//   Kyle 2026/10/30:「目前 koca 破壞全部沒有了, 需要開放使用以下包材代替,
+//   請 app 不要擋住或詢問:5E-5061-EV / 5E-5063-EV」
+//
+//   ⚠ 為什麼不是去改 PACKAGING_RULES:
+//     改規則的話「建議包材」會跟著變, 同仁刷原本正確的 KOCA-PB 反而會被問 ——
+//     而缺貨是暫時的, 補到貨之後又要再改一次, 來回改規則遲早改錯一邊。
+//     這裡只做一件事:**這幾個一律算合理**, 規則本身一個字都不動。
+//   📌 補到貨之後把這個陣列清空就恢復原狀(規則沒被動過, 不會有後遺症)。
+const PACKAGING_SUBSTITUTES = new Set([
+  "5E-5061-EV",   // 五益包裝 50*61 破壞袋
+  "5E-5063-EV",   // 五益包裝 50*63 破壞袋
+]);
 // 受規則管的包材 SKU (只有刷到這些才會做防呆比對)
 const GOVERNED_PACKAGING = (() => {
   const s = new Set();
   for (const r of PACKAGING_RULES) { (r.single || []).forEach(x => s.add(x)); (r.multi || []).forEach(x => s.add(x)); }
+  for (const x of PACKAGING_SUBSTITUTES) s.delete(x);   // 替代包材不受規則管
   return s;
 })();
 function _pkgName(sku) { const p = library.find(x => x.sku === sku); return p && p.name ? `${sku}(${p.name})` : sku; }
@@ -13091,6 +13120,7 @@ function expectedPackagingFor(items) {
 function checkPackagingMismatch(scannedSku) {
   if (settings.packagingGuard === false) return { ok: true };         // 使用者關閉防呆
   if (state.returnInfo || state.inboundInfo) return { ok: true };     // 退貨拆包/進貨驗收不是在包貨 → 包材防呆不適用, 免得亂跳
+  if (PACKAGING_SUBSTITUTES.has(scannedSku)) return { ok: true };     // 🔁 缺貨替代包材 → 一律放行, 不問
   if (!GOVERNED_PACKAGING.has(scannedSku)) return { ok: true };       // 非規則管的包材, 不判斷
   if (!state.activeParcel || !state.activeParcel.items) return { ok: true };
   const { expected, reasons } = expectedPackagingFor(state.activeParcel.items);
@@ -13109,7 +13139,10 @@ function checkActiveParcelPackaging() {
   const { expected, reasons } = expectedPackagingFor(items);
   if (expected.size === 0) return { ok: true };                        // 沒主機無法判斷
   // 這單裡「有數量、受規則管、但不在建議內」的包材 = 疑似刷錯
-  const wrong = Object.keys(items).filter(sku => (items[sku] > 0) && GOVERNED_PACKAGING.has(sku) && !expected.has(sku));
+  //   🔁 替代包材不算「刷錯」—— GOVERNED_PACKAGING 已經把它們排除了, 這裡再擋一次,
+  //      確保就算有人把替代品寫進 PACKAGING_RULES 也不會在結案時跳出來問。
+  const wrong = Object.keys(items).filter(sku => (items[sku] > 0)
+    && !PACKAGING_SUBSTITUTES.has(sku) && GOVERNED_PACKAGING.has(sku) && !expected.has(sku));
   if (wrong.length === 0) return { ok: true };
   const expList = Array.from(expected).map(_pkgName).join("\n   或 ");
   const wrongList = wrong.map(_pkgName).join("\n   ");
@@ -13221,6 +13254,27 @@ function processScan(code) {
           _scanMultiplier = 1; renderMultiplierBadge();
           return;
         }
+      }
+      // ✅ 刷到「系統已經自動帶進這箱」的商品 → 當成**確認**, 不重複加。
+      //   Kyle 2026/10/30 回報的就是這個:投影機+收納包的單, 系統已經帶進去了,
+      //   同仁照習慣又刷一次 → 已裝 2 / 應出 1, 出貨紀錄寫 2 個、庫存多扣。
+      //   ⚠ 只有「這箱裡這個 SKU 的數量**全部**來自系統自動帶入」時才算確認 ——
+      //     只要同仁自己刷過一個, 就回到正常的累加(那是他真的在放東西)。
+      //   ⚠ 也不跳「多刷了」的警告:同仁沒做錯事, 跳久了真的多刷時會被按過去。
+      const _ap = state.activeParcel;
+      const _pre = (_ap && _ap.prefilled && _ap.prefilled[matchedProd.sku]) || 0;
+      const _inBox = (_ap && _ap.items && _ap.items[matchedProd.sku]) || 0;
+      const _it0 = state.items[idx];
+      if (_pre > 0 && _inBox > 0 && _pre >= _inBox && (_it0.packed || 0) >= (_it0.expected || 0)) {
+        // 🔑 確認額度「用掉就減少」——
+        //   系統帶了 1 個, 同仁刷第 1 次 = 確認那一個;
+        //   再刷第 2 次就代表他**真的又放了一個**, 額度已經用完 → 回到正常的多刷防呆。
+        //   不這樣做的話, 這個 SKU 之後怎麼刷都不會計數, 真的多放也抓不到。
+        _ap.prefilled[matchedProd.sku] = Math.max(0, _pre - Math.max(1, _mul));
+        SOUND.scanSku();
+        _scanMultiplier = 1; renderMultiplierBadge();
+        showToast(`✓ ${matchedProd.sku} 已確認(系統自動帶入的 ${_inBox} 個,不重複計數)`, 3500);
+        return;
       }
       SOUND.scanSku();
       bumpPickItem(idx, _mul, (state.inboundInfo || state.returnInfo || state.replacementInfo) ? { noBundle: true } : undefined); // 入倉/退貨/補寄只算實到, 不觸發連動加單
