@@ -1736,16 +1736,18 @@ footer.summary-bar {
     <!-- 蝦皮訂單查詢 (查 Worker 的待出貨池; Mac 端抓取器負責推資料進去) -->
     <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
       <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-        <span style="font-weight:700; color:var(--primary); font-size:0.95rem;">🛒 蝦皮訂單</span>
+        <!-- 2026/10/21 Kyle 要求改成「蝦皮訂單」(當時九成以上是蝦皮單);
+             2026/11/04 MOMO 要上線了 → 改回「通路訂單」。
+             功能從頭到尾都一樣:這個框本來就吃蝦皮 / MOMO / 酷澎, 通路由訂單資料判斷, 不是由標題。 -->
+        <span style="font-weight:700; color:var(--primary); font-size:0.95rem;">🛒 通路訂單</span>
         <!-- 📡 訂單池狀態 —— 同仁要看得到「池子是不是活的」, 不能刷下去查不到才知道。
              沒設 Worker 就整個不顯示(單機模式不該出現看不懂的字)。 -->
         <span id="shopee-pool-status" class="hint" style="font-size:0.72rem;" hidden></span>
       </div>
       <!-- 說明文字刪掉 (同上)。查到會自己標出是蝦皮/MOMO/酷澎, 查不到也會講原因, 不需要先寫一段。 -->
-      <!-- ⚠ 標題寫「蝦皮訂單」是 Kyle 2026/10/21 指定的 (實際上九成以上是蝦皮單, 同仁看得懂最重要)。
-           但這個框**本來就吃 MOMO / 酷澎** —— 池子是共用的, 刷進來照樣查得到,
+      <!-- 這個框吃蝦皮 / MOMO / 酷澎 —— 池子是共用的, 刷進來照樣查得到,
            查到之後的結果區會自己標出真正的通路(「✓ 查到這張單 — MOMO」), 出貨紀錄也記對的通路。
-           所以這裡只是標題, 不要因為它寫「蝦皮」就去把其他通路擋掉。 -->
+           ⚠ 不要因為標題寫什麼就去擋其他通路:通路一律由訂單資料的 channel 決定。 -->
       <div style="display:flex; gap:8px;">
         <input type="text" id="shopee-order-input" placeholder="刷標籤條碼 / 訂單編號" autocomplete="off" spellcheck="false" style="flex:1; min-width:0; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:0.9375rem; background:var(--surface); color:var(--text);">
         <button class="btn sm" id="shopee-order-fetch-btn" type="button" style="white-space:nowrap;">查這張單</button>
@@ -3500,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v12.9 · 2026-10-30";
+const APP_VERSION = "v13.4 · 2026-11-04";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -6211,8 +6213,22 @@ function checkBundleRule(triggerIdx, deltaAdded) {
           //   改用 trigger 的累計量算:刷了 N 個收納包, 主機總共就該有 N 個(不是「再加 N 個」)。
           //   ・只刷收納包 → 主機補到 N  ✅ 連動原本的用途還在
           //   ・主機和收納包都刷 → 主機已經有了, 不再補  ✅ 不會變兩台
-          const _want = (triggerIt.packed || 0) * (c.qty || 1);
-          let _add = Math.max(0, _want - (_child.packed || 0));
+          //   ⚠ 2026/11/04 Kyle 回報(MOMO 手建單):刷了收納包, 投影機沒有被帶進來,
+          //     只跳「Joy Lite 1 主機 已經刷齊了, 這次沒有再加」。
+          //     原因是這裡比的是**整張清單的累計量** —— 手建單一張清單會包很多箱,
+          //     前面的箱子已經刷過投影機 → 清單層級算起來「平衡了」→ 這一箱就不補,
+          //     但**這一箱裡實際上沒有投影機**。同仁信了系統, 箱子就真的少放一台。
+          //   → 改成比「**這一箱**」。有黃框時一律用黃框的數量算, 沒有才退回清單層級。
+          //     這樣兩個情境都對:
+          //     ・同一箱裡主機和收納包都刷了 → 這箱已經有了, 不再補(原本要修的多刷問題還是擋著)
+          //     ・新的一箱只刷收納包 → 這箱還沒有主機 → 照樣補上
+          const _apB = state.activeParcel;
+          const _boxTrig = (_apB && _apB.items && _apB.items[triggerIt.sku]) || 0;
+          const _boxChild = (_apB && _apB.items && _apB.items[c.sku]) || 0;
+          const _baseTrig = _apB ? _boxTrig : (triggerIt.packed || 0);
+          const _baseChild = _apB ? _boxChild : (_child.packed || 0);
+          const _want = _baseTrig * (c.qty || 1);
+          let _add = Math.max(0, _want - _baseChild);
           _add = Math.min(_add, c.totalQty);          // 這一刷最多只補這一刷該補的份
           // 🔒 第二關:官網單/CSV 另外再用應出量封頂(兩關取嚴的)
           if (!state.manualMode && (_child.expected || 0) > 0) {
@@ -6220,6 +6236,10 @@ function checkBundleRule(triggerIdx, deltaAdded) {
           }
           if (_add > 0) {
             bumpPickItem(recheckIdx, _add, { suppressBundle: true });
+            // 📌 連動加的也算「系統自動帶進來的」—— 同仁接著刷實體商品時當確認, 不重複計數。
+            //   跟預填同一套(v12.9)。不加這個的話:連動補了濾芯 4 顆, 同仁照習慣又刷 4 次
+            //   → 變成 8 顆, 出貨紀錄多記、庫存多扣, 而且他沒做錯任何事。
+            if (_apB) { _apB.prefilled = _apB.prefilled || {}; _apB.prefilled[c.sku] = (_apB.prefilled[c.sku] || 0) + _add; }
             added.push({ name: c.name, qty: _add });
             addedCount++;
             // 把連動子項掛到「剛剛那個 trigger 的 undo 動作」上, 之後按撤銷會一起撤 (避免子項殘留多算)
@@ -6233,7 +6253,8 @@ function checkBundleRule(triggerIdx, deltaAdded) {
       }
       // 「這次沒加, 因為清單上已經夠了」也要講出來 —— 不講的話同仁會以為連動壞了, 跑去手動補一個。
       if (skipped.length > 0 && addedCount === 0) {
-        showToast(`📦 ${skipped.join("、")} 已經刷齊了, 這次沒有再加`, 4000);
+        // 講清楚是「這一箱」已經有了, 不是整張清單 —— 否則同仁會以為連動壞掉跑去手動補
+        showToast(`📦 這一箱已經有 ${skipped.join("、")} 了, 沒有再加`, 4000);
       }
       if (addedCount > 0) {
         const _d = added.map(c => `${c.name}×${c.qty}`).join("、");
@@ -7035,8 +7056,28 @@ function _kocaSpecExpand(name, allowSingle) {
   }
   const direct = specMap[name];
   if (Array.isArray(direct) && direct.length >= minCount) return direct;
-  const n = normalizeProdName(name);
-  if (!n) return null;
+  const n0 = normalizeProdName(name);
+  if (!n0) return null;
+  // 🔑 **完全相同**的鍵一律算數 —— 不受下面的「至少 6 個字」和 minCount 限制。
+  //   Kyle 2026/11/04 回報:蝦皮規格就是「濾芯5個」, 規格表裡也**正好有**「濾芯5個 → 濾芯×5」,
+  //   卻對不到。三道關卡疊起來擋的:
+  //     ① v.length < minCount(2) → 只對到 1 個 SKU 的對應被整個跳過
+  //     ② kn.length >= 6 → 「濾芯5個」只有 4 個字, 連「完全相同」都被擋掉
+  //   ②那道保護的用意是「短鍵不要做**包含**比對」(會亂中), 但**完全相同**不是猜 ——
+  //   字一模一樣就是答案, 沒有誤判空間。
+  {
+    const _noMark0 = (s) => String(s || "").split("●")[0].trim();
+    const nB0 = normalizeProdName(_noMark0(name));
+    for (const k in specMap) {
+      const v = specMap[k];
+      if (!Array.isArray(v) || v.length === 0) continue;
+      const kRaw = String(k).replace(/^\[(品線|商品)\]\s*/, "");
+      const kn = normalizeProdName(kRaw);
+      const knB = normalizeProdName(_noMark0(kRaw));
+      if (kn === n0 || knB === nB0 || kn === nB0 || knB === n0) return v;
+    }
+  }
+  const n = n0;
   // ●現貨 / ●預購 是**庫存狀態**, 不是商品本身。規格表的鍵常常帶著它, 蝦皮送來的品名則沒有。
   //   比對是「規格表的名字要出現在來源品名裡」, 鍵多了 ●預購 就比來源長 → 永遠包不進去。
   //   實例(Kyle 2026/10/20 提供):規格表「Dusty MINI 1 一般版●預購」vs 蝦皮「Dusty MINI 1 一般版」
@@ -7372,7 +7413,14 @@ function shopeeItemsToTotals(order) {
     // 蝦皮的「商品名 + 規格名」才是完整品名, 規格對應表也是用這個當 key
     const full = [it.name, it.spec].filter(Boolean).join(" ").trim() || String(it.name || "");
     // ★ 套組優先(跟官網單同一個函式)
-    const expand = (typeof _kocaSpecExpand === "function") ? _kocaSpecExpand(full) : null;
+    let expand = (typeof _kocaSpecExpand === "function") ? _kocaSpecExpand(full) : null;
+    // 🔑 再用「規格欄位本身」試一次。
+    //   蝦皮的 name 是行銷標題(「5入裝 台灣現貨【KOCA科卡】Dusty MINI 1無線吸塵器專屬濾芯」),
+    //   spec 才是真正的品名(「濾芯5個」)—— 而規格對應表的鍵就是照 spec 建的。
+    //   用 name+spec 合起來比, 短鍵永遠包不進去;單獨拿 spec 比才會**完全相同**。
+    if ((!expand || !expand.length) && it && it.spec && typeof _kocaSpecExpand === "function") {
+      expand = _kocaSpecExpand(String(it.spec));
+    }
     if (expand && expand.length) {
       for (const m of expand) {
         const add = (m.qty || 1) * qty;
@@ -13057,9 +13105,12 @@ const PACKAGING_RULES = [
 //     而缺貨是暫時的, 補到貨之後又要再改一次, 來回改規則遲早改錯一邊。
 //     這裡只做一件事:**這幾個一律算合理**, 規則本身一個字都不動。
 //   📌 補到貨之後把這個陣列清空就恢復原狀(規則沒被動過, 不會有後遺症)。
+//
+// 📅 2026/10/30 開啟(KOCA-PB 缺貨)→ 2026/11/04 **關閉**(Kyle:「KOCA 破壞袋有進貨了,
+//    請暫時關閉刷替代模式」)。機制留著, 下次缺貨把 SKU 填回去就好, 不用再改規則。
 const PACKAGING_SUBSTITUTES = new Set([
-  "5E-5061-EV",   // 五益包裝 50*61 破壞袋
-  "5E-5063-EV",   // 五益包裝 50*63 破壞袋
+  // "5E-5061-EV",   // 五益包裝 50*61 破壞袋
+  // "5E-5063-EV",   // 五益包裝 50*63 破壞袋
 ]);
 // 受規則管的包材 SKU (只有刷到這些才會做防呆比對)
 const GOVERNED_PACKAGING = (() => {
@@ -13149,6 +13200,10 @@ function checkActiveParcelPackaging() {
   const message = `⚠ 包材確認\n\n本單內容:\n ${reasons.join("\n ")}\n\n建議包材:\n   ${expList}\n\n但這單用了:\n   ${wrongList}\n\n可能是刷錯,或本單另有需求。\n確定要用這個包材完成嗎?`;
   return { ok: false, message };
 }
+
+// 🔫 刷槍連發防護用:記住「上一次刷到的商品 SKU 和時間」
+const SAME_SKU_MIN_GAP_MS = 350;
+let _lastSkuScan = { sku: "", at: 0 };
 
 function processScan(code) {
   // ×N 倍數模式偵測
@@ -13243,6 +13298,26 @@ function processScan(code) {
       showToast("⚠ 請先刷寄件單再加 SKU");
       return;
     }
+    // 🔫 刷槍連發防護:同一個 SKU 在 350 毫秒內又被刷到 → 當成刷槍抖動, 直接忽略。
+    //   為什麼需要:自由計數的品項(手建單 / 補寄 / 退貨 / 入倉 / 包材 / 單外加購)
+    //   **沒有應出量可以比**, 所以多刷攔截整個用不上 —— 刷槍連發一次就多算一件,
+    //   而且完全無聲。MOMO 目前全部是手建單, 整批都在這個狀態。
+    //   ⚠ 350ms 的理由:人手不可能 0.35 秒內刷同一樣東西兩次(要移動、對位、按扳機),
+    //     但刷槍連發是幾十毫秒內的事。只擋「同一個 SKU」, 連刷不同商品完全不受影響。
+    //   ⚠ 刻意「忽略」而不是「詢問」:真的是連發的話, 跳窗只會讓同仁按掉;
+    //     而且會講出來(toast + 進狀態紀錄), 不是靜默丟棄。
+    {
+      const _nowS = Date.now();
+      if (_lastSkuScan.sku === matchedProd.sku && (_nowS - _lastSkuScan.at) < SAME_SKU_MIN_GAP_MS) {
+        _lastSkuScan.at = _nowS;   // 連發期間一直刷新, 避免「連三槍」只擋到第二槍
+        _scanMultiplier = 1; renderMultiplierBadge();
+        SOUND.scanError();
+        showToast(`🔫 ${matchedProd.sku} 在 0.35 秒內被刷到兩次,當成刷槍連發略過(真的要加請按 ＋)`, 4000);
+        logEvent("warn", "刷槍連發", `${matchedProd.sku} 重複觸發已略過`, { 間隔ms: _nowS - _lastSkuScan.at });
+        return;
+      }
+      _lastSkuScan = { sku: matchedProd.sku, at: _nowS };
+    }
     const idx = state.items.findIndex(it => it.sku === matchedProd.sku);
     if (idx >= 0) {
       // 📦 包材防呆: 刷到受規則管的包材且與本單建議不符 → 先問, 不強制擋
@@ -13261,19 +13336,20 @@ function processScan(code) {
       //   ⚠ 只有「這箱裡這個 SKU 的數量**全部**來自系統自動帶入」時才算確認 ——
       //     只要同仁自己刷過一個, 就回到正常的累加(那是他真的在放東西)。
       //   ⚠ 也不跳「多刷了」的警告:同仁沒做錯事, 跳久了真的多刷時會被按過去。
+      //   做法:系統放了 _pre 個 → 前 _pre 次掃描算「確認」, 之後才是真的在加。
+      //   ⚠ 用「已確認數」累加, **不要**去扣 _pre ——
+      //     扣的話第 2 次之後條件就不成立了, 4 顆濾芯只有第 1 顆算確認, 其餘照加(實測變成 7 顆)。
       const _ap = state.activeParcel;
       const _pre = (_ap && _ap.prefilled && _ap.prefilled[matchedProd.sku]) || 0;
-      const _inBox = (_ap && _ap.items && _ap.items[matchedProd.sku]) || 0;
-      const _it0 = state.items[idx];
-      if (_pre > 0 && _inBox > 0 && _pre >= _inBox && (_it0.packed || 0) >= (_it0.expected || 0)) {
-        // 🔑 確認額度「用掉就減少」——
-        //   系統帶了 1 個, 同仁刷第 1 次 = 確認那一個;
-        //   再刷第 2 次就代表他**真的又放了一個**, 額度已經用完 → 回到正常的多刷防呆。
-        //   不這樣做的話, 這個 SKU 之後怎麼刷都不會計數, 真的多放也抓不到。
-        _ap.prefilled[matchedProd.sku] = Math.max(0, _pre - Math.max(1, _mul));
+      const _conf = (_ap && _ap.confirmed && _ap.confirmed[matchedProd.sku]) || 0;
+      if (_ap && _pre > 0 && _conf < _pre) {
+        _ap.confirmed = _ap.confirmed || {};
+        _ap.confirmed[matchedProd.sku] = Math.min(_pre, _conf + Math.max(1, _mul));
+        const _left = _pre - _ap.confirmed[matchedProd.sku];
         SOUND.scanSku();
         _scanMultiplier = 1; renderMultiplierBadge();
-        showToast(`✓ ${matchedProd.sku} 已確認(系統自動帶入的 ${_inBox} 個,不重複計數)`, 3500);
+        saveState();
+        showToast(`✓ ${matchedProd.sku} 已確認(系統自動帶入 ${_pre} 個${_left > 0 ? `,還有 ${_left} 個待確認` : ",已全部確認"}),不重複計數`, 3500);
         return;
       }
       SOUND.scanSku();
