@@ -3502,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v13.7 · 2026-11-09";
+const APP_VERSION = "v13.9 · 2026-11-09";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -6333,6 +6333,82 @@ function ctnQtyOf(sku) {
   const n = p ? Math.floor(Number(p.ctnQty) || 0) : 0;
   return (n > 1 && isFinite(n)) ? n : 0;
 }
+
+// 📍 改櫃位 —— 商品庫首頁和後台編輯清單**共用這一份**。
+// (同一件事寫兩份規則 = 改了一邊忘了另一邊, 而且沒有人會發現 —— 見 CLAUDE.md)
+// 回傳 true 代表真的改了, 呼叫端自己決定要重繪哪些畫面。
+function promptEditLocation(sku) {
+  const p = library.find(x => x.sku === sku);
+  if (!p) { showToast("⚠ 找不到這個商品"); return false; }
+  // ⚠ 鏡像裝置(手機)改了**不會推出去**, 而且主機下次推主檔時 fetchMasterMirror() 會把 library 整個換掉
+  //   → 改的東西無聲消失。與其讓人白做一場, 不如當場擋下來講清楚為什麼。
+  if (!settings.isMasterDevice && cloudHistoryEnabled()) {
+    alert(`這台是鏡像裝置, 不能改櫃位。\n\n改了不會同步出去, 而且主機下次更新主檔時會被蓋掉, 等於白改。\n\n請到主機(電腦)上改 —— 改完會自動同步回這台。`);
+    return false;
+  }
+  const cur = p.location || "";
+  const v = prompt(`📍 「${p.sku}」放在哪一格?\n${p.name || ""}\n\n格式請跟架上貼紙一模一樣, 例如 C-09-3\n(不一樣的話同仁對不起來, 排序也會當成兩個不同位置)\n\n(清空 = 取消設定)`, cur);
+  if (v === null) return false;
+  const loc = String(v).trim();
+  if (loc) p.location = loc; else delete p.location;
+  saveLibrary();   // 內含 scheduleMasterPush(), 會自動同步到其他裝置
+  showToast(loc ? `📍 ${p.sku} → ${loc}` : `✓ 已清除 ${p.sku} 的櫃位`);
+  logEvent("info", "改櫃位", `${p.sku} → ${loc || "(清除)"}`);
+  return true;
+}
+
+// ===== 🏷 刷到「架上的櫃位條碼」=====
+// 架上貼了 48 張 Code128 條碼(A-01 / C-09-3 …)。這些碼有 dash、全是英數,
+// 會被 processScan 的 looksLikeSku() 判成「像 SKU」→ 跳出「要不要加入商品庫?」
+// 同仁手滑按確定, 櫃位編號就變成永久的假商品, 還會計入當下那張訂單 ×1。
+// (跟 CLAUDE.md 記的「寄件單號被寫進商品庫」是同一個坑, 只是來源換成架上的貼紙。)
+//
+// 解法不是只把它擋掉, 而是讓它有用: 刷下去就告訴同仁「這一格應該有什麼」——
+// 這正好是歸位時最常問的問題。純顯示, 不動任何資料。
+const LOCATION_CODE_RE = /^[A-Z]-\d{2}(-\d{1,2}){0,2}$/i;   // A-01 / C-09-3 / C-09-3-02
+function looksLikeLocationCode(s) {
+  if (!s) return false;
+  const t = String(s).trim().toUpperCase();
+  if (LOCATION_CODE_RE.test(t)) return true;
+  // 格式不合但確實是某個商品的櫃位(自訂格式如「電腦桌下」) → 也算
+  return library.some(p => p.location && String(p.location).trim().toUpperCase() === t);
+}
+// 這個櫃位(含其下層/位)有哪些商品
+function productsAtLocation(code) {
+  const t = String(code || "").trim().toUpperCase();
+  if (!t) return [];
+  return library.filter(p => {
+    const l = String(p.location || "").trim().toUpperCase();
+    if (!l) return false;
+    return l === t || l.indexOf(t + "-") === 0;   // 刷 C-09 要列出 C-09-1 ~ C-09-4
+  });
+}
+function showLocationLookup(code) {
+  const t = String(code).trim().toUpperCase();
+  const hits = productsAtLocation(t);
+  SOUND.scanSku();
+  if (hits.length === 0) {
+    showToast(`📍 ${t} — 目前沒有商品設定在這一格`, 4000);
+    logEvent("info", "刷櫃位", `${t} (無商品)`);
+    return;
+  }
+  hits.sort((a, b) => locSortKey(a.sku).localeCompare(locSortKey(b.sku)) || a.sku.localeCompare(b.sku));
+  // 一行一項, 要短到不折行:
+  //   刷「C-09-3」→ 大家都同一格, 不重複印櫃位
+  //   刷「C-09」  → 只印差異的那一段(「3」), 不是整串 C-09-3
+  const lines = hits.slice(0, 10).map(p => {
+    const loc = String(p.location || "").trim().toUpperCase();
+    const seg = (loc === t) ? "" : loc.slice(t.length).replace(/^-/, "") + "│";
+    const nm = String(p.name || "");
+    const short = nm.length > 12 ? nm.slice(0, 11) + "…" : nm;
+    const st = stockMap[p.sku];
+    const q = (st && typeof st.qty === "number") ? ` ${st.qty}` : "";
+    return `${seg}${p.sku}${short ? " " + short : ""}${q}`;
+  });
+  if (hits.length > 10) lines.push(`…還有 ${hits.length - 10} 項`);
+  showToast(`📍 ${t}　${hits.length} 項\n` + lines.join("\n"), 7000);
+  logEvent("info", "刷櫃位", `${t} → ${hits.length} 項`);
+}
 function groupByCategory(items) {
   const groups = {};
   for (const it of items) {
@@ -6371,12 +6447,25 @@ function statusOf(it, shippedMap) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-function showToast(msg) {
+// ms 不給就照舊 2400。多行訊息(含 \n)會自動改成會換行的排版 ——
+// .toast 用 textContent, 預設 white-space 會把 \n 當空白, 整串擠成一行。
+function showToast(msg, ms) {
   const t = document.getElementById("toast");
   t.textContent = msg;
+  const multi = /\n/.test(String(msg));
+  t.style.whiteSpace = multi ? "pre-line" : "";
+  t.style.textAlign = multi ? "left" : "";
+  t.style.borderRadius = multi ? "12px" : "";
+  // ⚠ .toast 是 left:50% + translateX(-50%)。translate 只動畫面位置, **不改版面寬度** ——
+  //   自動寬度只能用到「從中線到右緣」那一半(手機約 215px), 所以多行訊息會被折得亂七八糟。
+  //   用 max-content 讓它撐到最長那一行, 再用 90vw 封頂。
+  t.style.width = multi ? "max-content" : "";
+  t.style.maxWidth = multi ? "90vw" : "";
+  t.style.lineHeight = multi ? "1.55" : "";
+  t.style.background = multi ? "rgba(0,0,0,.93)" : "";   // 多行要讀內容, 半透明在淺色畫面上吃力
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 2400);
+  t._timer = setTimeout(() => t.classList.remove("show"), Math.max(800, Number(ms) || 2400));
 }
 
 // ---- Render: Import (Menu tab) ----
@@ -6437,6 +6526,8 @@ function renderMenu() {
             <div class="item-sku">${escapeHtml(p.sku)}${locChip(p.sku)}</div>
             <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
           </div>
+          <button type="button" data-menu-loc="${escapeHtml(p.sku)}" title="設定/修改櫃位"
+            style="flex:none; min-width:40px; min-height:38px; padding:4px 9px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:${p.location ? "var(--primary)" : "var(--text-soft)"}; cursor:pointer; font-size:${p.location ? "0.9375rem" : "0.75rem"}; line-height:1.2;">${p.location ? "📍" : "📍＋"}</button>
           ${stockHtml}
         </div>`;
         }).join("");
@@ -13650,6 +13741,14 @@ function processScan(code) {
     renderPicking();
     return;
   }
+  // 🏷 架上的櫃位條碼 —— 必須在 looksLikeSku 之前攔下來。
+  //   C-09-3 有 dash、全是英數, looksLikeSku 會判成「像 SKU」→ 跳「要不要加入商品庫?」
+  //   手滑按確定就多一個假商品, 而且計入當下那張訂單 ×1。架上有 48 張這種條碼。
+  //   這裡只顯示那一格有什麼, 不改任何資料。
+  if (looksLikeLocationCode(code)) {
+    showLocationLookup(code);
+    return;
+  }
   if (looksLikeSku(code)) {
     // ⚠ 這裡以前是死路 (非手建模式只跳 alert 不給出路) → 補寄單號等「有 dash 的訂單號」完全刷不進來。
     //   改成: 問一次要當商品還是當單號, 取消就往下繼續當寄件單號處理, 不擋死。
@@ -15757,6 +15856,18 @@ document.getElementById("cancel-mapping-btn").addEventListener("click", () => {
 
 // Menu tab interactions - 純瀏覽模式: 只處理分類收合
 document.getElementById("menu-items").addEventListener("click", (e) => {
+  // 📍 直接在商品庫首頁改櫃位 (不用再進設定裡的編輯清單)
+  const locBtn = e.target.closest("button[data-menu-loc]");
+  if (locBtn) {
+    if (promptEditLocation(locBtn.dataset.menuLoc)) {
+      renderMenu();
+      if (typeof renderLibrary === "function") renderLibrary();
+      if (typeof renderInventory === "function") renderInventory();
+      if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
+      if (stockTake && typeof renderStockTake === "function") renderStockTake();
+    }
+    return;
+  }
   const catBtn = e.target.closest("button[data-cat-toggle]");
   if (catBtn) {
     const cat = catBtn.dataset.catToggle;
@@ -15923,15 +16034,14 @@ document.getElementById("lib-items").addEventListener("click", (e) => {
     const idx = parseInt(editLoc.dataset.libEditLoc, 10);
     const p = library[idx];
     if (!p) return;
-    const cur = p.location || "";
-    const v = prompt(`📍 「${p.sku}」放在哪一櫃?\n\n撿貨清單會顯示這個位置, 並依此排序(同分類內)。\n格式不限, 例如: A-01-02-03 / A區2層 / 電腦桌下\n\n(清空 = 取消設定)`, cur);
-    if (v === null) return;
-    const loc = String(v).trim();
-    if (loc) p.location = loc; else delete p.location;
-    saveLibrary();
-    renderLibrary();
-    if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
-    showToast(loc ? `📍 ${p.sku} → ${loc}` : `✓ 已清除 ${p.sku} 的儲位`);
+    // 跟商品庫首頁共用同一份 promptEditLocation(), 不要在這裡再寫一次規則
+    if (promptEditLocation(p.sku)) {
+      renderLibrary();
+      if (typeof renderMenu === "function") renderMenu();
+      if (typeof renderInventory === "function") renderInventory();
+      if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
+      if (stockTake && typeof renderStockTake === "function") renderStockTake();
+    }
     return;
   }
   // 📦 編輯每箱入數: 盤點時可以輸入「幾箱 + 幾個」, 不用拆箱; 隨主檔連動同步到其他裝置
