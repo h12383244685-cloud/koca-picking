@@ -3502,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v13.4 · 2026-11-04";
+const APP_VERSION = "v13.6 · 2026-11-05";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -6323,6 +6323,16 @@ function locChip(sku) {
   if (!l) return "";
   return ` <span style="display:inline-block; background:var(--primary-light); color:var(--primary); font-weight:800; font-size:0.66rem; padding:1px 7px; border-radius:6px; font-family:ui-monospace,monospace; vertical-align:1px;">📍 ${escapeHtml(l)}</span>`;
 }
+
+// ===== 📦 每箱入數 (盤點用) =====
+// 外箱上印的「QTY: 20PCS/CTN」。設了之後盤點可以輸入「幾箱 + 幾個」, 不用拆箱一個一個數。
+// 只存在商品庫 (library[].ctnQty) → 跟著「主檔連動」同步到其他裝置。
+// ⚠ 回 0 代表「沒設」: 1 也當成沒設 (每箱 1 個 = 拆不拆都一樣, 多一個欄位只會干擾)。
+function ctnQtyOf(sku) {
+  const p = library.find(x => x.sku === sku);
+  const n = p ? Math.floor(Number(p.ctnQty) || 0) : 0;
+  return (n > 1 && isFinite(n)) ? n : 0;
+}
 function groupByCategory(items) {
   const groups = {};
   for (const it of items) {
@@ -6520,9 +6530,11 @@ function renderLibrary() {
             <span>條碼: <span style="font-family:monospace; color:${customBc ? 'var(--primary)' : 'var(--text-soft)'};">${escapeHtml(bc)}</span>${customBc ? ' (自訂)' : ''}</span>
             <span>單價: <span style="font-family:monospace; color:${price > 0 ? 'var(--success)' : 'var(--danger)'};">$${price.toFixed(2)}</span></span>
             <span>儲位: <span style="font-family:monospace; color:${p.location ? 'var(--primary)' : 'var(--text-soft)'};">${p.location ? escapeHtml(p.location) : "(未設)"}</span></span>
+            <span>每箱: <span style="font-family:monospace; color:${ctnQtyOf(p.sku) ? 'var(--primary)' : 'var(--text-soft)'};">${ctnQtyOf(p.sku) ? ctnQtyOf(p.sku) + " 個" : "(未設)"}</span></span>
           </div>
         </div>
         <button class="btn sm outline" data-lib-edit-loc="${idx}" title="編輯儲位(放在哪一櫃)">📍</button>
+        <button class="btn sm outline" data-lib-edit-ctn="${idx}" title="編輯每箱入數(盤點數箱子用)">📦</button>
         <button class="btn sm outline" data-lib-edit-price="${idx}" title="編輯單價">💰</button>
         <button class="btn sm outline" data-lib-edit-bc="${idx}" title="編輯條碼">📇</button>
         <button class="btn sm outline" data-lib-toggle-essential="${idx}" title="標記為必要商品">${p.essential ? "★" : "☆"}</button>
@@ -9315,7 +9327,9 @@ function renderInventory() {
   });
 
   listEl.innerHTML = catNames.map(cat => {
-    const skus = byCat[cat].sort((a, b) => a.localeCompare(b));
+    // 同分類內先照儲位排 (找貨/補貨要走路), 沒設儲位的排最後; 儲位相同再照 SKU
+    const skus = byCat[cat].sort((a, b) =>
+      locSortKey(a).localeCompare(locSortKey(b)) || a.localeCompare(b));
     const catEmoji = catIcon(cat);
     const itemsHtml = skus.map(sku => {
       const libP = library.find(p => p.sku === sku);
@@ -9347,7 +9361,7 @@ function renderInventory() {
       return `
         <div class="row-line" style="display:flex; justify-content:space-between; align-items:center; padding: 8px 10px; border-bottom: 1px solid var(--border-light); gap: 8px;">
           <div style="flex:1; min-width:0;">
-            <div style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 0.6875rem;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 0.625rem;">未入庫</span>' : ''}</div>
+            <div style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(sku)}${locChip(sku)}${isEssential ? ' <span style="color: var(--warn); font-size: 0.6875rem;">★</span>' : ''}${!libP ? ' <span style="background: var(--warn-bg); color: #92400e; padding: 1px 6px; border-radius: 6px; font-size: 0.625rem;">未入庫</span>' : ''}</div>
             <div style="font-size: 0.75rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(name)}</div>
             ${binLine}
           </div>
@@ -9493,6 +9507,7 @@ function startStockTake() {
     counts: {},
     skipped: {},   // 暫不盤點 (滯銷品等): {sku: true}
     notes: {},     // 差異備註: {sku: "破損3個"}
+    ctns: {},      // 整箱數 (只是輸入方式, 真正的數字永遠在 counts): {sku: 3}
   };
   saveStockTake();
   showStockTakeView();
@@ -9543,13 +9558,61 @@ function setStockTakeCount(sku, qty) {
   if (!stockTake) return;
   if (!stockTake.counts) stockTake.counts = {};
   qty = Math.max(0, Math.floor(Number(qty) || 0));
-  if (qty === 0) delete stockTake.counts[sku];
+  if (qty === 0) { delete stockTake.counts[sku]; if (stockTake.ctns) delete stockTake.ctns[sku]; }
   else stockTake.counts[sku] = qty;
   // 有輸入實盤數就自動取消略過
   if (qty > 0 && stockTake.skipped) delete stockTake.skipped[sku];
   _stLastTouched = sku;
   saveStockTake();
   renderStockTake();
+}
+
+// ===== 📦 箱 + 個 的輸入方式 =====
+// ⚠ 真正的實盤數永遠只有一個來源: stockTake.counts[sku] (總件數)。
+//    ctns[sku] 只是「使用者輸入了幾箱」, 用來把總數拆回「3 箱 + 5 個」顯示。
+//    這樣下游 (computeStockTakeDiff / applyStockTake / 匯出) 完全不用改, 也不會有兩份真相。
+function _stTotalOf(sku) {
+  return (stockTake && stockTake.counts && stockTake.counts[sku]) || 0;
+}
+// 目前算幾箱: 以總數為準收斂 —— 總數被改小 (按 −、或直接改總數) 時箱數自動跟著降, 不會出現 3 箱卻只有 10 個
+function _stCtnOf(sku) {
+  const q = ctnQtyOf(sku);
+  if (!q) return 0;
+  const raw = Math.floor(Number((stockTake && stockTake.ctns && stockTake.ctns[sku]) || 0));
+  if (!(raw > 0)) return 0;
+  return Math.max(0, Math.min(raw, Math.floor(_stTotalOf(sku) / q)));
+}
+// 散裝數 = 總數 − 整箱的量 (永遠推導, 不另存)
+function _stLooseOf(sku) {
+  const q = ctnQtyOf(sku);
+  const total = _stTotalOf(sku);
+  if (!q) return total;
+  return Math.max(0, total - _stCtnOf(sku) * q);
+}
+function _stWriteTotal(sku, ctn, loose) {
+  const q = ctnQtyOf(sku);
+  ctn = Math.max(0, Math.floor(Number(ctn) || 0));
+  loose = Math.max(0, Math.floor(Number(loose) || 0));
+  const total = (q ? ctn * q : 0) + loose;
+  if (!stockTake.counts) stockTake.counts = {};
+  if (!stockTake.ctns) stockTake.ctns = {};
+  if (total === 0) { delete stockTake.counts[sku]; delete stockTake.ctns[sku]; }
+  else {
+    stockTake.counts[sku] = total;
+    if (ctn > 0) stockTake.ctns[sku] = ctn; else delete stockTake.ctns[sku];
+  }
+  if (total > 0 && stockTake.skipped) delete stockTake.skipped[sku];
+  _stLastTouched = sku;
+  saveStockTake();
+  renderStockTake();
+}
+function setStockTakeCtn(sku, ctn) {
+  if (!stockTake || !ctnQtyOf(sku)) return;
+  _stWriteTotal(sku, ctn, _stLooseOf(sku));
+}
+function setStockTakeLoose(sku, loose) {
+  if (!stockTake || !ctnQtyOf(sku)) return;
+  _stWriteTotal(sku, _stCtnOf(sku), loose);
 }
 
 // 暫不盤點 (略過): 滯銷品等不會被刷到的, 標略過就不算「未盤」
@@ -9560,6 +9623,7 @@ function toggleStockTakeSkip(sku) {
   else {
     stockTake.skipped[sku] = true;
     if (stockTake.counts) delete stockTake.counts[sku]; // 略過就清掉已輸入的數
+    if (stockTake.ctns) delete stockTake.ctns[sku];
   }
   saveStockTake();
   renderStockTake();
@@ -9576,12 +9640,49 @@ function isBigDiff(r) {
   return false;
 }
 
+// 差異原因的常用選項 — 同仁按一下就好, 不用打字。
+// ⚠ 分「廠商多給」和「出貨漏刷」是重點: 數字上都是 +N, 但一個是賺到、一個是出貨出錯。
+//    不分開記, 長期就看不出到底是哪一種在發生。
+const STOCKTAKE_NOTE_PRESETS = ["廠商多給", "廠商少給", "出貨漏刷", "退貨未入", "贈品領用", "破損", "登錄錯"];
+
+// 同一個 SKU 上一次盤點的差異與原因 (本機 + 雲端合併, 取最近一次有盤到的)
+function lastStockTakeDiffFor(sku) {
+  let hist;
+  try { hist = (typeof allStockTakeHistory === "function") ? allStockTakeHistory() : stockTakeHistory; }
+  catch (_) { hist = stockTakeHistory; }
+  if (!Array.isArray(hist)) return null;
+  // 防禦: 不假設傳進來的是排好的 (allStockTakeHistory 在沒有雲端資料時會直接回原陣列)
+  const sorted = hist.slice().sort((a, b) => (String((b && b.completedAt) || "") > String((a && a.completedAt) || "") ? 1 : -1));
+  for (const h of sorted) {
+    const items = (h && Array.isArray(h.items)) ? h.items : [];
+    for (const it of items) {
+      if (it && it.sku === sku) {
+        return { at: h.completedAt, diff: Number(it.diff) || 0, note: it.note || "" };
+      }
+    }
+  }
+  return null;
+}
+
+// 差異報告上的「上次盤點」一行: 看得出同一個 SKU 是不是每次都差一樣的量
+// 這是判斷「系統性問題」還是「偶發」唯一的依據 —— 只看這一次永遠分不出來。
+function _stLastDiffLine(r) {
+  const prev = lastStockTakeDiffFor(r.sku);
+  if (!prev || prev.diff === 0) return "";
+  const d = new Date(prev.at);
+  const when = isNaN(d) ? "" : d.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit" });
+  const sameWay = (prev.diff > 0) === (r.diff > 0);
+  const txt = `上次(${when}) ${prev.diff > 0 ? "+" : ""}${prev.diff}${prev.note ? " · " + prev.note : ""}`;
+  // 同方向 = 重複發生, 標出來讓人注意; 反方向多半是偶發
+  return `<div style="font-size:0.625rem; margin-top:3px; color:${sameWay ? "var(--danger)" : "var(--text-soft)"};">${sameWay ? "🔁 " : ""}${escapeHtml(txt)}${sameWay ? " — 重複發生, 要查原因" : ""}</div>`;
+}
+
 // 差異備註 (原因: 破損/遺失/登錄錯...)
 function setStockTakeNote(sku) {
   if (!stockTake) return;
   if (!stockTake.notes) stockTake.notes = {};
   const cur = stockTake.notes[sku] || "";
-  const val = prompt(`「${sku}」差異備註\n\n常見原因: 破損、遺失、退貨未入、贈品領用、登錄錯\n(留空可清除備註)`, cur);
+  const val = prompt(`「${sku}」差異備註\n\n常見原因: ${STOCKTAKE_NOTE_PRESETS.join("、")}\n(留空可清除備註)`, cur);
   if (val === null) return; // 取消
   const v = val.trim();
   if (v) stockTake.notes[sku] = v;
@@ -9654,7 +9755,13 @@ function applyStockTake() {
   const diffResults = computeStockTakeDiff();
   const snapshotItems = diffResults
     .filter(r => r.inStockTake)
-    .map(r => ({ sku: r.sku, name: r.name, system: r.system, actual: r.actual, diff: r.diff, note: notesObj[r.sku] || "" }));
+    .map(r => {
+      const _q = ctnQtyOf(r.sku), _c = _stCtnOf(r.sku);
+      const _row = { sku: r.sku, name: r.name, system: r.system, actual: r.actual, diff: r.diff, note: notesObj[r.sku] || "" };
+      // 用箱數算的才記, 之後回查看得出「3箱×20+5」而不只是 65
+      if (_q && _c > 0) { _row.ctnQty = _q; _row.ctn = _c; _row.loose = _stLooseOf(r.sku); }
+      return _row;
+    });
   let updated = 0;
   for (const sku in counts) {
     if (!stockMap[sku]) {
@@ -9766,7 +9873,7 @@ function _renderStocktakeRow(r) {
   return `
       <div style="display:flex; align-items:center; gap:8px; padding:12px 10px; border-bottom:1px solid var(--border-light); background:${rowBg}; ${touchStyle}">
         <div style="flex:1; min-width:0;">
-          <div style="font-weight:700; font-size:1rem;">${escapeHtml(r.sku)}${touchBadge}</div>
+          <div style="font-weight:700; font-size:1rem;">${escapeHtml(r.sku)}${locChip(r.sku)}${touchBadge}</div>
           <div style="font-size:0.875rem; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</div>
           ${skipBtn}
         </div>
@@ -9774,13 +9881,39 @@ function _renderStocktakeRow(r) {
           <div style="font-size:0.875rem; color:var(--text-soft);">系統 ${r.system}</div>
           <div style="font-size:0.9375rem; color:${diffColor}; font-weight:700;">${diffText}</div>
         </div>
+        ${_stCountInputs(r)}
+      </div>`;
+}
+
+// 數量輸入區: 有設「每箱入數」的改成「箱 + 個」兩格, 不用拆箱一個一個數
+function _stCountInputs(r) {
+  const q = ctnQtyOf(r.sku);
+  const minus = `<button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>`;
+  const plus = `<button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background:var(--success); color:white; border:0; border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;">+</button>`;
+  if (!q) {
+    return `
         <div style="display:flex; align-items:center; gap:5px;">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="-1" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;" ${r.actual <= 0 ? 'disabled' : ''}>−</button>
+          ${minus}
           <input type="number" inputmode="numeric" min="0" step="1" data-st-set="${escapeHtml(r.sku)}" value="${r.actual}"
                  style="width:62px; height:46px; text-align:center; padding:2px; border:1px solid var(--border); border-radius:8px; font-size:1.3125rem; font-weight:700; background:var(--surface); color:var(--text);">
-          <button data-st-bump="${escapeHtml(r.sku)}" data-st-delta="1" style="background:var(--success); color:white; border:0; border-radius:8px; width:40px; height:46px; cursor:pointer; font-weight:700; font-size:1.375rem;">+</button>
-        </div>
-      </div>`;
+          ${plus}
+        </div>`;
+  }
+  const ctn = _stCtnOf(r.sku), loose = _stLooseOf(r.sku);
+  const lbl = "font-size:0.625rem; color:var(--text-soft); text-align:center; line-height:1;";
+  const box = "width:52px; height:40px; text-align:center; padding:2px; border:1px solid var(--border); border-radius:8px; font-size:1.125rem; font-weight:700; background:var(--surface); color:var(--text);";
+  return `
+        <div style="display:flex; align-items:flex-end; gap:4px;">
+          <div><div style="${lbl} margin-bottom:3px;">箱 ×${q}</div>
+            <input type="number" inputmode="numeric" min="0" step="1" data-st-ctn="${escapeHtml(r.sku)}" value="${ctn}" style="${box}"></div>
+          <div style="${lbl} padding-bottom:12px;">+</div>
+          <div><div style="${lbl} margin-bottom:3px;">散裝</div>
+            <input type="number" inputmode="numeric" min="0" step="1" data-st-loose="${escapeHtml(r.sku)}" value="${loose}" style="${box}"></div>
+          <div style="${lbl} padding-bottom:12px;">=</div>
+          <div style="min-width:38px; text-align:center; padding-bottom:9px;">
+            <div style="font-size:1.1875rem; font-weight:800; color:var(--primary); line-height:1;">${r.actual}</div></div>
+          ${plus}
+        </div>`;
 }
 
 function renderStockTake() {
@@ -9824,7 +9957,8 @@ function renderStockTake() {
     list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有符合條件的 SKU</div></div>';
     return;
   }
-  // 依分類分組 (盤點好找); 同分類內用 SKU 穩定排序, 不會因為輸入而亂跳
+  // 依分類分組 (盤點好找); 同分類內先照儲位排 (盤點是要走路的, 照櫃位排才不用來回跑),
+  // 沒設儲位的排最後; 儲位相同再用 SKU 排 → 排序只跟商品本身有關, 不會因為輸入數字而亂跳
   const _groups = {};
   for (const r of displayed) { const c = r.category || "其他"; (_groups[c] = _groups[c] || []).push(r); }
   const _catOrder = [...CATEGORY_ORDER, "其他", "未分類"];
@@ -9834,7 +9968,8 @@ function renderStockTake() {
   });
   const _sy = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
   list.innerHTML = _cats.map(cat => {
-    const rows = _groups[cat].sort((a, b) => (a.sku || "").localeCompare(b.sku || ""));
+    const rows = _groups[cat].sort((a, b) =>
+      locSortKey(a.sku).localeCompare(locSortKey(b.sku)) || (a.sku || "").localeCompare(b.sku || ""));
     const collapsed = !!_stCollapsed[cat];
     const emoji = catIcon(cat);
     const countedInCat = rows.filter(r => r.inStockTake).length;
@@ -9978,6 +10113,10 @@ document.getElementById("stocktake-list").addEventListener("click", (e) => {
 
 // 列表上直接輸入實盤數量 (不用一直點 +)
 document.getElementById("stocktake-list").addEventListener("change", (e) => {
+  const ctnInp = e.target.closest("input[data-st-ctn]");
+  if (ctnInp) { setStockTakeCtn(ctnInp.dataset.stCtn, ctnInp.value); return; }
+  const looseInp = e.target.closest("input[data-st-loose]");
+  if (looseInp) { setStockTakeLoose(looseInp.dataset.stLoose, looseInp.value); return; }
   const inp = e.target.closest("input[data-st-set]");
   if (!inp) return;
   const sku = inp.dataset.stSet;
@@ -9985,7 +10124,7 @@ document.getElementById("stocktake-list").addEventListener("change", (e) => {
 });
 // 點進數字欄位時自動選取, 直接打新數字覆蓋
 document.getElementById("stocktake-list").addEventListener("focusin", (e) => {
-  const inp = e.target.closest("input[data-st-set]");
+  const inp = e.target.closest("input[data-st-set], input[data-st-ctn], input[data-st-loose]");
   if (inp) setTimeout(() => { try { inp.select(); } catch(_){} }, 0);
 });
 
@@ -10074,10 +10213,12 @@ function showStockTakeDiffReport() {
               <span style="color: ${color}; font-weight: 700; margin-left: 6px;">${r.diff > 0 ? '+' : ''}${r.diff}</span>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
-            <button data-st-note="${escapeHtml(r.sku)}" style="background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:2px 8px; flex:none;">${note ? "📝 改備註" : "＋ 加備註"}</button>
-            ${note ? `<span style="font-size:0.6875rem; color:var(--text); background:var(--surface); border-radius:6px; padding:2px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(note)}</span>` : ""}
+          ${_stLastDiffLine(r)}
+          <div style="display:flex; align-items:center; gap:4px; margin-top:4px; flex-wrap:wrap;">
+            ${STOCKTAKE_NOTE_PRESETS.map(t => `<button data-st-note-quick="${escapeHtml(r.sku)}" data-st-note-val="${escapeHtml(t)}" style="background:${note === t ? "var(--primary)" : "var(--surface)"}; color:${note === t ? "#fff" : "var(--text-soft)"}; border:1px solid var(--border); border-radius:6px; font-size:0.6875rem; cursor:pointer; padding:3px 8px; flex:none;">${escapeHtml(t)}</button>`).join("")}
+            <button data-st-note="${escapeHtml(r.sku)}" style="background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-soft); font-size:0.6875rem; cursor:pointer; padding:3px 8px; flex:none;">✏️ 自己打</button>
           </div>
+          ${note && STOCKTAKE_NOTE_PRESETS.indexOf(note) === -1 ? `<div style="font-size:0.6875rem; color:var(--text); background:var(--surface); border-radius:6px; padding:2px 6px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(note)}</div>` : ""}
         </div>
       `;
     }).join("");
@@ -10096,6 +10237,19 @@ document.getElementById("stocktake-diff-apply").addEventListener("click", () => 
   applyStockTake();
 });
 document.getElementById("stocktake-diff-modal").addEventListener("click", (e) => {
+  // 快捷原因: 再按一次同一個 = 取消 (按錯要能拿掉, 不然只能改成別的原因)
+  const quick = e.target.closest("button[data-st-note-quick]");
+  if (quick) {
+    if (!stockTake) return;
+    if (!stockTake.notes) stockTake.notes = {};
+    const sku = quick.dataset.stNoteQuick, val = quick.dataset.stNoteVal;
+    if (stockTake.notes[sku] === val) delete stockTake.notes[sku];
+    else stockTake.notes[sku] = val;
+    saveStockTake();
+    showStockTakeDiffReport();
+    renderStockTake();
+    return;
+  }
   const noteBtn = e.target.closest("button[data-st-note]");
   if (noteBtn) { setStockTakeNote(noteBtn.dataset.stNote); return; }
   if (e.target.id === "stocktake-diff-modal") document.getElementById("stocktake-diff-modal").hidden = true;
@@ -15774,6 +15928,24 @@ document.getElementById("lib-items").addEventListener("click", (e) => {
     renderLibrary();
     if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
     showToast(loc ? `📍 ${p.sku} → ${loc}` : `✓ 已清除 ${p.sku} 的儲位`);
+    return;
+  }
+  // 📦 編輯每箱入數: 盤點時可以輸入「幾箱 + 幾個」, 不用拆箱; 隨主檔連動同步到其他裝置
+  const editCtn = e.target.closest("button[data-lib-edit-ctn]");
+  if (editCtn) {
+    const idx = parseInt(editCtn.dataset.libEditCtn, 10);
+    const p = library[idx];
+    if (!p) return;
+    const cur = ctnQtyOf(p.sku) || "";
+    const v = prompt(`📦 「${p.sku}」一箱幾個?\n\n看外箱上印的 QTY / PCS per CTN。\n設了之後盤點可以輸入「3 箱 + 5 個」自動算總數, 不用拆箱。\n\n(清空或填 0 = 不使用, 盤點照舊只輸入總數)`, cur);
+    if (v === null) return;
+    const n = Math.floor(Number(String(v).trim()) || 0);
+    if (!isFinite(n) || n < 0) { showToast("⚠ 請填正整數"); return; }
+    if (n > 1) p.ctnQty = n; else delete p.ctnQty;
+    saveLibrary();
+    renderLibrary();
+    if (stockTake) renderStockTake();
+    showToast(n > 1 ? `📦 ${p.sku} → 每箱 ${n} 個` : `✓ 已清除 ${p.sku} 的每箱入數`);
     return;
   }
   const editPrice = e.target.closest("button[data-lib-edit-price]");
