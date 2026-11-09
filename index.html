@@ -3502,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v13.6 · 2026-11-05";
+const APP_VERSION = "v13.7 · 2026-11-09";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -6399,9 +6399,10 @@ function renderMenu() {
     // 套用搜尋 (跨分類過濾 SKU / 品名)
     let groups = allGroups;
     if (q) {
+      // 櫃位也納入搜尋 → 打「C-09」就能列出那一架的所有東西 (歸位、找貨時最常問的問題)
       groups = allGroups.map(g => ({
         name: g.name,
-        items: g.items.filter(p => ((p.sku || "") + " " + (p.name || "")).toLowerCase().includes(q))
+        items: g.items.filter(p => ((p.sku || "") + " " + (p.name || "") + " " + (p.location || "")).toLowerCase().includes(q))
       })).filter(g => g.items.length > 0);
     }
     // 總覽數字
@@ -6422,7 +6423,10 @@ function renderMenu() {
     } else {
       container.innerHTML = groups.map(g => {
         const collapsed = q ? false : !!collapsedCats[g.name]; // 搜尋時一律展開以顯示結果
-        const itemsHtml = g.items.map(p => {
+        // 同分類內先照櫃位排 (沒設的排最後), 櫃位相同再照 SKU — 跟盤點單/倉庫清冊同一套規則
+        const _sorted = g.items.slice().sort((a, b) =>
+          locSortKey(a.sku).localeCompare(locSortKey(b.sku)) || (a.sku || "").localeCompare(b.sku || ""));
+        const itemsHtml = _sorted.map(p => {
           const st = stockMap[p.sku];
           const stockHtml = (st && typeof st.qty === "number")
             ? `<span class="menu-item-stock ${st.qty <= 0 ? "zero" : ""}">庫存 ${st.qty}</span>`
@@ -6430,7 +6434,7 @@ function renderMenu() {
           return `
         <div class="menu-item" data-sku="${escapeHtml(p.sku)}">
           <div class="menu-item-info">
-            <div class="item-sku">${escapeHtml(p.sku)}</div>
+            <div class="item-sku">${escapeHtml(p.sku)}${locChip(p.sku)}</div>
             <div class="item-name">${escapeHtml(p.name || "(無名稱)")}</div>
           </div>
           ${stockHtml}
