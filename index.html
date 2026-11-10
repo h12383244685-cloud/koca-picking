@@ -3502,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.1 · 2026-11-09";
+const APP_VERSION = "v14.6 · 2026-11-10";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -4459,6 +4459,9 @@ async function pushKocaFulfill(entry) {
     // ❗ 失敗不可以就這樣算了 —— 進補送佇列, 開機/網路恢復/開出貨紀錄時會自動再試。
     _enqueueFulfill({
       id: entry.id, kocaOrderId: entry.kocaOrderId,
+      // 🔑 單號要跟著佇列走。只存 id 的話, 重試時萬一出貨紀錄已經不在,
+      //   就再也湊不出 trackingNo → 宅配單永遠回寫不成功(見 _doKocaFulfill 開頭的說明)。
+      trackingNo: r.trackingNo || null, carrierLabel: r.carrierLabel || null,
       at: new Date().toISOString(), tries: 1,
       lastError: r.error || "unknown", fatal: _FULFILL_FATAL.has(r.error),
     });
@@ -4466,7 +4469,13 @@ async function pushKocaFulfill(entry) {
 }
 // 真正執行回寫。回傳 { done:true } 或 { done:false, error:"…" }。
 // 補送佇列和當下推送共用這一支, 保證兩條路規則完全一致。
-async function _doKocaFulfill(entry) {
+// ⚠ 第二個參數 job 是**補送佇列**那一筆。原本呼叫端有傳, 但這裡沒宣告 → 被整個忽略。
+//   後果是一條死路:重試時如果本機出貨紀錄已經不在(紀錄被清掉/過期),
+//   呼叫端會丟一個 `parcels: []` 的假 entry 進來 → 物流單號查不到 →
+//   宅配單官網要求 trackingNo 必填 → 400 → **永遠重試不成功, 那張單在官網永遠「未出貨」**。
+//   (CLAUDE.md:「傳了一個沒有人收的參數」+「失敗路徑一律要有出路, 不留死路」)
+//   修法:佇列自己帶著物流單號, 這裡拿它當後備 —— 佇列要能獨立完成任務, 不依賴另一份可能已經不在的資料。
+async function _doKocaFulfill(entry, job) {
   if (!entry || !entry.kocaOrderId) return { done: false, error: "no_order_id" };
   if (!settings.syncWorkerUrl) return { done: false, error: "no_worker_url" };
 
@@ -4486,6 +4495,11 @@ async function _doKocaFulfill(entry) {
       }
     }
     if (trackingNo) break;
+  }
+  // 後備:出貨紀錄已經不在時(entry.parcels 是空的), 用佇列當初存下來的單號
+  if (!trackingNo && job && job.trackingNo) {
+    trackingNo = String(job.trackingNo);
+    carrierLabel = job.carrierLabel || null;
   }
   // 沒抓到也照送: 官網說「訂單已有托運單號者可免」(綠界建的單以綠界為準), 超商取貨也會忽略 trackingNo。
 
@@ -4519,7 +4533,8 @@ async function _doKocaFulfill(entry) {
       : (data.error || res.status);
     setTimeout(() => showToast(`⚠ 官網回寫失敗: ${msg}(已排入重試)`), 1000);
     console.warn("[koca-fulfill] failed", data);
-    return { done: false, error: String(data.error || res.status || "http_error") };
+    // 把算出來的單號一起回去, 讓佇列存起來 —— 下次重試就不必再依賴出貨紀錄還在不在
+    return { done: false, error: String(data.error || res.status || "http_error"), trackingNo, carrierLabel };
   } catch (e) {
     console.warn("[koca-fulfill] network error", e);
     return { done: false, error: "network" };   // 斷網/逾時 → 一定要重試
@@ -6341,8 +6356,14 @@ function ctnQtyOf(sku) {
 // 📍 改櫃位 —— 商品庫首頁和後台編輯清單**共用這一份**。
 // (同一件事寫兩份規則 = 改了一邊忘了另一邊, 而且沒有人會發現 —— 見 CLAUDE.md)
 // 回傳 true 代表真的改了, 呼叫端自己決定要重繪哪些畫面。
-function promptEditLocation(sku) {
-  const p = library.find(x => x.sku === sku);
+// 參數可以是品號, 也可以直接給商品物件。
+// ⚠ 後台清單是用「第幾列」點進來的 —— 如果商品庫裡有兩筆同品號(匯入壞檔案就會),
+//   只靠 find(品號) 會改到**第一筆**, 也就是改到使用者沒點的那一列, 而且畫面看起來正常。
+//   所以後台直接把那一列的物件傳進來, 不要讓它再找一次。
+function promptEditLocation(skuOrProduct) {
+  const p = (skuOrProduct && typeof skuOrProduct === "object")
+    ? skuOrProduct
+    : library.find(x => x.sku === skuOrProduct);
   if (!p) { showToast("⚠ 找不到這個商品"); return false; }
   // ⚠ 鏡像裝置(手機)改了**不會推出去**, 而且主機下次推主檔時 fetchMasterMirror() 會把 library 整個換掉
   //   → 改的東西無聲消失。與其讓人白做一場, 不如當場擋下來講清楚為什麼。
@@ -6358,6 +6379,29 @@ function promptEditLocation(sku) {
   saveLibrary();   // 內含 scheduleMasterPush(), 會自動同步到其他裝置
   showToast(loc ? `📍 ${p.sku} → ${loc}` : `✓ 已清除 ${p.sku} 的櫃位`);
   logEvent("info", "改櫃位", `${p.sku} → ${loc || "(清除)"}`);
+  return true;
+}
+
+// 📦 改每箱入數 —— 跟 promptEditLocation 同一套規則, 商品庫首頁和後台清單共用這一份。
+function promptEditCtnQty(skuOrProduct) {
+  const p = (skuOrProduct && typeof skuOrProduct === "object")
+    ? skuOrProduct
+    : library.find(x => x.sku === skuOrProduct);
+  if (!p) { showToast("⚠ 找不到這個商品"); return false; }
+  // ⚠ 鏡像裝置改了不會推出去, 主機下次推主檔時會被整個蓋掉 —— 理由同 promptEditLocation
+  if (!settings.isMasterDevice && cloudHistoryEnabled()) {
+    alert(`這台是鏡像裝置, 不能改每箱入數。\n\n改了不會同步出去, 而且主機下次更新主檔時會被蓋掉, 等於白改。\n\n請到主機(電腦)上改 —— 改完會自動同步回這台。`);
+    return false;
+  }
+  const cur = ctnQtyOf(p.sku) || "";
+  const v = prompt(`📦 「${p.sku}」一箱幾個?\n${p.name || ""}\n\n看外箱上印的 QTY / PCS per CTN。\n設了之後盤點可以輸入「3 箱 + 5 個」自動算總數, 不用拆箱。\n\n(清空或填 0 = 不使用, 盤點照舊只輸入總數)`, cur);
+  if (v === null) return false;
+  const n = Math.floor(Number(String(v).trim()) || 0);
+  if (!isFinite(n) || n < 0) { showToast("⚠ 請填正整數"); return false; }
+  if (n > 1) p.ctnQty = n; else delete p.ctnQty;
+  saveLibrary();
+  showToast(n > 1 ? `📦 ${p.sku} → 每箱 ${n} 個` : `✓ 已清除 ${p.sku} 的每箱入數`);
+  logEvent("info", "改每箱入數", `${p.sku} → ${n > 1 ? n : "(清除)"}`);
   return true;
 }
 
@@ -6532,6 +6576,8 @@ function renderMenu() {
           </div>
           <button type="button" data-menu-loc="${escapeHtml(p.sku)}" title="設定/修改櫃位"
             style="flex:none; min-width:40px; min-height:38px; padding:4px 9px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:${p.location ? "var(--primary)" : "var(--text-soft)"}; cursor:pointer; font-size:${p.location ? "0.9375rem" : "0.75rem"}; line-height:1.2;">${p.location ? "📍" : "📍＋"}</button>
+          <button type="button" data-menu-ctn="${escapeHtml(p.sku)}" title="設定/修改每箱入數(盤點數箱子用)"
+            style="flex:none; min-width:40px; min-height:38px; padding:4px 7px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:${ctnQtyOf(p.sku) ? "var(--primary)" : "var(--text-soft)"}; cursor:pointer; font-size:${ctnQtyOf(p.sku) ? "0.75rem" : "0.75rem"}; line-height:1.2; font-weight:${ctnQtyOf(p.sku) ? "700" : "400"};">${ctnQtyOf(p.sku) ? "📦" + ctnQtyOf(p.sku) : "📦＋"}</button>
           ${stockHtml}
         </div>`;
         }).join("");
@@ -7957,10 +8003,37 @@ function _renderShopeePoolStatus(d) {
   // 15 分鐘:抓取端每 2 分鐘推一次, 連續 7 次沒到就不正常了
   const stale = (age === null) || age > 15;
   const ageTxt = age === null ? "從未同步" : (age <= 1 ? "剛剛更新" : age + " 分鐘前更新");
-  el.innerHTML = stale
-    ? `<span style="color:var(--danger); font-weight:700;">📡 訂單池 ${ageTxt} —— 可能不是最新的</span>`
-    : `<span style="color:var(--text-soft);">📡 訂單池 ${cnt} 張 · ${ageTxt}</span>`
-      + (blocked ? ` <span style="color:var(--danger); font-weight:700;">· ${blocked} 張不要包</span>` : "");
+  // 🏷 逐通路狀態(Worker 7.1 起提供)。
+  //   以前整池只有一個時間, 蝦皮每 2 分鐘推一次會把它壓在「剛剛更新」——
+  //   **MOMO 的抓取器掛掉也看不出來**。現在一個通路一格, 哪個停了當場看得見。
+  //   ⚠ 舊版 Worker 沒有 channels → 整段跳過, 顯示維持原樣(不要讓舊 Worker 的人看到空白)。
+  const chans = (d.channels && typeof d.channels === "object") ? d.channels : null;
+  let chanTxt = "";
+  if (chans) {
+    const order = ["shopee", "momo", "coupang"];
+    const keys = Object.keys(chans).sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+    chanTxt = keys.map(k => {
+      const c = chans[k] || {};
+      // Worker 的通路鍵就是 shopee / momo / coupang, _channelLabel 直接認得。
+      // ⚠ 不要先轉成 a1 —— 那是 App 內部的平台代碼, _channelLabel 不認得, 會把 "a1" 原樣吐到畫面上。
+      const label = _channelLabel(k);
+      const a = (typeof c.ageMinutes === "number") ? c.ageMinutes : null;
+      // 門檻跟著各通路自己的節奏:沒資料就用 15 分鐘(= 原本蝦皮的判斷)
+      const bad = (a === null) || a > 15;
+      return bad
+        ? `<span style="color:var(--danger); font-weight:700;">${escapeHtml(label)} ✖ ${a === null ? "沒同步過" : a + "分前"}</span>`
+        : `<span style="color:var(--text-soft);">${escapeHtml(label)} ✓ ${Number(c.count) || 0}張</span>`;
+    }).join(`<span style="color:var(--border);"> · </span>`);
+  }
+  el.innerHTML = (stale && !chans
+      ? `<span style="color:var(--danger); font-weight:700;">📡 訂單池 ${ageTxt} —— 可能不是最新的</span>`
+      : `<span style="color:var(--text-soft);">📡 訂單池 ${cnt} 張</span>`)
+    + (chanTxt ? `　${chanTxt}` : (chans ? "" : ""))
+    + (!chans && !stale ? `<span style="color:var(--text-soft);"> · ${ageTxt}</span>` : "")
+    + (blocked ? ` <span style="color:var(--danger); font-weight:700;">· ${blocked} 張不要包</span>` : "");
 }
 
 let _poolAlertAt = 0;
@@ -9608,6 +9681,7 @@ function startStockTake() {
     notes: {},     // 差異備註: {sku: "破損3個"}
     ctns: {},      // 整箱數 (只是輸入方式, 真正的數字永遠在 counts): {sku: 3}
   };
+  _stLocFilter = "";   // 新的一次盤點不要繼承上次留下的「只看某一格」
   saveStockTake();
   showStockTakeView();
   showToast("🔍 盤點開始, 刷 SKU 條碼或手動輸入");
@@ -9728,6 +9802,23 @@ function toggleStockTakeSkip(sku) {
   renderStockTake();
 }
 
+// 📍 盤點時「只看某一格」的篩選(刷架上的櫃位條碼設定, 再刷一次或按 ✕ 取消)。
+//   ⚠ 不存進 stockTake —— 這只是「現在這一刻看哪裡」, 不是盤點資料。
+//      存進去的話換台裝置或重開會莫名其妙只看到一部分, 而且同仁不知道為什麼。
+let _stLocFilter = "";
+// 篩選中的提示條。一定要有「✕ 清除」—— 篩選不給出路會變成「東西不見了」的客訴。
+function _stLocChipHtml(shown) {
+  if (!_stLocFilter) return "";
+  return `<div style="display:flex; align-items:center; gap:8px; margin:0 0 8px; padding:8px 10px;
+            background:var(--primary-light); border:1px solid var(--primary); border-radius:8px;">
+      <span style="font-weight:700; color:var(--primary);">📍 只看 ${escapeHtml(_stLocFilter)}</span>
+      <span style="color:var(--text-soft); font-size:0.8125rem;">${shown} 項</span>
+      <button type="button" data-st-loc-clear="1" style="margin-left:auto; background:var(--surface);
+        border:1px solid var(--border); border-radius:6px; padding:5px 10px; cursor:pointer;
+        font-size:0.8125rem; color:var(--text);">✕ 看全部</button>
+    </div>`;
+}
+
 // 差異過大警示門檻: 差 ≥ 10 件, 或 ≥ 系統庫存的 30%
 const STOCKTAKE_BIG_DIFF_ABS = 10;
 const STOCKTAKE_BIG_DIFF_PCT = 0.3;
@@ -9801,6 +9892,22 @@ function processStockTakeScan(code) {
     bumpStockTakeCount(matched.sku, 1);
     SOUND.scanSku();
     showToast(`📦 +1 ${matched.sku} (實盤 ${stockTake.counts[matched.sku]})`);
+    return;
+  }
+  // 🏷 架上的櫃位條碼 —— 一定要在「當作新 SKU 加入」之前攔下來。
+  //   v13.8 只修了出貨那邊的 processScan(), **盤點有自己的掃描框, 當時漏掉了**。
+  //   而盤點正是最可能刷到架上條碼的時候:同仁站在架子前, 手上就是掃描槍。
+  //   不攔的話:刷 C-09-3 → 問「要當作新 SKU 加入盤點嗎?」→ 按確定 →
+  //   套用實盤數時 stockMap["C-09-3"] = {qty:1} → **櫃位編號變成倉庫清冊裡的假商品**。
+  //   (CLAUDE.md:「只修了一半的同類問題」—— 修好一個就要把同類入口全掃一遍。)
+  //   順手讓它有用:刷櫃位 = 只看那一格, 再刷一次或按 ✕ 取消。
+  if (looksLikeLocationCode(code)) {
+    const t = String(code).trim().toUpperCase();
+    _stLocFilter = (_stLocFilter === t) ? "" : t;   // 再刷同一個 = 取消, 不用去找按鈕
+    SOUND.scanSku();
+    if (!_stLocFilter) showToast(`📍 已取消只看 ${t}`);
+    else showToast(`📍 只看 ${t} — ${productsAtLocation(t).length} 項`);
+    renderStockTake();
     return;
   }
   // 不認識 → 直接用掃到的 code 當 SKU (跟手建模式類似)
@@ -10050,10 +10157,19 @@ function renderStockTake() {
   else if (_stockTakeFilter === "diff_minus") displayed = diffResults.filter(r => r.status === "diff_minus");
   else if (_stockTakeFilter === "not_counted") displayed = diffResults.filter(r => r.status === "not_counted");
   else if (_stockTakeFilter === "skipped") displayed = diffResults.filter(r => r.status === "skipped");
+  // 📍 刷了架上櫃位條碼 → 只看那一格(含其下層/位)
+  if (_stLocFilter) {
+    displayed = displayed.filter(r => {
+      const l = String(locOf(r.sku) || "").trim().toUpperCase();
+      return l === _stLocFilter || l.indexOf(_stLocFilter + "-") === 0;
+    });
+  }
   const list = document.getElementById("stocktake-list");
   if (!list) return;
   if (displayed.length === 0) {
-    list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>沒有符合條件的 SKU</div></div>';
+    // ⚠ 提示條一定要跟著出現, 否則同仁只看到「沒有符合條件」卻不知道自己在篩選中, 也不知道怎麼取消
+    list.innerHTML = _stLocChipHtml(0)
+      + `<div class="empty-state"><div class="icon">📭</div><div>${_stLocFilter ? escapeHtml(_stLocFilter) + " 這一格沒有設定任何商品" : "沒有符合條件的 SKU"}</div></div>`;
     return;
   }
   // 依分類分組 (盤點好找); 同分類內先照儲位排 (盤點是要走路的, 照櫃位排才不用來回跑),
@@ -10066,7 +10182,7 @@ function renderStockTake() {
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
   const _sy = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
-  list.innerHTML = _cats.map(cat => {
+  list.innerHTML = _stLocChipHtml(displayed.length) + _cats.map(cat => {
     const rows = _groups[cat].sort((a, b) =>
       locSortKey(a.sku).localeCompare(locSortKey(b.sku)) || (a.sku || "").localeCompare(b.sku || ""));
     const collapsed = !!_stCollapsed[cat];
@@ -10195,6 +10311,8 @@ document.getElementById("stocktake-filter-bar").addEventListener("click", (e) =>
 
 // 列表上的 +/- 按鈕 / 暫不盤點 / 恢復
 document.getElementById("stocktake-list").addEventListener("click", (e) => {
+  const locClr = e.target.closest("button[data-st-loc-clear]");
+  if (locClr) { _stLocFilter = ""; renderStockTake(); return; }
   const catBtn = e.target.closest("button[data-st-cat-toggle]");
   if (catBtn) { const c = catBtn.dataset.stCatToggle; _stCollapsed[c] = !_stCollapsed[c]; renderStockTake(); return; }
   const bumpBtn = e.target.closest("button[data-st-bump]");
@@ -14187,6 +14305,15 @@ function renderTimingStats() {
     </div>`;
 }
 // 📝 官網訂單備註橫幅 —— 建單時的提示會被捲掉, 但備註要一直看得到才有用。
+// 📝 備註是不是在叫人「多放東西」(例:多提供濾心*4 / 加送一個 / 多給 2 片)。
+// ⚠ 只拿來**多講一句提醒**, 絕對不拿來自動加數量 ——
+//   從自由文字自動加東西, 加錯了同仁不會去數, 沒有人會發現(CLAUDE.md:系統自己加的東西不受檢查)。
+//   所以認錯了最多就是多一行提醒, 沒有任何代價; 認不出來也還有原文照登那一行。
+const ADD_REMARK_RE = /多提供|多給|多放|多加|多送|加送|加贈|多附|多寄|另贈|贈送/;
+function _looksLikeAddRemark(rk) {
+  return ADD_REMARK_RE.test(String(rk || ""));
+}
+
 function renderKocaRemarkBanner() {
   const el = document.getElementById("koca-remark-banner");
   if (!el) return;
@@ -14219,6 +14346,9 @@ function renderKocaRemarkBanner() {
                 border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:0.82rem; line-height:1.6;">
       <div style="font-weight:700;">📝 這張官網訂單有備註 — 出貨前先看</div>
       <div style="margin-top:4px; color:var(--text);">${escapeHtml(rk)}</div>
+      ${_looksLikeAddRemark(rk) ? `<div style="margin-top:6px; font-weight:700;">
+        ❗ 這是「<u>要多放</u>」的指示 —— 系統<strong>不會自動加</strong>,請自己放進去並核對數量。
+        <br><span style="font-weight:400;">(刷超過應出量時會跳提醒,那是正常的,確認數量對就按過去)</span></div>` : ""}
       ${excl.length ? (() => {
         // ⚠ 這裡一定要用 applyRemarkExclusions() 的「實際結果」, 不可以自己再猜一次。
         //   猜的版本會把「清單裡本來就沒這項」誤判成「已經扣掉了」→ 橫幅寫「✓ 不用動手」,
@@ -15369,7 +15499,7 @@ document.getElementById("history-merge-file").addEventListener("change", (e) => 
         state.scanMode = false;
         state.continuationOf = entryToRestore.id;
         state.appendLevel = (entryToRestore.appendLevel || 1) + 1;
-        state.continuationDate = entryToRestore.completedAt;
+        // (原本這裡有 state.continuationDate = … —— 全檔只寫不讀、也沒存進出貨紀錄, 2026/11/10 稽核移除)
         // 追加重複扣帳修正: 帶過「原單已推送 KOCA 的數量」, 之後只推增量, 不重複扣
         state.priorKocaPushed = entryToRestore.kocaPushedItems || null;
         state.loadedDate = new Date().toISOString().slice(0, 10);
@@ -15861,17 +15991,17 @@ document.getElementById("cancel-mapping-btn").addEventListener("click", () => {
 // Menu tab interactions - 純瀏覽模式: 只處理分類收合
 document.getElementById("menu-items").addEventListener("click", (e) => {
   // 📍 直接在商品庫首頁改櫃位 (不用再進設定裡的編輯清單)
+  const _afterEdit = () => {
+    renderMenu();
+    if (typeof renderLibrary === "function") renderLibrary();
+    if (typeof renderInventory === "function") renderInventory();
+    if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
+    if (stockTake && typeof renderStockTake === "function") renderStockTake();
+  };
   const locBtn = e.target.closest("button[data-menu-loc]");
-  if (locBtn) {
-    if (promptEditLocation(locBtn.dataset.menuLoc)) {
-      renderMenu();
-      if (typeof renderLibrary === "function") renderLibrary();
-      if (typeof renderInventory === "function") renderInventory();
-      if (typeof renderPicking === "function" && state.items && state.items.length) renderPicking();
-      if (stockTake && typeof renderStockTake === "function") renderStockTake();
-    }
-    return;
-  }
+  if (locBtn) { if (promptEditLocation(locBtn.dataset.menuLoc)) _afterEdit(); return; }
+  const ctnBtn = e.target.closest("button[data-menu-ctn]");
+  if (ctnBtn) { if (promptEditCtnQty(ctnBtn.dataset.menuCtn)) _afterEdit(); return; }
   const catBtn = e.target.closest("button[data-cat-toggle]");
   if (catBtn) {
     const cat = catBtn.dataset.catToggle;
@@ -16038,8 +16168,9 @@ document.getElementById("lib-items").addEventListener("click", (e) => {
     const idx = parseInt(editLoc.dataset.libEditLoc, 10);
     const p = library[idx];
     if (!p) return;
-    // 跟商品庫首頁共用同一份 promptEditLocation(), 不要在這裡再寫一次規則
-    if (promptEditLocation(p.sku)) {
+    // 跟商品庫首頁共用同一份 promptEditLocation(), 不要在這裡再寫一次規則。
+    // 傳物件不傳品號 —— 這一列是用索引點進來的, 品號重複時才不會改到別列
+    if (promptEditLocation(p)) {
       renderLibrary();
       if (typeof renderMenu === "function") renderMenu();
       if (typeof renderInventory === "function") renderInventory();
@@ -16054,16 +16185,12 @@ document.getElementById("lib-items").addEventListener("click", (e) => {
     const idx = parseInt(editCtn.dataset.libEditCtn, 10);
     const p = library[idx];
     if (!p) return;
-    const cur = ctnQtyOf(p.sku) || "";
-    const v = prompt(`📦 「${p.sku}」一箱幾個?\n\n看外箱上印的 QTY / PCS per CTN。\n設了之後盤點可以輸入「3 箱 + 5 個」自動算總數, 不用拆箱。\n\n(清空或填 0 = 不使用, 盤點照舊只輸入總數)`, cur);
-    if (v === null) return;
-    const n = Math.floor(Number(String(v).trim()) || 0);
-    if (!isFinite(n) || n < 0) { showToast("⚠ 請填正整數"); return; }
-    if (n > 1) p.ctnQty = n; else delete p.ctnQty;
-    saveLibrary();
-    renderLibrary();
-    if (stockTake) renderStockTake();
-    showToast(n > 1 ? `📦 ${p.sku} → 每箱 ${n} 個` : `✓ 已清除 ${p.sku} 的每箱入數`);
+    // 跟商品庫首頁共用 promptEditCtnQty();傳物件不傳品號 —— 品號重複時才不會改到別列
+    if (promptEditCtnQty(p)) {
+      renderLibrary();
+      if (typeof renderMenu === "function") renderMenu();
+      if (stockTake && typeof renderStockTake === "function") renderStockTake();
+    }
     return;
   }
   const editPrice = e.target.closest("button[data-lib-edit-price]");
@@ -17641,9 +17768,41 @@ document.getElementById("resume-btn").addEventListener("click", () => {
 // Final report
 const reportModal = document.getElementById("report-modal");
 // ===== 出貨前健康檢查 =====
+// 📝 這張單有沒有備註 —— 官網和通路(蝦皮/MOMO)各有各的欄位, 統一從這裡拿
+function _currentOrderRemark() {
+  const k = String(state.kocaRemark || "").trim();
+  if (k) return { text: k, from: "官網訂單" };
+  const s = String(((state.shopeeNote || {}).remark) || "").trim();
+  if (s) return { text: s, from: _channelLabel((state.shopeeNote || {}).channel) + "訂單" };
+  return null;
+}
+
 function runHealthCheck() {
   const shipped = getShippedBySkuMap();
   const issues = [];
+  // 0. 📝 訂單備註 —— 完成前一定要再看一次
+  //   背景(Kyle 2026/11/09):官網後台寫「多提供濾心*4」這種**要多放**的指示。
+  //   系統**刻意不自動加** —— 自由文字自動加東西, 加錯了同仁不會去數, 沒人發現(見 CLAUDE.md)。
+  //   所以改成:橫幅醒目顯示 + 完成前再擋一次, 由同仁自己確認做了沒。
+  //   ⚠ 只有真的有備註才會出現, 不會變成每次都跳的背景雜音。
+  {
+    const _rk = _currentOrderRemark();
+    if (_rk) {
+      const _applied = Array.isArray(state.kocaRemarkApplied) ? state.kocaRemarkApplied : null;
+      issues.push({
+        level: "warning",
+        icon: "📝",
+        title: `這張單有備註 — 確認處理過了嗎?`,
+        detail: `${_rk.from}備註:「${_rk.text}」\n`
+          + (_applied && _applied.length
+              ? `(系統已自動處理「不含 ⋯」的扣減:${_applied.join("、")})\n`
+              : "")
+          + (_looksLikeAddRemark(_rk.text)
+              ? `❗ 這是「要多放」的指示 —— 系統不會自動加, 請確認已經放進去, 數量也對。`
+              : `⚠ 「多給 / 多提供 / 加送」這類要多放的指示系統不會自動加, 請自己確認。`),
+      });
+    }
+  }
   // 1. active parcel 未收尾
   if (state.activeParcel) {
     const items = state.activeParcel.items || {};
