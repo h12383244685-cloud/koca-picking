@@ -3502,7 +3502,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.6 · 2026-11-10";
+const APP_VERSION = "v14.7 · 2026-11-13";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -7709,6 +7709,13 @@ async function _autoShopeeLookup(code, rawScan) {
       expected: totals, unmapped: unmapped.map(u => u.name), remark: o.remark || "",
       stale: !!r.stale, matchedBy: r.matchedBy || "",
     };
+    // 🚚 物流商(蝦皮自己給的, 不是用單號猜的)—— 一定要在這裡存, 不可以只放在 _prefillShopeeActiveParcel()。
+    //   那支只有「清單是空的」才會被呼叫(見下面的 !_shopeeBusy()), 而整批 CSV 在包的時候清單一定不是空的
+    //   → **每天量最大的那條路反而沒存到物流商**。兩條路都有查到池子, 卻只有一條把答案留下來。
+    //   2026/11/13 查出來的代價:當天 181 箱的物流商是空白的, 司機交件要數「7-11 幾件 / 全家幾件」
+    //   只能拿箱號反推, 而 16 碼純數字的箱號橫跨所有通路, 根本推不出來(見 CLAUDE.md「拿一個樣本當規則」)。
+    const _cl0 = (o.logistics && o.logistics.channel) ? String(o.logistics.channel) : "";
+    if (_cl0) state.activeParcel.carrierLabel = _cl0;
     saveState();
 
     if (r.blocked) {
