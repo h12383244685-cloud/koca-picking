@@ -1659,6 +1659,10 @@ footer.summary-bar {
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 11h6M9 15h4"/></svg></span>
       <span class="tab-label">出貨紀錄</span>
     </button>
+    <button data-tab="handover" id="tab-handover">
+      <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="13" height="16" rx="2"/><path d="M9 4h3v2.5H9z"/><path d="M7.5 11.5l2 2 4.5-4.5"/><path d="M17 10h2.2l1.8 2.4V16h-4"/></svg></span>
+      <span class="tab-label">交件</span>
+    </button>
     <button data-tab="logistics" id="tab-logistics">
       <span class="tab-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v9H3z"/><path d="M13 9h4l3 3v3h-7z"/><circle cx="7.5" cy="17.5" r="1.7"/><circle cx="16.5" cy="17.5" r="1.7"/></svg></span>
       <span class="tab-label">物流</span>
@@ -1930,6 +1934,18 @@ footer.summary-bar {
       <button class="btn outline sm danger" id="clear-history-btn" style="flex: 0.6;">🗑</button>
     </div>
     <p class="hint" style="font-size: 0.6875rem; margin-top: 6px;">📤 摘要 = 每行一個 SKU 的彙總 · 📦 明細 = 每行一張寄件單裡的一個 SKU (含寄件編號)</p>
+  </div>
+
+  <!-- Tab: 司機交件單 -->
+  <div class="panel" id="tab-content-handover" hidden>
+    <h2>🚚 司機交件單</h2>
+    <p class="hint" style="margin-bottom:10px;">今天各家物流各要交幾箱。數字是<strong>出貨當下記下來的</strong>(蝦皮 / 官網給的物流別),不是拿箱號猜的。點一下可以展開箱號,跟司機逐一核對。</p>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+      <button class="btn outline sm" id="handover-day-btn" type="button" style="padding:4px 14px;">今天</button>
+      <span class="hint" id="handover-date" style="margin:0;"></span>
+      <button class="btn sm" id="handover-refresh-btn" type="button" style="padding:4px 12px; margin-left:auto;">🔄 重新整理</button>
+    </div>
+    <div id="handover-board"></div>
   </div>
 
   <!-- Tab: 物流總覽 -->
@@ -8707,6 +8723,102 @@ function parcelCarrierOf(p) {
   if (!t) return { label: "沒有物流單號", sure: false, why: "這箱沒有存到物流單號 — 可能是建單時官網還沒產生單號, 或這張是手動開的" };
   return { label: "無法判斷", sure: false, why: `單號「${t}」的格式不在已知的任何一種(7-11 / 全家 / 黑貓)` };
 }
+// ===== 🚚 司機交件單 (v14.7) =====
+// 司機來收貨時要當場數「7-11 幾箱、全家幾箱」。以前算不出來, 因為物流商根本沒被存下來 ——
+// v14.7 起刷標籤查到訂單池就存 carrierLabel(蝦皮自己給的物流別), 這裡才有確定值可用。
+//
+// ⚠ 同一家會有好幾種寫法:官網單記「7-11」、蝦皮單記「7-ELEVEN」, 實際資料兩種都有。
+//   不合併的話, 司機要的「一個數字」會被拆成 63 + 43 兩格, 當場對不起來。
+function _handoverGroup(label) {
+  const s = String(label || "").trim();
+  if (/7-?\s?11|7-?ELEVEN|統一超商/i.test(s)) return "7-11";
+  if (/全家|FamilyMart|FamiPort/i.test(s)) return "全家";
+  if (/萊爾富|Hi-?Life/i.test(s)) return "萊爾富";
+  if (/OK\s?mart|OK超商/i.test(s)) return "OK mart";
+  if (/黑貓|宅急便|TCAT/i.test(s)) return "黑貓宅急便";
+  if (/新竹/i.test(s)) return "新竹物流";
+  if (/郵政|郵局/i.test(s)) return "中華郵政";
+  if (/店到店/i.test(s)) return "蝦皮店到店";
+  if (/店到家/i.test(s)) return "蝦皮店到家";
+  return s;
+}
+const _HANDOVER_UNKNOWN = "❓ 沒記到物流商";
+// 「推測出來的」還算有答案, 「無法判斷 / 沒有物流單號 / 好幾家都符合」是真的不知道。
+//   不知道的**一定要單獨顯示**, 不可以塞進某一家湊數 —— 那會讓司機數到的跟畫面上的對不起來,
+//   而且錯的方向是「我們以為交了, 其實沒交」。
+function _isUnknownCarrier(r) {
+  const s = String((r && r.label) || "");
+  return !s || /無法判斷|沒有物流單號/.test(s) || s.includes(" 或 ");
+}
+let _handoverDayOffset = 0;    // 0 = 今天, 1 = 昨天
+let _handoverOpen = {};        // 展開了哪幾家
+function handoverData(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() - (offset || 0));
+  const key = d.toLocaleDateString("zh-TW");
+  const groups = {};
+  for (const e of allHistory()) {
+    // 退貨 / 入倉不是要交給司機的東西; 補寄是真的要寄出去, 所以要算
+    if (e.orderType === "return" || e.orderType === "inbound") continue;
+    if (!e.completedAt) continue;
+    if (new Date(e.completedAt).toLocaleDateString("zh-TW") !== key) continue;
+    for (const p of (e.parcels || [])) {
+      const r = parcelCarrierOf(p);
+      const g = _isUnknownCarrier(r) ? _HANDOVER_UNKNOWN : _handoverGroup(r.label);
+      const gr = (groups[g] = groups[g] || { name: g, n: 0, sure: 0, guess: 0, boxes: [] });
+      gr.n++;
+      if (r.sure) gr.sure++; else gr.guess++;
+      gr.boxes.push({ id: p.id || "(無箱號)", sure: !!r.sure, why: r.why || "" });
+    }
+  }
+  return { key, groups };
+}
+function renderHandover() {
+  const box = document.getElementById("handover-board");
+  if (!box) return;
+  const { key, groups } = handoverData(_handoverDayOffset);
+  const dEl = document.getElementById("handover-date");
+  if (dEl) dEl.textContent = key;
+  const dBtn = document.getElementById("handover-day-btn");
+  if (dBtn) dBtn.textContent = _handoverDayOffset === 0 ? "今天" : "昨天";
+  const arr = Object.values(groups).sort((a, b) => {
+    const ua = a.name === _HANDOVER_UNKNOWN, ub = b.name === _HANDOVER_UNKNOWN;
+    if (ua !== ub) return ua ? 1 : -1;      // 「不知道」永遠排最後, 但一定看得到
+    return b.n - a.n;
+  });
+  const total = arr.reduce((s, g) => s + g.n, 0);
+  if (!total) {
+    box.innerHTML = `<div class="hint" style="padding:18px; text-align:center;">這一天還沒有出貨紀錄。</div>`;
+    return;
+  }
+  let html = "";
+  for (const g of arr) {
+    const unk = g.name === _HANDOVER_UNKNOWN;
+    const open = !!_handoverOpen[g.name];
+    html += `<div style="border:1px solid ${unk ? "var(--danger)" : "var(--border)"}; border-radius:10px; margin-bottom:8px; overflow:hidden;">`
+      + `<button type="button" data-handover-toggle="${escapeHtml(g.name)}" style="width:100%; display:flex; align-items:center; gap:8px; padding:12px 14px; background:${unk ? "rgba(220,38,38,.07)" : "transparent"}; border:0; cursor:pointer; font-family:inherit; text-align:left; color:inherit;">`
+      + `<span style="flex:1; min-width:0; font-weight:700; font-size:0.95rem; color:${unk ? "var(--danger)" : "var(--text)"};">${escapeHtml(g.name)}</span>`
+      + `<span style="font-size:1.4rem; font-weight:800; line-height:1; color:${unk ? "var(--danger)" : "var(--primary)"};">${g.n}</span>`
+      + `<span style="font-size:0.75rem; color:var(--text-soft);">箱</span>`
+      + `<span style="font-size:0.7rem; color:var(--text-soft); width:12px;">${open ? "▲" : "▼"}</span>`
+      + `</button>`;
+    if (unk) {
+      html += `<div class="hint" style="margin:0; padding:0 14px 10px; font-size:0.72rem; color:var(--danger);">⚠ 這些箱子<strong>沒有被算進上面任何一家</strong>。交件前要先確認它們走哪一家,否則會少交。</div>`;
+    } else if (g.guess > 0) {
+      html += `<div class="hint" style="margin:0; padding:0 14px 10px; font-size:0.72rem;">其中 ${g.sure} 箱是出貨當下記下來的,<strong>${g.guess} 箱是用箱號推測的</strong>(不保證準,虛線框那些)</div>`;
+    }
+    if (open) {
+      html += `<div style="padding:0 14px 12px; display:flex; flex-wrap:wrap; gap:6px;">`;
+      for (const b of g.boxes) {
+        html += `<span title="${escapeHtml(b.why)}" style="font-family:ui-monospace,monospace; font-size:0.75rem; padding:3px 7px; border-radius:6px; background:var(--bg); border:1px ${b.sure ? "solid" : "dashed"} var(--border);">${escapeHtml(b.id)}</span>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  html += `<div class="hint" style="margin-top:10px;">合計 <strong>${total}</strong> 箱</div>`;
+  box.innerHTML = html;
+}
 function _kocaOrderMeta(o, gate) {
   return {
     deliveryMethod: (o && o.shipping && o.shipping.method) || "",
@@ -14808,6 +14920,25 @@ document.getElementById("tab-a1").addEventListener("click", () => switchTab("a1"
 document.getElementById("tab-history").addEventListener("click", () => switchTab("history"));
 document.getElementById("tab-logistics").addEventListener("click", () => switchTab("logistics"));
 document.getElementById("tab-inventory").addEventListener("click", () => switchTab("inventory"));
+document.getElementById("tab-handover").addEventListener("click", () => switchTab("handover"));
+
+// 🚚 司機交件單: 今天/昨天切換 · 重新整理 · 展開箱號
+document.getElementById("handover-day-btn").addEventListener("click", () => {
+  _handoverDayOffset = _handoverDayOffset === 0 ? 1 : 0;
+  _handoverOpen = {};                     // 換一天就把展開狀態清掉, 免得上一天的殘留下來
+  renderHandover();
+});
+document.getElementById("handover-refresh-btn").addEventListener("click", () => {
+  renderHandover();
+  if (cloudHistoryEnabled()) fetchCloudHistory(true).then(() => renderHandover()).catch(() => {});
+});
+document.getElementById("handover-board").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-handover-toggle]");
+  if (!b) return;
+  const k = b.dataset.handoverToggle;
+  _handoverOpen[k] = !_handoverOpen[k];
+  renderHandover();
+});
 
 // 物流分頁: 日期切換 / 重新整理
 document.getElementById("tab-content-logistics").addEventListener("click", (e) => {
@@ -14823,8 +14954,16 @@ function switchTab(t) {
   document.getElementById("tab-content-menu").hidden = (t !== "menu");
   document.getElementById("tab-content-a1").hidden = (t !== "a1");
   document.getElementById("tab-content-history").hidden = (t !== "history");
+  document.getElementById("tab-content-handover").hidden = (t !== "handover");
   document.getElementById("tab-content-logistics").hidden = (t !== "logistics");
   document.getElementById("tab-content-inventory").hidden = (t !== "inventory");
+  // 🚚 切到交件單: 先畫本機(馬上有東西看), 再拉雲端 —— 別台(手機)包的箱子也要算進去,
+  //    不然司機來的時候數字會少一截, 而且少的那一截完全看不出來。
+  if (t === "handover") {
+    _handoverDayOffset = 0;
+    renderHandover();
+    if (cloudHistoryEnabled()) fetchCloudHistory(true).then(() => renderHandover()).catch(() => {});
+  }
   if (t === "history") { _histShowAll = false; renderHistory(); fetchCloudHistory(true); flushPendingCloudHistory(); renderFulfillPending(); flushPendingFulfill(); } // 切到歷史: 回到只畫最近 N 筆; 先畫本機, 再強制拉雲端最新, 順手補推沒上雲的 + 補回寫官網
   if (t === "logistics") { fetchCloudHistory(true).then(() => openLogisticsView()).catch(() => openLogisticsView()); } // 切到物流: 先拉雲端紀錄(別台出的官網單也算), 再開總覽
   if (t === "inventory") {
