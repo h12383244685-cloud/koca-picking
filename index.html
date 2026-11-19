@@ -1637,6 +1637,18 @@ footer.summary-bar {
   🧪 測試模式中 — 出貨完成「不會留任何紀錄」!(點此關閉)
 </div>
 
+<!-- 📡 訂單池壞掉時的常駐紅條 (v14.10, Kyle 2026/11/19:「不想再倉儲區來回跑到辦公區」)
+     ⚠ 一定要放在 #import-view **外面** 而且用 sticky —— 放進某個分頁裡就只有那一頁看得到。
+       這正是 MOMO 停了 18 小時沒人發現的直接原因:狀態其實一直有顯示,
+       但只顯示在「開始出貨」那一頁角落的 13px 灰字裡, 而且寫「1130分前」(要心算才知道是 18.8 小時)。
+     ⚠ 正常時完全不出現(hidden), 不佔版面也不用點掉 —— 跟這個專案其他自動提示一致。
+     ⚠ 連不到 Worker **不吼**:網路不好是常態, 吼了會變背景雜訊, 真的壞掉反而被滑過去。
+       那種情況交給下面那條小字講(「暫時連不到訂單池」)。 -->
+<div id="pool-health-banner" hidden
+     style="position:sticky; top:0; z-index:9998; background:#b91c1c; color:#fff; padding:8px 12px;
+            font-size:0.8125rem; line-height:1.5; box-shadow:0 2px 6px rgba(0,0,0,.3); cursor:pointer;"
+     title="點一下重新檢查"></div>
+
 <!-- IMPORT VIEW: tabs for Excel paste vs my library -->
 <div id="import-view">
   <div id="resume-banner" class="resume-banner" hidden>
@@ -3518,7 +3530,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.7 · 2026-11-13";
+const APP_VERSION = "v14.10 · 2026-11-19";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -8011,6 +8023,61 @@ function _prefillShopeeActiveParcel(o) {
 //   要刷下去查不到才知道, 而「查不到」在設計上是安靜的(官網單/手建單走到那裡也查不到)。
 //   所以這裡常駐講三件事:幾張、多久前更新、現在能不能信。
 //   ⚠ 沒設 Worker → 整個不顯示(單機模式不該冒出看不懂的字)。
+// 📡 分鐘數講成人看得懂的話。
+//   ⚠ 以前直接寫「1130分前」—— 要心算 1130÷60 才知道是 18.8 小時。
+//     Kyle 2026/11/19 就是因為這樣沒看出 MOMO 停了, 走回辦公區才發現。
+//     單位會跟著大小跳(分鐘 → 小時 → 天), 因為「壞多久」的量級本身就是訊息。
+//   bare=true 回「18.8 小時」(給「已經 N 沒同步」這種句子用), 否則回「18.8 小時前」。
+function _poolAgeText(min, bare) {
+  if (min === null || min === undefined || !isFinite(Number(min))) return bare ? "從來沒同步過" : "從未同步";
+  const m = Math.max(0, Math.round(Number(min)));
+  if (m <= 1) return bare ? "不到 1 分鐘" : "剛剛";
+  if (m < 60) return m + " 分鐘" + (bare ? "" : "前");
+  const h = m / 60;
+  if (h < 24) return (h < 10 ? h.toFixed(1) : String(Math.round(h))) + " 小時" + (bare ? "" : "前");
+  const dd = h / 24;
+  return (dd < 10 ? dd.toFixed(1) : String(Math.round(dd))) + " 天" + (bare ? "" : "前");
+}
+
+// 📡 壞掉時的常駐紅條。跟下面那條小字分工:
+//   小字 = 平常也看得到「池子是活的」(常駐, 低調);  紅條 = 真的壞了才出現(每一頁都看得到)。
+// ⚠ 門檻用 30 分鐘, 比小字那條的 15 分鐘寬 —— 紅條要「確定壞了」才吼,
+//   不然抖一下就跳一次, 叫久了就沒人看, 等於沒有警報。
+const _POOL_DEAD_MIN = 30;
+function _renderPoolHealthBanner(d) {
+  const bar = document.getElementById("pool-health-banner");
+  if (!bar) return;
+  const off = () => { bar.hidden = true; bar.innerHTML = ""; };
+  if (!settings.syncWorkerUrl || !settings.spideyKey) return off();   // 單機模式
+  if (!d || !d.ok) return off();                                      // 連不到 → 不吼(見元素上方註解)
+  const chans = (d.channels && typeof d.channels === "object") ? d.channels : null;
+  if (!chans) return off();                                           // 舊版 Worker 沒有逐通路資料
+  const bad = [];
+  for (const k of Object.keys(chans)) {
+    const c = chans[k] || {};
+    const label = _channelLabel(k);
+    const a = (typeof c.ageMinutes === "number") ? c.ageMinutes : null;
+    // 抓取端自己回報壞掉 → 優先講, 它最準(它當下就知道自己登出了)
+    if (c.fetchError) {
+      bad.push({ label, why: "抓取端回報:" + String(c.fetchError), how: "最常見的原因是那台電腦沒登入賣家中心" });
+      continue;
+    }
+    if (a === null || a > _POOL_DEAD_MIN) {
+      bad.push({ label, why: "已經 " + _poolAgeText(a, true) + "沒同步",
+                 how: "請確認跑 " + label + " 抓取器的那台電腦開著、而且有登入賣家中心" });
+    }
+  }
+  if (!bad.length) return off();
+  bar.innerHTML =
+    `<div style="font-weight:800; font-size:0.875rem;">🔴 ${escapeHtml(bad.map(b => b.label).join("、"))} 的新單進不來了</div>`
+    + bad.map(b => `<div style="margin-top:3px;">・<strong>${escapeHtml(b.label)}</strong> ${escapeHtml(b.why)}`
+        + ` —— ${escapeHtml(b.how)}</div>`).join("")
+    + `<div style="margin-top:5px; opacity:.92;">現在刷這些通路的標籤會<strong>查不到</strong>,`
+    + `同仁只能照感熱紙手建(而手建的數量沒有人檢查)。</div>`
+    + `<div style="margin-top:4px; font-size:0.75rem; opacity:.8;">池子裡既有的單還查得到。點一下重新檢查。</div>`;
+  bar.hidden = false;
+}
+
 function _renderShopeePoolStatus(d) {
   const el = document.getElementById("shopee-pool-status");
   if (!el) return;
@@ -8025,7 +8092,7 @@ function _renderShopeePoolStatus(d) {
   const blocked = Number(d.blockedTotal) || 0;
   // 15 分鐘:抓取端每 2 分鐘推一次, 連續 7 次沒到就不正常了
   const stale = (age === null) || age > 15;
-  const ageTxt = age === null ? "從未同步" : (age <= 1 ? "剛剛更新" : age + " 分鐘前更新");
+  const ageTxt = age === null ? "從未同步" : (age <= 1 ? "剛剛更新" : _poolAgeText(age) + "更新");
   // 🏷 逐通路狀態(Worker 7.1 起提供)。
   //   以前整池只有一個時間, 蝦皮每 2 分鐘推一次會把它壓在「剛剛更新」——
   //   **MOMO 的抓取器掛掉也看不出來**。現在一個通路一格, 哪個停了當場看得見。
@@ -8047,7 +8114,7 @@ function _renderShopeePoolStatus(d) {
       // 門檻跟著各通路自己的節奏:沒資料就用 15 分鐘(= 原本蝦皮的判斷)
       const bad = (a === null) || a > 15;
       return bad
-        ? `<span style="color:var(--danger); font-weight:700;">${escapeHtml(label)} ✖ ${a === null ? "沒同步過" : a + "分前"}</span>`
+        ? `<span style="color:var(--danger); font-weight:700;">${escapeHtml(label)} ✖ ${a === null ? "沒同步過" : _poolAgeText(a)}</span>`
         : `<span style="color:var(--text-soft);">${escapeHtml(label)} ✓ ${Number(c.count) || 0}張</span>`;
     }).join(`<span style="color:var(--border);"> · </span>`);
   }
@@ -8059,11 +8126,28 @@ function _renderShopeePoolStatus(d) {
     + (blocked ? ` <span style="color:var(--danger); font-weight:700;">· ${blocked} 張不要包</span>` : "");
 }
 
+// 📡 回到 App 就重新檢查一次訂單池。
+//   手機放口袋 → 螢幕關掉 → 再拿出來, 這時畫面上的數字可能是幾小時前的。
+//   ⚠ 不用自己設計時器輪詢:那會在倉儲區的爛網路上一直重試, 耗電又沒好處。
+//     「人回來看」才是需要新數字的那一刻。
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert(true);
+});
+// 點紅條 = 立刻重新檢查(force, 不受一分鐘節流限制)
+document.addEventListener("DOMContentLoaded", () => {
+  const bar = document.getElementById("pool-health-banner");
+  if (bar) bar.addEventListener("click", () => {
+    bar.innerHTML = `<div style="font-weight:700;">📡 重新檢查中…</div>`;
+    if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert(true);
+  });
+});
+
 let _poolAlertAt = 0;
 async function refreshShopeePoolAlert(force) {
   const box = document.getElementById("shopee-blocked-banner");
   if (!box) return;
-  if (!settings.syncWorkerUrl || !settings.spideyKey) { box.hidden = true; _renderShopeePoolStatus(null); return; }
+  if (!settings.syncWorkerUrl || !settings.spideyKey) { box.hidden = true; _renderShopeePoolStatus(null); _renderPoolHealthBanner(null); return; }
   if (!force && Date.now() - _poolAlertAt < 60000) return;      // 一分鐘內不重複問
   _poolAlertAt = Date.now();
   let d = null;
@@ -8073,6 +8157,7 @@ async function refreshShopeePoolAlert(force) {
     d = await res.json().catch(() => null);
   } catch (e) { /* 連不上就當沒這回事 */ }
   _renderShopeePoolStatus(d);
+  _renderPoolHealthBanner(d);   // 📡 壞掉時的常駐紅條(每一頁都看得到)
   // ⚠ 失敗一律安靜收掉 —— 網路不好不可以變成「畫面上掛著一條紅字但沒人知道什麼意思」
   if (!d || !d.ok || !Array.isArray(d.blocked) || d.blocked.length === 0) { box.hidden = true; box.innerHTML = ""; return; }
   const rows = d.blocked.map(b =>
@@ -8963,21 +9048,38 @@ function reloadKocaOrderItems(orderId) {
   }
   // 黃框重開, 商品照官網單預填 (跟第一次建單時一致), 包材維持空白讓同仁刷
   const meta = (state.kocaBatch && state.kocaBatch.meta && state.kocaBatch.meta[orderId]) || {};
-  state.activeParcel = { id: orderId, items: {}, startedAt: new Date().toISOString() };
+  // 📌 prefilled 一定要一起開。少了它, 同仁重開之後照習慣再刷一次實體商品會被當成「多放一個」,
+  //   跳「⚠ 多刷了, 確定要多加嗎?」—— 而他正是因為剛剛出錯才重開的, 這時候最可能去重刷一次確認。
+  //   按下確定就變成 已裝 2 / 應出 1, 出貨紀錄多記、庫存多扣。
+  //   另外兩條預填路徑(_prefillKocaActiveParcel、_prefillShopeeActiveParcel)都有標, 只有這條漏了。
+  state.activeParcel = { id: orderId, items: {}, prefilled: {}, startedAt: new Date().toISOString() };
   if (meta.trackingNo && String(meta.trackingNo) !== String(orderId)) state.activeParcel.trackingNo = String(meta.trackingNo);
+  //   ⚠ 只能補「還沒裝進箱子的那些」, 不可以直接加 expected ——
+  //     上面那個迴圈才剛把 it.packed 設成「已完成箱子裡的量」, 再無條件加一次 expected
+  //     等於同一批貨算兩次:A×2 的單, 箱子裡已經有 2 個 → 重開後 packed=4。
+  //     出貨紀錄會記 4 個、庫存扣 4 個(實際只出 2 個), 畫面上只多兩個字「超出」,
+  //     而且數量被放大之後連包材建議都會跟著算錯 → 完成時跳一個莫名其妙的「包材不符」。
+  //     這是 2026/11/19 同仁刷錯商品想重開訂單時踩到的。
+  let _refilled = 0;
   for (const it of state.items) {
     if (it.essential || it.unmapped) continue;
-    const q = it.expected || 0;
+    const q = Math.max(0, (it.expected || 0) - (it.packed || 0));   // it.packed 此刻 = 已完成箱子的量
     if (q <= 0) continue;
-    it.packed = (it.packed || 0) + q;   // 已完成箱子的量 + 這次重新帶入的量
+    it.packed = (it.packed || 0) + q;
     state.activeParcel.items[it.sku] = (state.activeParcel.items[it.sku] || 0) + q;
+    state.activeParcel.prefilled[it.sku] = (state.activeParcel.prefilled[it.sku] || 0) + q;
+    _refilled++;
   }
   state.scanMode = true;
   saveState();
   if (state.roomMode && state.isRoomHost && typeof pushRoomListReset === "function") pushRoomListReset();
   render();
   SOUND.parcelStart();
-  showToast(`🔁 已重新帶入 ${snap.length} 個商品`);
+  // 訊息照實說。全部都還在箱子裡的時候講「帶入 N 個商品」是騙人的 —— 黃框其實是空的,
+  //   同仁會以為可以直接按完成, 結果什麼都沒刷。
+  showToast(_refilled > 0
+    ? `🔁 已重新帶入 ${_refilled} 項商品`
+    : `🔁 清單已還原 — 這張單的貨已經全部裝進箱子了, 不需要再刷`);
   return true;
 }
 
@@ -12646,13 +12748,20 @@ async function fetchCloudHistory(force) {
     }
   } catch (e) { console.warn("[cloud-history] fetch failed", e); }
 }
+// ⚠ 這支以前自己寫了一套補形狀的規則, 跟本機那支 sanitizeHistoryEntry() 是同一件事 ——
+//   但**比較弱**, 而且弱的那一邊剛好是風險比較高的一邊(雲端資料來自別台裝置):
+//     ・`{...e}` 之後直接讀 `e.items` → e 是 null 就整個 throw,
+//       而這支跑在 .map() 裡 → **一筆壞的就讓整次雲端出貨紀錄拉不回來**
+//     ・只檢查「外層是不是陣列」, 不檢查**陣列裡的元素**
+//       → parcels 裡混一個 null, 後面所有 `p.id` 的地方都會炸(出貨紀錄、統計、司機交件單)
+//   本機那支兩件都有做。同一件事兩份規則 = 改了一邊忘了另一邊, 而且沒有人會發現。
+//   → 改成接過去, 只留「雲端紀錄的 summary 預設值」這個本來就不一樣的部分。
 function _normCloudEntry(e) {
-  return {
-    ...e,
-    items: Array.isArray(e.items) ? e.items : [],
-    parcels: Array.isArray(e.parcels) ? e.parcels : [],
-    summary: e.summary || { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 },
-  };
+  const s = sanitizeHistoryEntry(e);
+  if (!s.summary || Object.keys(s.summary).length === 0) {
+    s.summary = { totalSku: 0, totalExpected: 0, totalPacked: 0, completionRate: 0, parcelCount: 0 };
+  }
+  return s;
 }
 function _mergeCloud(oldArr, newArr) {
   const byId = new Map();
@@ -14975,8 +15084,11 @@ function switchTab(t) {
   }
   // 手機鏡像: 切到商品庫/倉庫清冊時, 拉電腦主檔最新 (主機自己不拉)
   if (t === "menu" || t === "inventory") fetchMasterMirror(true);
-  // 🚫 切到「開始出貨」就順手看一下池子裡有沒有不能出的單 (節流 1 分鐘, 失敗安靜)
-  if (t === "a1" && typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert();
+  // 🚫📡 每切一次分頁就順手看一下訂單池 (節流 1 分鐘, 失敗安靜)。
+  //   ⚠ v14.10 起**不再只限「開始出貨」那一頁**。
+  //     只在 a1 更新的話, 紅條就只有切到那一頁才會出現 —— 等於白做一個「每頁都看得到」的紅條。
+  //     Kyle 2026/11/19:「不想再倉儲區來回跑到辦公區」, 他要的是隨手掏出手機就看得到。
+  if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert();
 }
 
 // (Excel paste 功能已移除, 改為倉庫清冊)
