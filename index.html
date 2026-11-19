@@ -1587,8 +1587,14 @@ footer.summary-bar {
 .section-actions .btn { flex: 1; }
 
 /* 官方批次多單「本批訂單」列 */
-.koca-batch-strip { margin: 10px 12px 0; border: 1px solid var(--primary); border-radius: 10px; overflow: hidden; background: var(--surface); }
-.kbatch-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--primary-light, rgba(232,74,2,.08)); border: 0; cursor: pointer; color: var(--text); text-align: left; }
+/* 📏 v14.11:批次卡調淡(Kyle 2026/11/19「介面能不能美化」)。
+   原本是橘色外框 + 桃色底 —— 但它只是**背景資訊**(這批有哪幾張單), 不是狀態, 也不是要按的東西。
+   跟標題列、黃框、裝箱掃描、兩顆按鈕一起用高彩度在搶注意力, 結果**沒有一塊真的突出**。
+   ⚠ 只調「外框 + 標題底」。裡面的 .kbatch-chip.active 維持橘色 ——
+     那個是「現在包的是哪一張」, 是狀態, 動它會讓同仁找不到自己在哪一單。
+   ⚠ 同理, .scan-toggle 一個字都沒動:它的橘/青是「未啟用 / 裝箱中」的訊號, 不是裝飾。 */
+.koca-batch-strip { margin: 10px 12px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.kbatch-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--bg, #f1f1f1); border: 0; border-bottom: 1px solid var(--border); cursor: pointer; color: var(--text); text-align: left; }
 .kbatch-title { font-weight: 700; font-size: 0.875rem; }
 .kbatch-sub { margin-left: auto; font-size: 0.75rem; color: var(--text-soft); }
 .kbatch-caret { font-size: 0.75rem; color: var(--text-soft); }
@@ -2053,7 +2059,7 @@ footer.summary-bar {
       <div class="active-parcel-items" id="active-parcel-items">尚未加入商品</div>
       <div class="row" style="gap: 6px;">
         <button class="btn outline sm danger" id="cancel-parcel-btn" style="flex: 1;">✗ 取消此筆</button>
-        <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 再刷一次 / 手動完成此筆</button>
+        <button class="btn sm" id="finish-parcel-btn" style="flex: 2;">✓ 完成此筆</button>
       </div>
     </div>
   </div>
@@ -3530,7 +3536,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.10 · 2026-11-19";
+const APP_VERSION = "v14.11 · 2026-11-19";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -8044,6 +8050,9 @@ function _poolAgeText(min, bare) {
 // ⚠ 門檻用 30 分鐘, 比小字那條的 15 分鐘寬 —— 紅條要「確定壞了」才吼,
 //   不然抖一下就跳一次, 叫久了就沒人看, 等於沒有警報。
 const _POOL_DEAD_MIN = 30;
+// 紅條是展開還是收合。預設收合 —— 大部分時候同仁只需要知道「哪一家壞了、壞多久」,
+// 「怎麼辦」是處理的人才要看的。重畫時要保留, 否則每次自動更新都會把它收回去。
+let _poolBarOpen = false;
 function _renderPoolHealthBanner(d) {
   const bar = document.getElementById("pool-health-banner");
   if (!bar) return;
@@ -8068,13 +8077,30 @@ function _renderPoolHealthBanner(d) {
     }
   }
   if (!bad.length) return off();
+  // 📏 v14.11:預設只佔**一行**。
+  //   v14.10 第一版是五行的紅色區塊 —— Kyle 2026/11/19 回報「這個警訊有點太大了」, 他是對的:
+  //   它佔掉手機半個螢幕, 把真正在做的事擠下去。而且像「MOMO 沒登入」這種已知狀況,
+  //   不值得每一頁都用五行講一次。
+  //   ⚠ 但也不能縮到看不見 —— 縮成灰色小字就變回 v14.10 之前那個「有講但沒人聽得到」的問題。
+  //   折衷:**紅底 + 一行 + 講完重點**(誰、多久), 想知道怎麼辦再點開。
+  const _sum = bad.map(b => `${b.label} ${b.why}`).join(" · ");
   bar.innerHTML =
-    `<div style="font-weight:800; font-size:0.875rem;">🔴 ${escapeHtml(bad.map(b => b.label).join("、"))} 的新單進不來了</div>`
-    + bad.map(b => `<div style="margin-top:3px;">・<strong>${escapeHtml(b.label)}</strong> ${escapeHtml(b.why)}`
-        + ` —— ${escapeHtml(b.how)}</div>`).join("")
-    + `<div style="margin-top:5px; opacity:.92;">現在刷這些通路的標籤會<strong>查不到</strong>,`
-    + `同仁只能照感熱紙手建(而手建的數量沒有人檢查)。</div>`
-    + `<div style="margin-top:4px; font-size:0.75rem; opacity:.8;">池子裡既有的單還查得到。點一下重新檢查。</div>`;
+    `<div style="display:flex; align-items:center; gap:8px; min-width:0;">`
+    + `<span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`
+    + ` font-weight:800; font-size:0.8125rem;">🔴 ${escapeHtml(_sum)}</span>`
+    + `<span style="flex:0 0 auto; font-size:0.6875rem; opacity:.85; font-weight:600;">`
+    + `${_poolBarOpen ? "▴ 收合" : "▾ 怎麼辦"}</span>`
+    + `</div>`
+    + (_poolBarOpen
+      ? `<div style="margin-top:6px; font-weight:400; line-height:1.5; border-top:1px solid rgba(255,255,255,.25); padding-top:6px;">`
+        + bad.map(b => `<div style="margin-top:2px;">・<strong>${escapeHtml(b.label)}</strong> —— ${escapeHtml(b.how)}</div>`).join("")
+        + `<div style="margin-top:5px; opacity:.92;">現在刷這些通路的標籤會<strong>查不到</strong>,`
+        + `同仁只能照感熱紙手建(而手建的數量沒有人檢查)。池子裡既有的單還查得到。</div>`
+        + `<div style="margin-top:6px;"><button type="button" data-pool-recheck="1"`
+        + ` style="font:inherit; font-size:0.75rem; padding:3px 10px; border-radius:6px; border:1px solid rgba(255,255,255,.5);`
+        + ` background:rgba(255,255,255,.12); color:#fff; cursor:pointer;">🔄 重新檢查</button></div>`
+        + `</div>`
+      : "");
   bar.hidden = false;
 }
 
@@ -8134,14 +8160,25 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert(true);
 });
-// 點紅條 = 立刻重新檢查(force, 不受一分鐘節流限制)
+// 點紅條 = 展開/收合「怎麼辦」;展開後裡面的按鈕才是重新檢查。
+//   ⚠ v14.10 是「點一下就重新檢查」—— 但紅條縮成一行之後, 最自然的動作是「點開來看細節」,
+//     點了卻跑去重新連線(可能要等好幾秒、而且可能失敗)會很奇怪。兩件事分開。
 document.addEventListener("DOMContentLoaded", () => {
   const bar = document.getElementById("pool-health-banner");
-  if (bar) bar.addEventListener("click", () => {
-    bar.innerHTML = `<div style="font-weight:700;">📡 重新檢查中…</div>`;
-    if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert(true);
+  if (!bar) return;
+  bar.addEventListener("click", (ev) => {
+    if (ev.target && ev.target.closest && ev.target.closest("[data-pool-recheck]")) {
+      ev.stopPropagation();
+      bar.innerHTML = `<div style="font-weight:700; font-size:0.8125rem;">📡 重新檢查中…</div>`;
+      if (typeof refreshShopeePoolAlert === "function") refreshShopeePoolAlert(true);
+      return;
+    }
+    _poolBarOpen = !_poolBarOpen;
+    if (typeof _lastPoolStatus !== "undefined") _renderPoolHealthBanner(_lastPoolStatus);
   });
 });
+// 最後一次拿到的池子狀態 —— 展開/收合要重畫, 但不該為了重畫再打一次網路。
+let _lastPoolStatus = null;
 
 let _poolAlertAt = 0;
 async function refreshShopeePoolAlert(force) {
@@ -8156,6 +8193,7 @@ async function refreshShopeePoolAlert(force) {
       { headers: { "X-Spidey-Key": settings.spideyKey } });
     d = await res.json().catch(() => null);
   } catch (e) { /* 連不上就當沒這回事 */ }
+  _lastPoolStatus = d;
   _renderShopeePoolStatus(d);
   _renderPoolHealthBanner(d);   // 📡 壞掉時的常駐紅條(每一頁都看得到)
   // ⚠ 失敗一律安靜收掉 —— 網路不好不可以變成「畫面上掛著一條紅字但沒人知道什麼意思」
@@ -14611,7 +14649,11 @@ function renderActiveParcel() {
   // 各模式各自語境, 不沿用出貨字眼
   const LABEL = { inbound: "進貨單", return: "退貨單", replacement: "補寄單", normal: "當前訂單" };
   const CANCEL = { inbound: "✗ 取消此單", return: "✗ 取消此單", replacement: "✗ 取消此筆", normal: "✗ 取消此筆" };
-  const FINISH = { inbound: "✓ 完成驗收", return: "✓ 完成退貨", replacement: "✓ 完成補寄", normal: "✓ 再刷一次 / 手動完成此筆" };
+  // ⚠ v14.11:normal 原本是「✓ 再刷一次 / 手動完成此筆」—— 在手機上會折成兩行、字擠在一起,
+  //   而且那句話在解釋「有兩種做法」, 但按鈕本身就是其中一種。按鈕只要講它自己做什麼。
+  //   「再刷一次單號也能結案」是同仁每天在走的路, 不需要印在按鈕上。
+  //   順便跟另外三種模式對齊(完成驗收 / 完成退貨 / 完成補寄), 長度一致。
+  const FINISH = { inbound: "✓ 完成驗收", return: "✓ 完成退貨", replacement: "✓ 完成補寄", normal: "✓ 完成此筆" };
   const labelEl = wrapper.querySelector(".active-parcel-label");
   if (labelEl) labelEl.textContent = LABEL[mode];
   const cancelBtn = document.getElementById("cancel-parcel-btn");
