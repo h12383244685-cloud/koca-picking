@@ -3536,7 +3536,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.11 · 2026-11-19";
+const APP_VERSION = "v14.14 · 2026-11-24";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -3661,7 +3661,11 @@ const DEFAULT_SPEC_MAP = {
   "Dusty MINI 1 一般版●預購":   [{ sku: "KVC-18MV45", qty: 1 }],
   "簡約白【單主機款】送6件套":      [{ sku: "KVC-40MV46", qty: 1 }],
   "簡約白【日本熱銷旗艦款】送6件套":  [{ sku: "KVC-40MV46", qty: 1 }],
-  "Shiny 1標準版【滑順吹嘴及壁掛】": [{ sku: "KHD-44MV42", qty: 1 }, { sku: "HD-WH-W", qty: 1 }],
+  // v14.14: 壁掛改出黑色 —— 白色(HD-WH-W)已停產/無庫存, Kyle 2026/11/24 確認。
+  // ⚠ 改這裡只對「全新安裝」有效。現役手機的 specMap 存在 localStorage,
+  //   下面補預設的邏輯是 `if (!(spec in specMap))` —— 只補缺的、不覆蓋已存在的,
+  //   所以一定要配一次性遷移(搜 picking_spec_fix_wallmount_black_v1), 否則改了等於沒改。
+  "Shiny 1標準版【滑順吹嘴及壁掛】": [{ sku: "KHD-44MV42", qty: 1 }, { sku: "HD-WH-B", qty: 1 }],
   "Shiny 1隨行組【滑順吹嘴和收納包】": [{ sku: "KHD-44MV42", qty: 1 }, { sku: "HD-BAG1", qty: 1 }],
   "珍珠白【半導體製冷】北極熊御用款":  [{ sku: "AF-CYK625-W", qty: 1 }],
   "海洋藍【半導體製冷】北極熊御用款":  [{ sku: "AF-CYK625-B", qty: 1 }],
@@ -5945,6 +5949,24 @@ function loadSpecMap() {
       }
       try { localStorage.setItem(SPEC_FIX_KEY, "1"); } catch(e) {}
     }
+    // 一次性修正: Shiny 1 標準版的壁掛改成黑色 (v14.14 · 2026/11/24)
+    //   白色 HD-WH-W 已停產、庫存 0, 但對應表還指著它 → 同仁實際拿黑色包,
+    //   App 卻扣白色(扣不動)、黑色永遠不扣。只改 DEFAULT_SPEC_MAP 對現役手機無效, 所以要遷移。
+    const SPEC_FIX_KEY_WH = "picking_spec_fix_wallmount_black_v1";
+    if (!localStorage.getItem(SPEC_FIX_KEY_WH)) {
+      const whSpec = "Shiny 1標準版【滑順吹嘴及壁掛】";
+      if (specMap[whSpec]) {
+        let hit = false;
+        for (const m of specMap[whSpec]) {
+          if (m.sku === "HD-WH-W") { m.sku = "HD-WH-B"; hit = true; }
+        }
+        if (hit) {
+          mapMigrated = true;
+          console.log("[migration] Shiny 1 標準版壁掛 HD-WH-W → HD-WH-B");
+        }
+      }
+      try { localStorage.setItem(SPEC_FIX_KEY_WH, "1"); } catch(e) {}
+    }
     // 一次性修正: 移除重複的 Joy Lite 1 白 單主機版 (v2026-05-28)
     const SPEC_FIX_KEY_2 = "picking_spec_fix_joylite_dup_v1";
     if (!localStorage.getItem(SPEC_FIX_KEY_2)) {
@@ -7224,7 +7246,16 @@ function _parseExcludedFromRemark(remark) {
   if (!s) return [];
   const out = [];
   // 「本次不含 XXX × 1」/「不含 XXX x1」/「本次不含XXX」
-  const re = /(?:本次)?不含\s*([^,,。;;\n×xX*]+?)\s*(?:[×xX*]\s*(\d+))?(?=[,,。;;\n]|$)/g;
+  // ⚠ v14.12 修:原本是 [^,,。;;\n×xX*] / [,,。;;\n] —— 看起來像「半形+全形」,
+  //   **其實兩個逗號都是半形、兩個分號也都是半形**。全形的「,」(U+FF0C)和「;」(U+FF1B)根本不在裡面。
+  //   而官網的缺件備註是中文標點:「本次不含 JOY LITE 收納包 × 1,另單免費補寄」——
+  //   那個逗號是全形, 所以**結尾判斷永遠不成立, 整個功能從上線到 2026/11/23 一次都沒跑過**。
+  //   後果:收納包沒被自動扣掉 → 同仁沒注意到紅字就照出 → 客人收到一個, 免費補寄又寄一個,
+  //   兩份貨 + 兩趟運費都是公司吸收。而畫面上完全看不出來(清單顯示 1/1 完成)。
+  //   📌 教訓:中文標點和英文標點長得像但不是同一個字元。字元集裡**看起來重複的符號**特別可疑 ——
+  //      正常人不會把同一個字元寫兩次, 會重複就代表原本想寫的是另一個(全形那個)卻打成半形。
+  //   也一併收了「、」和「:」,官網的寫法不只一種。
+  const re = /(?:本次)?不含\s*([^,，、。;；:：\n×xX*]+?)\s*(?:[×xX*]\s*(\d+))?(?=[,，、。;；:：\n]|$)/g;
   let m;
   while ((m = re.exec(s))) {
     const nm = (m[1] || "").trim();
@@ -7344,8 +7375,14 @@ function kocaOrderShippable(o) {
 }
 
 // 官網 items 只有 name + qty, 沒有穩定的 sku → 用商品名對 library
+// ⚠ v14.13 修:原本是 [\s　\-_()（）[\]、,,.。] —— 半形逗號「,」打了兩次,
+//   全形逗號「，」根本沒進字元集。()（） 和 .。 都成對處理了, 只有逗號漏掉。
+//   後果:官網商品名中間有全形逗號時(例「Joy Lite 1，白色單主機」)正規化後還留著那個逗號,
+//   兩邊對不起來 → matchSkuByName 回 null → 變成 __KOCA_UNMAPPED_0 無名項目, 庫存也不會扣。
+//   實測 10 種寫法修前對不到、修後對到。跟 v14.12 的 _parseExcludedFromRemark 同一個錯。
+//   ⚠ 只補逗號,不要順手加 : / + & 【】 這些 —— 多清字元會讓不同商品名被合成同一個, 反而誤對。
 function normalizeProdName(s) {
-  return String(s || "").toLowerCase().replace(/[\s　\-_()（）[\]、,,.。]/g, "");
+  return String(s || "").toLowerCase().replace(/[\s　\-_()（）[\]、,，.。]/g, "");
 }
 function matchSkuByName(name) {
   const n = normalizeProdName(name);
