@@ -1876,6 +1876,14 @@ footer.summary-bar {
     <!-- ☁ 雲端同步狀態: 沒設雲端 / 有紀錄卡著沒上傳 都要講出來。
          以前兩種失敗都是靜默的 → 手機刷的單電腦看不到, 但沒有任何地方看得出問題。 -->
     <div id="cloud-sync-status" hidden style="margin-bottom: 10px;"></div>
+    <!-- 📋 累積異常 (v14.16) —— Kyle 2026/11/25:「可以顯示, 但不用太大太明顯」。
+         為什麼要有:這些問題**不會當機**, 只是數字悄悄不對, 所以沒有人會發現。
+         實例:刮鬍刀漏 4 支、除濕機漏 1 台, 都是查了才知道, 已經放了兩個禮拜。
+         ⚠ 刻意做成「中性灰 + 預設收起 + 沒事就整個不顯示」:
+           ・不用紅色橫幅 —— 這類是「慢慢累積」不是「現在失火」, 吼久了會被當雜訊滑過去
+           ・但也**不能只放成 13px 灰字塞在角落**(見 CLAUDE.md「有講, 但沒有人聽得到」),
+             所以它在出貨紀錄頁最上面、有數字、點開就有明細和該怎麼辦 -->
+    <div id="anomaly-summary" hidden style="margin-bottom: 10px;"></div>
     <div class="row" style="gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
       <button class="btn outline sm" id="history-refresh-btn" style="flex:1; min-width: 100px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg> 重新整理</button>
       <button class="btn sm" id="open-erp-helper-btn" style="flex:1; min-width: 100px; background: var(--primary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg> ERP 鍵單</button>
@@ -3536,7 +3544,7 @@ const SPEC_MAP_KEY = "picking_spec_map_v1";
 const SPEC_MAP_INIT_KEY = "picking_spec_map_init_v1";
 const PLATFORM_KEY = "picking_platform_v1";
 // App 版本號 (每次部署改這裡, 方便確認手機是否載到最新版)
-const APP_VERSION = "v14.14 · 2026-11-24";
+const APP_VERSION = "v14.17 · 2026-11-26";
 
 // ════════════════════════════════════════════════════════════════
 // 📓 App 狀態紀錄(事件/錯誤日誌)
@@ -4005,6 +4013,56 @@ function saveKocaNameMap() {
 }
 function loadKocaNameMap() {
   try { const s = localStorage.getItem(KOCA_NAME_MAP_KEY); if (s) { const p = JSON.parse(s); if (p && typeof p === "object") kocaNameMap = p; } } catch (e) {}
+
+  // 一次性補「品名 → SKU」對應 (v14.15 · 2026/11/25)
+  //
+  //   為什麼要補:這些品名跟主檔的名字差太多, matchSkuByName 的三步全部落空
+  //   (① 記憶表沒有 ② 不完全相同 ③ 互不包含) → 變無名項目 `__KOCA_UNMAPPED_n`,
+  //   庫存不扣、也不會推進 ERP (index.html:4352 明確擋掉假 SKU)。
+  //
+  //   ⚠ 每一筆都要有獨立旗標, 不要共用一個 —— 共用的話日後新增一筆,
+  //     會連前面那幾筆一起重跑, 把同仁後來改掉的對應又蓋回來。
+  //   ⚠ key 一定要用 normalizeProdName() 當場算, 不要寫死正規化後的字串:
+  //     normalizeProdName 改過一次了(v14.13 補全形逗號), 寫死的 key 會無聲失效。
+  //   ⚠ 只在「這個品名還沒有任何對應」時才補 —— 同仁手動指定過的永遠優先
+  //     (matchSkuByName 第 0 步註明「使用者指定過的最準」)。
+  const _NAME_FIXES = [
+    {
+      flag: "picking_koca_name_fix_cloudy_v1",
+      // 官網品名。Kyle 2026/11/25 確認與主檔 KAD-13B3Y8「Cloudy Lite 1 雲朵除濕機」是同一台。
+      // 實測正規化後 kocacloudy1半導體除濕機 vs cloudylite1雲朵除濕機 —— 毫無交集。
+      // 實例:2026/11/24 官網單 KOCA17950086257807B4 出 1 台, 庫存沒扣。
+      name: "KOCA Cloudy 1 半導體除濕機",
+      sku: "KAD-13B3Y8",
+    },
+    {
+      flag: "picking_koca_name_fix_razor_m5_v1",
+      // 蝦皮。⚠ 這是「商品名 + 規格名」**合起來**的完整字串(見 shopeeItemsToTotals 的 full),
+      //   不是規格名。因為原始規格名拿不到:蝦皮訂單池只留待出貨的單,
+      //   這批 2026/11/12 出的 4 支早就離池(實測 7 個訂單編號全部 404)。
+      // ⚠ 所以這筆是**綁在賣場標題上**的 —— 賣場一改標題就會再次對不到。
+      //   真正耐久的做法是在 DEFAULT_SPEC_MAP 用「規格名」建一筆
+      //   (規格名會在 _kocaSpecExpand(it.spec) 那一步先被試, 比品名更早、更穩定)。
+      //   下次再出一支的時候, 趁它還在池子裡把 spec 抄下來補上。
+      // Kyle 2026/11/25:「機甲小鋼炮」= RS-M5 META刮鬍刀。
+      //   主檔沒有任何禮袋/禮盒 SKU(只有各機種專屬的 BOX-* 彩盒和收納包),
+      //   所以「送禮袋禮盒」當文案處理, 不另外帶品項。
+      name: "🔥現貨秒發免運🔥機甲小鋼炮 刮鬍刀  電動刮鬍刀 剃鬚刀刮鬍刀 旅行便攜式電動刮鬍刀 mini版 送男閨蜜 情人節禮物 機甲小鋼炮【2025旗艦版】送禮袋禮盒",
+      sku: "RS-M5",
+    },
+  ];
+  for (const fx of _NAME_FIXES) {
+    if (localStorage.getItem(fx.flag)) continue;   // 有人故意刪掉的話, 旗標擋住不再加回去
+    try {
+      const k = normalizeProdName(fx.name);
+      if (k && !kocaNameMap[k]) {
+        kocaNameMap[k] = fx.sku;
+        saveKocaNameMap();
+        console.log("[migration] 品名對應 → " + fx.sku + " (" + fx.name.slice(0, 24) + "…)");
+      }
+      localStorage.setItem(fx.flag, "1");
+    } catch (e) {}
+  }
 }
 
 // 官網品名 → 「規格對應表的套組鍵」記憶表。
@@ -5648,6 +5706,33 @@ function loadLibrary() {
       }
       try { localStorage.setItem(essentialMigKey, "1"); } catch(e) {}
     }
+    // 一次性遷移: 5E-5063-EV 破壞袋改歸包材 (v14.16 · 2026/11/25, Kyle:「應歸類為包材」)
+    //
+    //   DEFAULT_LIBRARY 裡它本來就是 category:"包裝" + essential:true, 但**線上實際是商品**
+    //   (/api/inventory 回 is_packaging=false, 而 is_packaging 就是 essential —— worker:2463),
+    //   而且名字是舊的「三口品白色破壞袋38x52cm」而非預設的「五益包裝50*63破壞袋」
+    //   → 有人在某台裝置上改過, 再靠 master push 同步出去。又是「預設值對了, 使用者端存了另一份」。
+    //
+    //   後果:30 天內 331 件被算進**商品**統計(佔商品件數 2.2%), 叫貨預估會偏高。
+    //
+    //   ⚠ 上面的 lib_essential_mig_v1 靠 category==="包裝" 判斷, 救不了這筆 ——
+    //     那支的旗標早就設過了, 而且這筆的 category 顯然也被改掉了。所以這裡**直接指名 SKU**,
+    //     category 一起補回「包裝」, 不要再依賴 category 當判斷依據。
+    //
+    //   ⚠ 這只影響**以後**的出貨:儀表板是讀每筆出貨紀錄當時存下來的 it.essential
+    //     (worker:2210-2219), 不是讀現在的商品庫。過去那 331 件在歷史統計裡仍然算商品 —— 這是對的,
+    //     出貨紀錄不該被回頭改寫。
+    const packMigKey = "lib_pack_5e5063_v1";
+    if (!localStorage.getItem(packMigKey)) {
+      const _bag = library.find(x => x.sku === "5E-5063-EV");
+      if (_bag && !_bag.essential) {
+        _bag.essential = true;
+        _bag.category = "包裝";
+        migrated = true;
+        console.log("[migration] 5E-5063-EV 改歸包材 (essential=true)");
+      }
+      try { localStorage.setItem(packMigKey, "1"); } catch(e) {}
+    }
     // 一次性遷移: 補 barcode 欄位 (預設 = sku)
     const barcodeMigKey = "lib_barcode_mig_v1";
     if (!localStorage.getItem(barcodeMigKey)) {
@@ -7199,10 +7284,12 @@ function _packSizeInName(name) {
 function applyRemarkExclusions() {
   const excl = _parseExcludedFromRemark(state.kocaRemark || "");
   if (!excl.length) return [];
-  const done = [];
+
+  // ① 先「試算」, 不要真的改 —— 算完才知道會不會把整張單扣到一件商品都不剩。
+  const plan = [];
   for (const ex of excl) {
     const toks = _nameTokens(ex.name);
-    if (!toks.length) { done.push({ ...ex, removed: 0, why: "名稱無法解析" }); continue; }
+    if (!toks.length) { plan.push({ ex, why: "名稱無法解析" }); continue; }
     // 每個關鍵詞都要是品項名稱(正規化後)的子字串
     const hits = (state.items || []).filter(it => {
       if (!it || it.essential || it.unmapped) return false;
@@ -7211,12 +7298,52 @@ function applyRemarkExclusions() {
       return toks.every(t => n.includes(t));
     });
     if (hits.length !== 1) {
-      done.push({ ...ex, removed: 0, why: hits.length === 0 ? "清單裡找不到對應品項" : `對到 ${hits.length} 項, 不敢自動刪` });
+      plan.push({ ex, why: hits.length === 0 ? "清單裡找不到對應品項" : `對到 ${hits.length} 項, 不敢自動刪` });
       continue;
     }
     const it = hits[0];
     const cut = ex.qty != null ? Math.min(ex.qty, it.expected || 0) : (it.expected || 0);
-    if (cut <= 0) { done.push({ ...ex, removed: 0, why: "清單上本來就沒有" }); continue; }
+    if (cut <= 0) { plan.push({ ex, why: "清單上本來就沒有" }); continue; }
+    plan.push({ ex, it, cut });
+  }
+
+  // ②🚨 安全閥:扣完之後如果**一件商品都不剩**, 就整個不扣。
+  //
+  //   實例 (2026/11/26, 官網單 KOCA1795681124215SGH):
+  //     隨行包缺貨 → 官網另外開一張「僅寄單」專門補寄隨行包, 商品只有「JOY LITE收納包 ×1」,
+  //     但備註把原單的原因整段複製過來:「…本次不含 JOY LITE收納包 × 1,另單免費補寄」。
+  //     → 自動扣除精準命中, 把這張單**唯一要出的商品**扣掉, 清單變空。
+  //     → 同仁看到一張沒有商品的單, 很可能就寄出一個空包裹。
+  //
+  //   ⚠ 這個情境在 v14.12 之前不會發生 —— 那時全形逗號的 bug 讓自動扣除從來沒跑過,
+  //     前 14 批僅寄單都是「因為壞掉所以沒事」。修好之後它活了, 僅寄單就成了未設想的情境。
+  //     **修好一個沉睡的功能 = 等於上線一個從沒被測過的功能**, 要回頭想它會在哪些單上跑。
+  //
+  //   ⚠ 用「會不會扣光」當判斷, 不要用「備註裡有沒有『僅寄』兩個字」—— 後者又是文字比對,
+  //     官網換個寫法就失效。「一張單不可能什麼都不出」是結構事實, 不會因為用詞而改變。
+  const cutBy = new Map();
+  for (const p of plan) if (p.it) cutBy.set(p.it, (cutBy.get(p.it) || 0) + p.cut);
+  if (cutBy.size > 0) {
+    const survivors = (state.items || []).filter(it => {
+      if (!it || it.essential || it.unmapped) return false;
+      const cut = cutBy.get(it) || 0;
+      const exp = Math.max(0, (it.expected || 0) - cut);
+      const pk = cut > 0 ? Math.max(0, Math.min(it.packed || 0, exp)) : (it.packed || 0);
+      return exp > 0 || pk > 0;
+    });
+    if (survivors.length === 0) {
+      return plan.map(p => ({
+        ...p.ex, removed: 0,
+        why: "⛔ 不自動扣:扣掉之後這張單一件商品都不剩。這通常是「僅寄單」—— 備註是從原單複製過來的,但這張單要出的就是它。請照清單正常出貨。",
+      }));
+    }
+  }
+
+  // ③ 真的執行
+  const done = [];
+  for (const p of plan) {
+    if (!p.it) { done.push({ ...p.ex, removed: 0, why: p.why }); continue; }
+    const ex = p.ex, it = p.it, cut = p.cut;
     it.expected = Math.max(0, (it.expected || 0) - cut);
     it.packed = Math.max(0, Math.min(it.packed || 0, it.expected));
     // 黃框(當前訂單)也要同步扣掉, 否則出貨紀錄還是會記成有出
@@ -12737,6 +12864,110 @@ async function flushPendingCloudHistory() {
 //   (1) 這台根本沒設雲端 → pushHistoryToCloud 第一行就 return, 紀錄只留本機, 不推也不排隊
 //   (2) 有設但推失敗 → 進補送佇列, 但以前畫面上完全看不到卡了幾筆
 // 這兩種以前都是靜默的, 所以「手機刷了電腦沒有」查不出原因。
+// 📋 累積異常摘要 (v14.16) —— 掃近 30 天出貨紀錄, 把「不會當機但數字不對」的東西列出來。
+//
+//   為什麼需要:App 只在「有人去問」的時候才會說話。2026/11/25 查到刮鬍刀漏 4 支、
+//   除濕機漏 1 台, 都已經放了兩個禮拜, 而且是我主動撈資料才發現的 —— 沒有任何畫面會講。
+//
+//   ⚠ 這支**只讀不寫**:不動 history、不動 stockMap、不碰任何上傳。算錯最多就是顯示錯,
+//     不可能弄壞出貨資料。
+//   ⚠ 壞一筆不可以毀整頁(見 CLAUDE.md「壞一筆毀整頁」):整支包在 try/catch 裡,
+//     而且每一層都先確認形狀是陣列再 for。出貨紀錄不能刪, 所以壞的那筆會一直在。
+function scanAnomalies(entries, days) {
+  const out = { unmapped: [], over: [], scanned: 0 };
+  try {
+    const cutoff = Date.now() - (days || 30) * 86400000;
+    const unmapBy = {};   // 正規化品名 → { name, qty, last }
+    for (const e of (Array.isArray(entries) ? entries : [])) {
+      if (!e || !e.completedAt) continue;
+      const t = new Date(e.completedAt).getTime();
+      if (!Number.isFinite(t) || t < cutoff) continue;
+      out.scanned++;
+      let extra = 0;
+      for (const it of (Array.isArray(e.items) ? e.items : [])) {
+        if (!it) continue;
+        const packed = Number(it.packed) || 0;
+        const expected = Number(it.expected) || 0;
+        // ① 對不到我們商品 → 庫存不會扣、也不會推進 ERP
+        if (it.unmapped || String(it.sku || "").startsWith("__KOCA_UNMAPPED_")) {
+          if (packed > 0) {
+            const nm = String(it.name || "(無名稱)");
+            const k = (typeof normalizeProdName === "function") ? normalizeProdName(nm) : nm;
+            const rec = unmapBy[k] = unmapBy[k] || { name: nm, qty: 0, last: "" };
+            rec.qty += packed;
+            if (String(e.completedAt) > rec.last) rec.last = String(e.completedAt);
+          }
+          continue;
+        }
+        // ② 多裝:實裝 > 應出。
+        //    ⚠ essential(包材)是自由計數, 本來就沒有「應出」→ 一定要排除, 否則每張單都會中。
+        //    ⚠ expected === 0 是手建/補寄那種沒有應出量的單, 不是多裝 → 也排除
+        //      (跟健康檢查 underItems 用同一組條件, 不要兩邊各寫一套)。
+        if (!it.essential && expected > 0 && packed > expected) extra += (packed - expected);
+      }
+      if (extra > 0) {
+        out.over.push({
+          id: e.id,
+          box: String(e.kocaOrderId || (Array.isArray(e.parcels) && e.parcels[0] && e.parcels[0].id) || e.id || ""),
+          when: String(e.completedAt || "").slice(0, 10),
+          extra,
+        });
+      }
+    }
+    out.unmapped = Object.values(unmapBy).sort((a, b) => b.qty - a.qty);
+    out.over.sort((a, b) => (a.when < b.when ? 1 : -1));
+  } catch (err) {
+    console.warn("[anomaly] scan failed", err);
+  }
+  return out;
+}
+
+function renderAnomalySummary() {
+  const el = document.getElementById("anomaly-summary");
+  if (!el) return;
+  let a;
+  try { a = scanAnomalies(allHistory(), 30); }
+  catch (err) { console.warn("[anomaly] render failed", err); el.hidden = true; return; }
+
+  const nUn = a.unmapped.reduce((s, x) => s + x.qty, 0);
+  const nOver = a.over.reduce((s, x) => s + x.extra, 0);
+  // 沒事就整個不顯示 —— 零雜訊。有事才出現。
+  if (nUn === 0 && nOver === 0) { el.hidden = true; el.innerHTML = ""; return; }
+
+  const bits = [];
+  if (nUn > 0) bits.push(`對不到商品 <strong>${nUn}</strong> 件`);
+  if (nOver > 0) bits.push(`多裝 <strong>${nOver}</strong> 件`);
+
+  let detail = "";
+  if (nUn > 0) {
+    detail += `<div style="margin-top:8px; font-weight:700;">🔴 對不到我們商品(庫存沒扣、也沒進 ERP)</div>`;
+    for (const u of a.unmapped.slice(0, 8)) {
+      detail += `<div style="margin-top:3px;">・${escapeHtml(u.name.slice(0, 46))}${u.name.length > 46 ? "…" : ""}
+        — <strong>${u.qty}</strong> 件,最後一次 ${escapeHtml(String(u.last).slice(0, 10))}</div>`;
+    }
+    if (a.unmapped.length > 8) detail += `<div style="margin-top:3px;">…另外還有 ${a.unmapped.length - 8} 種</div>`;
+    detail += `<div style="margin-top:4px; color:var(--text-soft);">怎麼辦:在「⚙ 規格對應表」或商品庫把這個品名指定到正確的 SKU,之後就會自動帶入。</div>`;
+  }
+  if (nOver > 0) {
+    detail += `<div style="margin-top:8px; font-weight:700;">⚠ 裝得比應出多</div>`;
+    for (const o of a.over.slice(0, 8)) {
+      detail += `<div style="margin-top:3px;">・${escapeHtml(o.when)} ${escapeHtml(o.box.slice(0, 28))} — 多 <strong>${o.extra}</strong> 件</div>`;
+    }
+    if (a.over.length > 8) detail += `<div style="margin-top:3px;">…另外還有 ${a.over.length - 8} 筆</div>`;
+    detail += `<div style="margin-top:4px; color:var(--text-soft);">多出去的貨不會自己回來,查一下是刷錯還是連動規則多加。</div>`;
+  }
+
+  el.hidden = false;
+  // 中性灰、字小、預設收起 —— 不是紅色橫幅(見上面容器的註解)
+  el.innerHTML = `
+    <details style="border:1px solid var(--border); border-radius:9px; background:var(--surface);">
+      <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-soft); padding:7px 10px; font-weight:600;">
+        📋 近 30 天累積異常:${bits.join(" · ")} <span style="font-weight:400;">(點開看明細)</span>
+      </summary>
+      <div style="font-size:0.75rem; line-height:1.65; padding:2px 10px 10px;">${detail}</div>
+    </details>`;
+}
+
 function renderCloudSyncStatus() {
   const el = document.getElementById("cloud-sync-status");
   if (!el) return;
@@ -12999,6 +13230,7 @@ function renderHistory() {
   const stats = document.getElementById("history-stats");
   if (!list) return;
   renderCloudSyncStatus();   // 沒設雲端 / 有紀錄卡著沒上傳 → 在這頁講清楚
+  renderAnomalySummary();    // 📋 累積異常 (對不到商品 / 多裝) —— 沒事就不顯示
 
   // 計數 (依 orderType 拆) - 用於 filter bar
   const cntAll = history.length;
